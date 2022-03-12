@@ -7,11 +7,11 @@ The project is currently in a state of [PoC](https://en.wikipedia.org/wiki/Proof
 ## Features
 - Every day new reports on economy
 - Determines minimum research of enemy countries 
-- Lists of most valuable cities of enemy countries
+- Lists most valuable cities of enemy countries
 - Beautiful graphs of victory points and economy developments 
 
 ## Concept
-Conlyse contains of four components, each of them is necessary.
+Conlyse contains of four components, each of them is necessary. 
 - ###  API
 The API connects to the database, reformat the gathered data and sends it to the client. The API is written in python using [flask](https://pypi.org/project/Flask/ "flask"). If you want to use the project in a production environment, which I wouldn't recommend, make sure to disable debug mode for flask.
 - ### Bot
