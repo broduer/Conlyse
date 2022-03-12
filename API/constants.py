@@ -1,0 +1,5 @@
+FLASK_SECRET = "flask_secret"
+MYSQL_IP_ADDR = "192.168.20.75"
+MYSQL_USER = "testing"
+MYSQL_USER_PASSWORD = "JGVCDwuwXvmO"
+MYSQL_DATABASE = "testing"
