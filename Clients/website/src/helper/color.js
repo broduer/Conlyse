@@ -16,7 +16,7 @@ export function getResourceColor(number){
     }
 }
 export function getCountryColor(number){
-    const c = [
+    let c = [
         "#55a64d",
         "#985792",
         "#3445c9",
@@ -46,7 +46,10 @@ export function getCountryColor(number){
         "#17cc77",
         "#6480ad",
     ]
-    const colors = c.concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c).concat(c)
+    for (let i = 0; i < 10; i++){
+        c = c.concat(c)
+    }
+    const colors = c
     let color = colors[number]
     if (colors.length >= number) return color
 }

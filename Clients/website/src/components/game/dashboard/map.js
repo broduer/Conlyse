@@ -89,7 +89,6 @@ export default function Map({static_provinces}){
         }
         setDidLoad(true)
     })
-    console.log(static_provinces)
     return (
         <Box className={"Map"} sx={{
             bgcolor: "divider",
@@ -161,7 +160,6 @@ export default function Map({static_provinces}){
                 right: 20,
             }}>
                 <Fab color={"primary"} size={"small"} onClick={() => {
-                    console.log(scale)
                     let pos = {
                         x: translatePos.x + (scale * (translatePos.x * 0.1)),
                         y: translatePos.y + (scale * (translatePos.y * 0.1)),

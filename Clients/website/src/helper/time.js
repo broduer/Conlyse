@@ -43,7 +43,7 @@ export function getDifference(timestamp_start, timestamp_end, format){
     var days = Math.floor(difference / (3600*24))
 
     switch (format){
-        case "D": return days + 1
+        case "D": return days
         default: return difference
     }
 }

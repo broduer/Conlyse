@@ -54,8 +54,8 @@ function decode(a, c) {
         k = (k & 15) << 4 | f >> 2
         h = (f & 3) << 6 | l
         b[g] = e
-        64 != f && (b[g + 1] = k)
-        64 != l && (b[g + 2] = h)
+        64 !== f && (b[g + 1] = k)
+        64 !== l && (b[g + 2] = h)
     }
     return b
 }

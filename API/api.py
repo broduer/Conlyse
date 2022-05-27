@@ -21,7 +21,7 @@ app.config['SECRET_KEY'] = constants.FLASK_SECRET
 # SqlAlchemy Datadb.Model Configuration With Mysql
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{constants.MYSQL_USER}:{constants.MYSQL_USER_PASSWORD}@{constants.MYSQL_IP_ADDR}/{constants.MYSQL_DATABASE}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ECHO'] = True
+app.config['SQLALCHEMY_ECHO'] = False
 
 db = SQLAlchemy(app)
 Compress(app)
@@ -263,24 +263,19 @@ def provinces():
                     getattr(Province, filter.name) == datetime.fromtimestamp(float(request.args[filter.name])))
             else:
                 query = query.filter(getattr(Province, filter.name) == request.args[filter.name])
-
+    game = getGame(request.args["game_id"])
     if "day" in request.args:
-        game = getGame(request.args["game_id"])
-        differenc_hours = game["current_time"].hour - game["start_time"].hour
-        differenc_minutes = game["current_time"].minute - game["start_time"].minute
         if "lastdays" in request.args:
             lastdays = int(request.args["lastdays"])
         else:
             lastdays = 0
-        day_time = round(time.mktime(game["start_time"].timetuple())) + (
-                int(request.args["day"]) * 3600 * 24) + differenc_hours * 3600 + differenc_minutes * 60
-        time_start = day_time - 3600 * 24 * lastdays - 300
-        time_end = day_time + 300
+        time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (lastdays * 3600 * 24) - 300
+        time_end = time.mktime(game["current_time"].timetuple()) + 300
         query = query.filter(
             between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
     if "value" in request.args:
         province_buildings = {}
-        for province in query.limit(1000000).all():
+        for province in query.filter(Province.current_time == game["current_time"]).limit(1000000).all():
             province_dict = {
                 "province_id": province.province_id,
                 "owner_id": province.owner_id,
@@ -348,16 +343,13 @@ def country():
                                                    )
         if "day" in request.args:
             game = getGame(request.args["game_id"])
-            differenc_hours = game["current_time"].hour - game["start_time"].hour
-            differenc_minutes = game["current_time"].minute - game["start_time"].minute
             if "lastdays" in request.args:
                 lastdays = int(request.args["lastdays"])
             else:
                 lastdays = 0
-            day_time = round(time.mktime(game["start_time"].timetuple())) + (
-                    int(request.args["day"]) * 3600 * 24) + differenc_hours * 3600 + differenc_minutes * 60
-            time_start = day_time - 3600 * 24 * lastdays - 300
-            time_end = day_time + 300
+            time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (
+                        lastdays * 3600 * 24) - 300
+            time_end = time.mktime(game["current_time"].timetuple()) + 300
             query = query.filter(
                 between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
         if "country_id" in request.args:
@@ -436,16 +428,13 @@ def country():
                                             )
         if "day" in request.args:
             game = getGame(request.args["game_id"])
-            differenc_hours = game["current_time"].hour - game["start_time"].hour
-            differenc_minutes = game["current_time"].minute - game["start_time"].minute
             if "lastdays" in request.args:
                 lastdays = int(request.args["lastdays"])
             else:
                 lastdays = 0
-            day_time = round(time.mktime(game["start_time"].timetuple())) + (
-                    int(request.args["day"]) * 3600 * 24) + differenc_hours * 3600 + differenc_minutes * 60
-            time_start = day_time - 3600 * 24 * lastdays - 300
-            time_end = day_time + 300
+            time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (
+                        lastdays * 3600 * 24) - 300
+            time_end = time.mktime(game["current_time"].timetuple()) + 300
             query = query.filter(
                 between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
         if "country_id" in request.args:
@@ -495,7 +484,6 @@ def building():
                              Building.upgrade_id, Building.health, Province.current_time
                              ).select_from(Building
                                            ).join(ProvinceHasBuilding).join(Province)
-    print(request.args)
     if "game_id" in request.args:
         query = query.filter(Province.game_id == request.args["game_id"])
     if "current_time" in request.args:

@@ -5,6 +5,7 @@ import VictoryGraph from "../components/VictoryGraph";
 import EconomyGraph from "../components/EconomyGraph";
 
 export default function Economy_stats({country, rising_power}){
+    console.log(country)
     if (typeof country === "undefined" || typeof rising_power === "undefined") return (
         <div>
             <Card>
