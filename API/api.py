@@ -21,7 +21,7 @@ app.config['SECRET_KEY'] = constants.FLASK_SECRET
 # SqlAlchemy Datadb.Model Configuration With Mysql
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{constants.MYSQL_USER}:{constants.MYSQL_USER_PASSWORD}@{constants.MYSQL_IP_ADDR}/{constants.MYSQL_DATABASE}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ECHO'] = False
+app.config['SQLALCHEMY_ECHO'] = True
 
 db = SQLAlchemy(app)
 Compress(app)
@@ -245,17 +245,21 @@ def provinces():
     output = dict({})
     filters = []
     table = inspect(Province)
+    if "game_id" not in request.args:
+        return "game_id is needed"
+    game = getGame(request.args["game_id"])
     if "value" in request.args:
         query = db.session.query(Province.province_id, Province.owner_id, StaticProvince.name, Building.upgrade_id,
                                  Building.health) \
             .select_from(Province) \
             .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
             .join(ProvinceHasBuilding) \
-            .join(Building)
+            .join(Building) \
+            .filter(StaticProvince.map_id == game.map_id)
+
     else:
         query = db.session.query(Province)
-    if "game_id" not in request.args:
-        return "game_id is needed"
+
     for filter in table.c:
         if filter.name in request.args:
             if "current_time" == filter.name:
@@ -263,7 +267,7 @@ def provinces():
                     getattr(Province, filter.name) == datetime.fromtimestamp(float(request.args[filter.name])))
             else:
                 query = query.filter(getattr(Province, filter.name) == request.args[filter.name])
-    game = getGame(request.args["game_id"])
+
     if "day" in request.args:
         if "lastdays" in request.args:
             lastdays = int(request.args["lastdays"])
@@ -312,6 +316,7 @@ def country():
     game_id = request.args["game_id"]
     if len(filters) + len(filters_exp) == 1:
         return "Error: To less filters"
+    game = getGame(request.args["game_id"])
 
     if "economy" in request.args:
         query = db.session.query(
@@ -340,9 +345,8 @@ def country():
                       ).join(Province).join(StaticProvince,
                                             Province.province_location_id == StaticProvince.province_location_id
                                             ).join(GameHasPlayer
-                                                   )
+                                                   ).filter(StaticProvince.map_id == game.map_id)
         if "day" in request.args:
-            game = getGame(request.args["game_id"])
             if "lastdays" in request.args:
                 lastdays = int(request.args["lastdays"])
             else:
@@ -357,7 +361,7 @@ def country():
         if "single" in request.args:
             for country in query.filter(
                     GameHasPlayer.game_id == game_id
-            ).group_by(Country.country_id, Province.current_time).all():
+            ).group_by(Province.current_time, Country.country_id).all():
                 output[country.country_id] = dict({
                     "country_id": country.country_id,
                     "current_time": round(country.current_time.timestamp()),
@@ -573,7 +577,7 @@ def static_scenario():
 
 
 def getGame(game_id):
-    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Scenario.speed).join(Scenario).filter(
+    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Scenario.speed, Scenario.map_id, Game.scenario_id).join(Scenario).filter(
         Game.game_id == game_id).first()
     return game
 

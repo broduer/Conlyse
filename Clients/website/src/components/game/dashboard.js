@@ -101,10 +101,10 @@ function DashboardDiv({game, scenario}){
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
                                 <Gameinformation game={game} scenario={scenario}/>
                             </Grid>
-                            <Grid item xs={3} sm={2} lg={6} width={"100%"}>
+                            <Grid item xs={6} sm={2} lg={6} width={"100%"}>
                                 <Countryranking countrys={countrys}/>
                             </Grid>
-                            <Grid item xs={3} sm={2} lg={6} width={"100%"}>
+                            <Grid item xs={6} sm={2} lg={6} width={"100%"}>
                                 <Teamranking teams={teams}/>
                             </Grid>
                         </Grid>
