@@ -56,7 +56,6 @@ function DashboardDiv({game, scenario}){
     const teams = getTeamsbyVP(datas["teams"].data, countrys)
     const rising_powers_countrys = getRisingPowers(datas["countrys"].data, datas["countrys_adv"].data, game["start_time"], game["current_time"])
     const combined_provinces = getCombinedProvinces(static_provinces, current_provinces)
-    console.log(combined_provinces)
 
     return(
         <div>
