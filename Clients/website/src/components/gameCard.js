@@ -4,21 +4,20 @@ import VideogameAssetIcon from '@mui/icons-material/VideogameAsset';
 import PlayCircleFilledWhiteIcon from '@mui/icons-material/PlayCircleFilledWhite';
 import {getDatefromTimestamp, getDifference} from "../helper/time";
 import {useNavigate} from "react-router-dom";
-function GameCard({game, scenario}) {
-
+function GameCard({game}) {
     const navigate = useNavigate()
-    const handleClick = (game, scenario) => {
-        navigate("/game/" + game.game_id + "/dashboard", { state: {game: game, scenario: scenario}})
+    const handleClick = (game) => {
+        navigate("/game/" + game.gid + "/dashboard")
     }
     return (
         <div>
             <Card elevation={2}>
                 <CardHeader
-                    title={game.game_id}
-                    subheader={getDatefromTimestamp(game.start_time, "D:M h:m")}
+                    title={game.gid}
+                    subheader={getDatefromTimestamp(game.st, "D:M h:m")}
                     action={
-                        <Tooltip title={game.end_time==null ? "Running" : "Ended"}>
-                            <VideogameAssetIcon color={game.end_time==null ? "success" : "info"}/>
+                        <Tooltip title={game.et==null ? "Running" : "Ended"}>
+                            <VideogameAssetIcon color={game.et==null ? "success" : "info"}/>
                         </Tooltip>
                     }
                 />
@@ -29,13 +28,13 @@ function GameCard({game, scenario}) {
                                 Scenario:
                             </Typography>
                             <Typography variant={"body2"} color={"textSecondary"}>
-                                {scenario.name.split("(")[0]}
+                                {game.sn.split("(")[0]}
                             </Typography>
                             <Typography variant={"subtitle1"}>
                                 Day:
                             </Typography>
                             <Typography>
-                                {getDifference(game.start_time, game.end_time===null ? game.current_time : game.end_time, "D")}
+                                {getDifference(game.st, game.et===null ? game.ct : game.et, "D")}
                             </Typography>
                         </Grid>
                         <Grid item >
@@ -43,12 +42,12 @@ function GameCard({game, scenario}) {
                                 Speed:
                             </Typography>
                             <Typography variant={"body2"} color={"textSecondary"}>
-                                {scenario.speed}x
+                                {game.sp}x
                             </Typography>
                         </Grid>
                         <Grid container justifyContent={"flex-end"}>
                             <Button variant={"contained"} onClick={() => {
-                                handleClick(game, scenario)
+                                handleClick(game)
                             }} color={"success"} startIcon={<PlayCircleFilledWhiteIcon/>}>
                                 Play
                             </Button>

@@ -1,6 +1,5 @@
-import Countrys from "./game/countrys";
-import React from "react";
-import CssBaseline from "@mui/material/CssBaseline";
+import Countrys from "./pages/game/countrys";
+import React, {useState} from "react";
 import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
@@ -8,135 +7,93 @@ import Drawer from "@mui/material/Drawer";
 import Divider from "@mui/material/Divider";
 import {List, ListItem, ListItemText} from "@mui/material";
 import Box from "@mui/material/Box";
-import {styled, useTheme} from "@mui/material/styles";
-import MuiAppBar from "@mui/material/AppBar";
-import {Navigate, useNavigate} from "react-router-dom";
+import {useTheme} from "@mui/material/styles";
+import {useNavigate} from "react-router-dom";
 
 import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from '@mui/icons-material/Home';
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FlagIcon from '@mui/icons-material/Flag';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import AppBar from "@mui/material/AppBar";
+import {LocationCity, Public} from "@mui/icons-material";
 
 const drawerWidth=240
 
-const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(
-    ({ theme, open }) => ({
-        flexGrow: 1,
-        padding: theme.spacing(3),
-        transition: theme.transitions.create('margin', {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-        }),
-        marginLeft: `-${drawerWidth}px`,
-        ...(open && {
-            transition: theme.transitions.create('margin', {
-                easing: theme.transitions.easing.easeOut,
-                duration: theme.transitions.duration.enteringScreen,
-            }),
-            marginLeft: 0,
-        }),
-    }),
-);
 
-
-const AppBar = styled(MuiAppBar, {
-    shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-    transition: theme.transitions.create(['margin', 'width'], {
-        easing: theme.transitions.easing.sharp,
-        duration: theme.transitions.duration.leavingScreen,
-    }),
-    ...(open && {
-        width: `calc(100% - ${drawerWidth}px)`,
-        marginLeft: `${drawerWidth}px`,
-        transition: theme.transitions.create(['margin', 'width'], {
-            easing: theme.transitions.easing.easeOut,
-            duration: theme.transitions.duration.enteringScreen,
-        }),
-    }),
-}));
-
-const DrawerHeader = styled('div')(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    padding: theme.spacing(0, 1),
-    // necessary for content to be below app bar
-    ...theme.mixins.toolbar,
-    justifyContent: 'flex-end',
-}));
 
 export default function CustomDrawer({children, game_id}) {
     const navigate = useNavigate()
     const theme = useTheme();
-    const [open, setOpen] = React.useState(false);
+    const [open, setOpen] = useState();
+    const toggleDrawer = (open) => (event) => {
+        if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) {
+            return;
+        }
 
-    const handleDrawerOpen = () => {
-        setOpen(true);
+        setOpen(open)
     };
 
-    const handleDrawerClose = () => {
-        setOpen(false);
-    };
+    const list = () => (
+        <Box
+            sx={{ width: 250 }}
+            role="presentation"
+            onClick={toggleDrawer(false)}
+            onKeyDown={toggleDrawer(false)}
+        >
+            <List>
+                <ListItem button key={"Dashboard"} onClick={() => navigate(`/game/${game_id}/dashboard`)}>
+                    <DashboardIcon/>
+                    <ListItemText>Dashboard</ListItemText>
+                </ListItem>
+                <ListItem button key={"Countrys"} onClick={() => navigate(`/game/${game_id}/countrys`)}>
+                    <FlagIcon/>
+                    <ListItemText>Countrys</ListItemText>
+                </ListItem>
+                <ListItem button key={"Provinces"} onClick={() => navigate(`/game/${game_id}/provinces`)}>
+                    <LocationCity/>
+                    <ListItemText>Provinces</ListItemText>
+                </ListItem>
+                <ListItem button key={"Map"} onClick={() => navigate(`/game/${game_id}/map`)}>
+                    <Public/>
+                    <ListItemText>Map</ListItemText>
+                </ListItem>
+                <Divider/>
+                <ListItem sx={{flex: "end"}} button key={"BackHome"} onClick={() => navigate(`/`)}>
+                    <HomeIcon/>
+                    <ListItemText>Back to Game Selection</ListItemText>
+                </ListItem>
+            </List>
+        </Box>
+    );
+
 
     return(
-        <Box sx={{display: 'flex'}}>
-            <CssBaseline/>
-            <AppBar position="fixed" open={open}>
+        <div>
+            <Drawer
+                anchor={"left"}
+                open={open}
+                onClose={toggleDrawer(false)}
+            >
+                {list()}
+            </Drawer>
+            <AppBar position={"sticky"}>
                 <Toolbar>
                     <IconButton
-                        color="inherit"
-                        aria-label="open drawer"
-                        onClick={handleDrawerOpen}
+                        size="large"
                         edge="start"
-                        sx={{mr: 2, ...(open && {display: 'none'})}}
+                        color="inherit"
+                        aria-label="menu"
+                        sx={{ mr: 2 }}
+                        onClick={toggleDrawer(!open)}
                     >
-                        <MenuIcon/>
+                        <MenuIcon />
                     </IconButton>
-                    <Typography variant="h6" noWrap component="div">
-                        Conlyse
-                    </Typography>
+                    <img width={100} src={require("../images/logo.png")} alt={"Conlyse"}/>
                 </Toolbar>
             </AppBar>
-            <Drawer
-                sx={{
-                    width: drawerWidth,
-                    flexShrink: 0,
-                    '& .MuiDrawer-paper': {
-                        width: drawerWidth,
-                        boxSizing: 'border-box',
-                    },
-                }}
-                variant="persistent"
-                anchor="left"
-                open={open}
-            >
-                <DrawerHeader>
-                    <IconButton onClick={handleDrawerClose}>
-                        {theme.direction === 'ltr' ? <ChevronLeftIcon/> : <ChevronRightIcon/>}
-                    </IconButton>
-                </DrawerHeader>
-                <Divider/>
-                <List>
-                    <ListItem button key={"Dashboard"} onClick={() => navigate(`/game/${game_id}/dashboard`)}>
-                        <DashboardIcon/>
-                        <ListItemText>Dashboard</ListItemText>
-                    </ListItem>
-                    <ListItem button key={"Countrys"} onClick={() => navigate(`/game/${game_id}/countrys`)}>
-                        <FlagIcon/>
-                        <ListItemText>Countrys</ListItemText>
-                    </ListItem>
-                    <ListItem button key={"BackHome"} onClick={() => navigate(`/`)}>
-                        <HomeIcon/>
-                        <ListItemText>Back to Game Selection</ListItemText>
-                    </ListItem>
-                </List>
-            </Drawer>
-            <Main open={open}>
-                <DrawerHeader/>
+            <div>
                 {children}
-            </Main>
-        </Box>
+            </div>
+        </div>
     )
 }

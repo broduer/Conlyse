@@ -1,31 +1,41 @@
 import json
+import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, request
+from flask_caching import Cache
 from flask_compress import Compress
-from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy import inspect
-from sqlalchemy import func, between, case, cast, Integer
+from sqlalchemy import func, between, case, desc, text
 from flask_cors import CORS
 
-import helper
+from helpers.province_buidings import get_province_buildings, province_sort_by_building_cost
 import constants
+from helpers.production import get_production
+from models import *
+
 # create the object of Flask
-from API.helpers.research import getResearch
+
 
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = constants.FLASK_SECRET
 
 # SqlAlchemy Datadb.Model Configuration With Mysql
-app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{constants.MYSQL_USER}:{constants.MYSQL_USER_PASSWORD}@{constants.MYSQL_IP_ADDR}/{constants.MYSQL_DATABASE}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config[
+    'SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{constants.MYSQL_USER}:{constants.MYSQL_USER_PASSWORD}@{constants.MYSQL_IP_ADDR}/{constants.MYSQL_DATABASE}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['SQLALCHEMY_ECHO'] = True
+
+# Caching
+app.config["CACHE_TYPE"] = "SimpleCache"
+app.config["CACHE_DEFAULT_TIMEOUT"] = 300
 
 db = SQLAlchemy(app)
 Compress(app)
 CORS(app)
+cache = Cache(app)
 
 with open("static_informations/upgrades.json") as file:
     data_upgrades = json.loads(file.read())
@@ -34,385 +44,197 @@ with open("static_informations/researches.json") as file:
     data_researches = json.loads(file.read())
 
 
-class Building(db.Model):
-    __tablename__ = 'building'
-
-    building_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    upgrade_id = db.Column(db.Integer, nullable=False)
-    health = db.Column(db.Integer)
-
-    provinces = db.relationship('Province', secondary='province_has_building', overlaps="provinces")
-
-
-class Player(db.Model):
-    __tablename__ = 'player'
-
-    player_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    site_user_id = db.Column(db.Integer, primary_key=True, nullable=False)
-    name = db.Column(db.String(75), nullable=False)
-
-
-class Scenario(db.Model):
-    __tablename__ = 'scenario'
-
-    scenario_id = db.Column(db.Integer, primary_key=True)
-    map_id = db.Column(db.Integer)
-    name = db.Column(db.String(45))
-    speed = db.Column(db.Integer)
-
-    game = db.relationship("Game", back_populates="scenario")
-
-
-class StaticProvince(db.Model):
-    __tablename__ = 'static_province'
-
-    static_province_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    province_location_id = db.Column(db.Integer, nullable=False)
-    map_id = db.Column(db.Integer)
-    province_type = db.Column(db.Integer)
-    name = db.Column(db.String(50))
-    coordinate_x = db.Column(db.Integer)
-    coordinate_y = db.Column(db.Integer)
-    mainland_id = db.Column(db.Integer)
-    region = db.Column(db.Integer)
-    db.Model_production = db.Column(db.Integer)
-    terrain_type = db.Column(db.Integer)
-    resource_production_type = db.Column(db.Integer)
-    b = db.Column(db.String(10000))
-    coastal = db.Column(db.BOOLEAN)
-
-
-class Game(db.Model):
-    __tablename__ = 'game'
-
-    game_id = db.Column(db.Integer, primary_key=True)
-    scenario_id = db.Column(db.ForeignKey('scenario.scenario_id'), nullable=False, index=True)
-    start_time = db.Column(db.TIMESTAMP)
-    end_time = db.Column(db.TIMESTAMP)
-    current_time = db.Column(db.TIMESTAMP)
-    next_day_time = db.Column(db.TIMESTAMP)
-    next_heal_time = db.Column(db.TIMESTAMP)
-
-    scenario = db.relationship('Scenario', back_populates="game")
-
-
-class Team(db.Model):
-    __tablename__ = 'team'
-
-    universal_team_id = db.Column(db.Integer, primary_key=True, nullable=False, autoincrement=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    team_id = db.Column(db.Integer)
-    name = db.Column(db.String(45))
-    leader_id = db.Column(db.Integer)
-    deleted = db.Column(db.BOOLEAN)
-
-    game = db.relationship('Game')
-
-
-class Country(db.Model):
-    __tablename__ = 'country'
-
-    country_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    player_id = db.Column(db.Integer)
-    team_id = db.Column(db.ForeignKey('team.universal_team_id'), index=True)
-    name = db.Column(db.String(45))
-    capital_id = db.Column(db.Integer)
-    defeated = db.Column(db.BOOLEAN)
-    computer = db.Column(db.BOOLEAN)
-
-    team = db.relationship('Team')
-
-
-class GameHasPlayer(db.Model):
-    __tablename__ = 'game_has_player'
-
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    player_id = db.Column(db.ForeignKey('player.player_id'), primary_key=True, nullable=False, index=True)
-    country_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-
-    country = db.relationship('Country')
-    game = db.relationship('Game')
-    player = db.relationship('Player')
-
-
-class Province(db.Model):
-    __tablename__ = 'province'
-
-    province_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    province_location_id = db.Column(db.Integer, nullable=False)
-    owner_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    morale = db.Column(db.Integer)
-    province_state_id = db.Column(db.Integer)
-    stationary_army_id = db.Column(db.Integer)
-    victory_points = db.Column(db.Integer)
-    resource_production = db.Column(db.Integer)
-    tax_production = db.Column(db.Integer)
-    current_time = db.Column(db.TIMESTAMP, nullable=False)
-    map_id = db.Column(db.Integer)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-
-    game = db.relationship('Game')
-    owner = db.relationship('Country')
-    buildings = db.relationship("Building", secondary="province_has_building", overlaps="provinces")
-
-
-class Trade(db.Model):
-    __tablename__ = 'trade'
-
-    trade_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    order_id = db.Column(db.String(45))
-    owner_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    amount = db.Column(db.Integer)
-    resource_type = db.Column(db.Integer)
-    limit = db.Column(db.Float)
-    buy = db.Column(db.BOOLEAN)
-    current_time = db.Column(db.TIMESTAMP)
-
-    game = db.relationship('Game')
-    owner = db.relationship('Country')
-
-
-class Newspaper(db.Model):
-    __tablename__ = 'newspaper'
-
-    article_id = db.Column(db.Integer, primary_key=True, nullable=False, autoincrement=True)
-    msg_typ = db.Column(db.Integer, nullable=False)
-    country_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    wtyp = db.Column(db.Integer, nullable=False)
-    whtyp = db.Column(db.Integer)
-    division = db.Column(db.Integer)
-    count = db.Column(db.Integer)
-    time = db.Column(db.TIMESTAMP)
-
-    country = db.relationship('Country')
-
-
-class ProvinceHasBuilding(db.Model):
-    __tablename__ = 'province_has_building'
-
-    province_id = db.Column(db.ForeignKey('province.province_id'), primary_key=True, nullable=False, index=True)
-    building_id = db.Column(db.ForeignKey('building.building_id'), primary_key=True, nullable=False, index=True)
-
-    province = db.relationship("Province", overlaps="buildings,provinces")
-    building = db.relationship("Building", overlaps="buildings,provinces")
+@app.route('/load')
+def load():
+    for k in cache.cache._cache:
+        print(k, cache.get(k))
 
 
 # creating our routes
-@app.route('/api/v1/game')
-def game():
-    filters = dict({})
-    output = dict({})
-    table = inspect(Team)
-    for filter in table.c:
-        if filter.name in request.args:
-            filters[filter.name] = request.args[filter.name]
-    for game in Game.query.filter_by(**filters).all():
-        output_dict = object_as_dict(game)
-        output_dict["current_time"] = round(output_dict["current_time"].timestamp())
-        output_dict["start_time"] = round(output_dict["start_time"].timestamp())
-        output_dict["next_heal_time"] = round(output_dict["next_heal_time"].timestamp()) if output_dict[
-                                                                                                "next_heal_time"] is not None else None
-        output_dict["next_day_time"] = round(output_dict["next_day_time"].timestamp()) if output_dict[
-                                                                                              "next_heal_time"] is not None else None
-        output_dict["end_time"] = round(output_dict["end_time"].timestamp()) if output_dict[
-                                                                                    "end_time"] is not None else None
+@app.route('/api/v1/game/<game_id>')
+@cache.cached(timeout=5000)
+def game(game_id):
+    output = {}
+    game_id = int(game_id)
+    query = db.session \
+        .query(Game.game_id, Game.current_time, Game.start_time, Game.next_heal_time, Game.next_day_time,
+               Game.end_time, Scenario.map_id, Scenario.name, Scenario.speed) \
+        .join(Scenario)
 
-        output[game.game_id] = output_dict
-    return jsonify(list(output.values()))
+    if game_id != -1:
+        query = query.filter(Game.game_id == game_id)
 
-
-@app.route('/api/v1/team')
-def team():
-    filters = dict({})
-    output = dict({})
-    table = inspect(Team)
-    if "game_id" not in request.args:
-        return "game_id is needed"
-    for filter in table.c:
-        if filter.name in request.args:
-            filters[filter.name] = request.args[filter.name]
-    for team in Team.query.filter_by(**filters).all():
-        output_dict = object_as_dict(team)
-        output_dict.pop("game_id")
-        output[team.universal_team_id] = output_dict
-
+    for game in query.all():
+        output[game.game_id] = {
+            "gid": game.game_id,
+            "ct": round(game.current_time.timestamp()),
+            "st": round(game.start_time.timestamp()),
+            "nht": game.next_heal_time if game.next_heal_time is None else round(game.next_heal_time.timestamp()),
+            "ndt": game.next_day_time if game.next_day_time is None else round(game.next_day_time.timestamp()),
+            "et": game.end_time if game.end_time is None else round(game.end_time.timestamp()),
+            "mid": game.map_id,
+            "sn": game.name,
+            "sp": game.speed,
+        }
     return jsonify(output)
 
 
-@app.route('/api/v1/province')
-def provinces():
-    output = dict({})
-    filters = []
-    table = inspect(Province)
-    if "game_id" not in request.args:
-        return "game_id is needed"
-    game = getGame(request.args["game_id"])
-    if "value" in request.args:
-        query = db.session.query(Province.province_id, Province.owner_id, StaticProvince.name, Building.upgrade_id,
-                                 Building.health) \
+@app.route('/api/v1/team/<game_id>/')
+@cache.cached(timeout=500)
+def team(game_id):
+    game = getGame(game_id)
+    output = {}
+    query = db.session.query(Team).filter(Team.game_id == game.game_id)
+
+    for team in query.all():
+        output[team.universal_team_id] = {
+            "utid": team.universal_team_id,
+            "tmid": team.team_id,
+            "tn": team.name,
+            "lid": team.leader_id,
+            "ds": bool(team.deleted),
+        }
+    return jsonify(output)
+
+
+@app.route('/api/v1/provinces/<game_id>/<mode>/<day>')
+@cache.cached(timeout=50000)
+def provinces(game_id, mode, day):
+    output = {}
+    game = getGame(game_id)
+    day_time = get_newest_time(game, day)
+    print(day_time)
+
+    if "value" == mode:
+        query = db.session.query(Province.province_id, Province.owner_id, Building.upgrade_id, Building.health,
+                                 StaticProvince.province_location_id) \
             .select_from(Province) \
             .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
             .join(ProvinceHasBuilding) \
             .join(Building) \
-            .filter(StaticProvince.map_id == game.map_id)
+            .filter(StaticProvince.map_id == game.map_id) \
+            .filter(Province.game_id == game.game_id) \
+            .filter(Province.current_time == day_time)
+
+    elif "list" == mode:
+        query = db.session.query(Province.province_id, StaticProvince.province_location_id, Province.owner_id,
+                                 Building.upgrade_id, Building.health, Province.morale, Province.province_state_id,
+                                 Province.victory_points,
+                                 case(
+                                     [(StaticProvince.resource_production_type == 2, Province.resource_production)],
+                                     else_=0
+                                 ).label("r2"),
+                                 case(
+                                     [(StaticProvince.resource_production_type == 3, Province.resource_production)],
+                                     else_=0
+                                 ).label("r3"),
+                                 case(
+                                     [(StaticProvince.resource_production_type == 5, Province.resource_production)],
+                                     else_=0
+                                 ).label("r5"),
+                                 case(
+                                     [(StaticProvince.resource_production_type == 6, Province.resource_production)],
+                                     else_=0
+                                 ).label("r6"),
+                                 case(
+                                     [(StaticProvince.resource_production_type == 7, Province.resource_production)],
+                                     else_=0
+                                 ).label("r7"),
+                                 Province.tax_production) \
+            .select_from(Province) \
+            .join(Country) \
+            .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
+            .join(ProvinceHasBuilding) \
+            .join(Building) \
+            .filter(Province.game_id == game.game_id) \
+            .filter(StaticProvince.map_id == game.map_id) \
+            .filter(Province.current_time == day_time)
 
     else:
-        query = db.session.query(Province)
+        query = db.session.query(Province).filter(Game.game_id == game_id).filter(Province.current_time == day_time)
 
-    for filter in table.c:
-        if filter.name in request.args:
-            if "current_time" == filter.name:
-                query = query.filter(
-                    getattr(Province, filter.name) == datetime.fromtimestamp(float(request.args[filter.name])))
-            else:
-                query = query.filter(getattr(Province, filter.name) == request.args[filter.name])
-
-    if "day" in request.args:
-        if "lastdays" in request.args:
-            lastdays = int(request.args["lastdays"])
-        else:
-            lastdays = 0
-        time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (lastdays * 3600 * 24) - 300
-        time_end = time.mktime(game["current_time"].timetuple()) + 300
-        query = query.filter(
-            between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
-    if "value" in request.args:
+    if "value" == mode:
         province_buildings = {}
-        for province in query.filter(Province.current_time == game["current_time"]).limit(1000000).all():
-            province_dict = {
-                "province_id": province.province_id,
-                "owner_id": province.owner_id,
-                "province_name": province[2],
-                "upgrade_id": province.upgrade_id,
-                "health": province.health
+
+        for province in query.all():
+            if province.province_id not in province_buildings:
+                province_buildings[province.province_id] = {
+                    "pid": province.province_id,
+                    "plid": province.province_location_id,
+                    "oid": province.owner_id,
+                    "upg": {},
+                }
+            province_buildings[province.province_id]["upg"][province.upgrade_id] = {
+                "upid": province.upgrade_id,
+                "ht": province.health
             }
-            province_buildings[f'{province_dict["province_id"]}_{province_dict["upgrade_id"]}'] = province_dict
-        ranked = False
-        if "ranked" in request.args:
-            ranked = True
-        output = helper.getProvinceBuildings(province_buildings, data_upgrades, ranked)
+        for province in province_buildings:
+            province = province_buildings[province]
+            province.update(get_province_buildings(province, data_upgrades, True))
+        output = sorted(list(province_buildings.values()), reverse=True, key=province_sort_by_building_cost)[0:30]
         return jsonify(output)
+
+    if "list" == mode:
+        province_buildings = {}
+        for province in query.all():
+            if province.province_id not in province_buildings:
+                province_buildings[province.province_id] = {
+                    "pid": province.province_id,
+                    "plid": province.province_location_id,
+                    "ml": province.morale,
+                    "psid": province.province_state_id,
+                    "vp": province.victory_points,
+                    "oid": province.owner_id,
+                    "2": province.r2,
+                    "3": province.r3,
+                    "5": province.r5,
+                    "6": province.r6,
+                    "7": province.r7,
+                    "21": province.tax_production,
+                    "upg": {},
+                }
+            province_buildings[province.province_id]["upg"][province.upgrade_id] = {
+                "upid": province.upgrade_id,
+                "ht": province.health
+            }
+        for province in province_buildings:
+            province = province_buildings[province]
+            province.update(get_province_buildings(province, data_upgrades, False))
+
+        output = province_buildings
+        return jsonify(output)
+
     for province in query.limit(1000000).all():
-        province_dict = object_as_dict(province)
-        province_dict["current_time"] = round(time.mktime(province.current_time.timetuple()))
-        province_dict.pop("map_id")
-        province_dict.pop("game_id")
-        output[province_dict["province_id"]] = province_dict
+        output[province.province_id] = {
+            "ct": round(province.current_time.timestamp()),
+            "ml": province.morale,
+            "oid": province.owner_id,
+            "pid": province.province_id,
+            "plid": province.province_location_id,
+            "psid": province.province_state_id,
+            "rp": province.resource_production,
+            "stid": province.stationary_army_id,
+            "tp": province.tax_production,
+            "vp": province.victory_points,
+        }
     return jsonify(output)
 
 
-@app.route('/api/v1/country')
-def country():
-    output = dict({})
-    filters = dict({})
-    filters_exp = dict({})
-    table_country = inspect(Country)
-    table_player = inspect(Player)
-
-    if "game_id" not in request.args:
+@app.route('/api/v1/countrys/<int:game_id>/<mode>/<country_id>/<day>')
+@cache.cached(timeout=50000)
+def countrys(game_id, mode, country_id, day):
+    if game_id is None:
         return "game_id is needed"
-
-    game_id = request.args["game_id"]
-    if len(filters) + len(filters_exp) == 1:
-        return "Error: To less filters"
-    game = getGame(request.args["game_id"])
-
-    if "economy" in request.args:
+    country_id = int(country_id)
+    day = int(day)
+    game = getGame(game_id)
+    day_time = get_newest_time(game, day)
+    # Define Queries for different modes
+    if mode == "stats":
         query = db.session.query(
             Country.country_id,
             Province.current_time,
-            func.sum(Province.victory_points),
-            func.sum(case(
-                [(StaticProvince.resource_production_type == 2, Province.resource_production)], else_=0
-            )),
-            func.sum(case(
-                [(StaticProvince.resource_production_type == 3, Province.resource_production)], else_=0
-            )),
-            func.sum(case(
-                [(StaticProvince.resource_production_type == 5, Province.resource_production)], else_=0
-            )),
-            func.sum(case(
-                [(StaticProvince.resource_production_type == 6, Province.resource_production)], else_=0
-            )),
-            func.sum(case(
-                [(StaticProvince.resource_production_type == 7, Province.resource_production)], else_=0
-            )),
-            func.sum(Province.tax_production),
-            func.sum(Province.resource_production).label("total"),
-
-        ).select_from(Country
-                      ).join(Province).join(StaticProvince,
-                                            Province.province_location_id == StaticProvince.province_location_id
-                                            ).join(GameHasPlayer
-                                                   ).filter(StaticProvince.map_id == game.map_id)
-        if "day" in request.args:
-            if "lastdays" in request.args:
-                lastdays = int(request.args["lastdays"])
-            else:
-                lastdays = 0
-            time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (
-                        lastdays * 3600 * 24) - 300
-            time_end = time.mktime(game["current_time"].timetuple()) + 300
-            query = query.filter(
-                between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
-        if "country_id" in request.args:
-            query = query.filter(Country.country_id == int(request.args["country_id"]))
-        if "single" in request.args:
-            for country in query.filter(
-                    GameHasPlayer.game_id == game_id
-            ).group_by(Province.current_time, Country.country_id).all():
-                output[country.country_id] = dict({
-                    "country_id": country.country_id,
-                    "current_time": round(country.current_time.timestamp()),
-                    "victory_points": int(country[2]),
-                    "2": int(country[3]),
-                    "3": int(country[4]),
-                    "5": int(country[5]),
-                    "6": int(country[6]),
-                    "7": int(country[7]),
-                    "21": int(country[8]),
-                    "total": int(country.total),
-                })
-            return jsonify(output)
-        for country in query.filter(
-                GameHasPlayer.game_id == game_id
-        ).group_by(Country.country_id, Province.current_time).all():
-            output[f"{country.country_id}_{round(country.current_time.timestamp())}"] = dict({
-                "country_id": country.country_id,
-                "current_time": round(country.current_time.timestamp()),
-                "victory_points": int(country[2]),
-                "2": int(country[3]),
-                "3": int(country[4]),
-                "5": int(country[5]),
-                "6": int(country[6]),
-                "7": int(country[7]),
-                "21": int(country[8]),
-                "total": int(country.total),
-            })
-        return jsonify(output)
-
-    if "research" in request.args:
-        query = db.session.query(
-            Newspaper.country_id, Newspaper.wtyp, func.sum(Newspaper.count)
-        ).select_from(Newspaper
-                      ).join(GameHasPlayer, GameHasPlayer.country_id == Newspaper.country_id
-                             ).filter(GameHasPlayer.game_id == game_id)
-        if "country_id" in request.args:
-            query = query.filter(Newspaper.country_id == int(request.args["country_id"]))
-        for country in query.group_by(Newspaper.country_id, Newspaper.wtyp).all():
-            output[f"{country.country_id} {country.wtyp}"] = dict({
-                "country_id": country.country_id,
-                "wtyp": country.wtyp,
-                "count": country[-1],
-            })
-        output = getResearch(output)
-        return jsonify(output)
-
-    if "stats" in request.args:
-        query = db.session.query(
-            Country.country_id,
-            Province.current_time,
+            func.sum(Province.victory_points).label("victory_points"),
             func.avg(Province.morale).label("morale"),
             func.sum(case(
                 [(Province.province_state_id <= 52, 1)], else_=0
@@ -426,141 +248,264 @@ def country():
             func.sum(case(
                 [(Province.province_state_id == 54, 1)], else_=0
             )).label("total_annexed_cities"),
-            func.count(Province.province_id).label("total"),
-        ).select_from(Country
-                      ).join(Province).join(GameHasPlayer
-                                            )
-        if "day" in request.args:
-            game = getGame(request.args["game_id"])
-            if "lastdays" in request.args:
-                lastdays = int(request.args["lastdays"])
+            func.count(Province.province_id).label("total_provinces_cities"),
+            func.sum(case(
+                [(StaticProvince.resource_production_type == 2, Province.resource_production)], else_=0
+            )).label("r2"),
+            func.sum(case(
+                [(StaticProvince.resource_production_type == 3, Province.resource_production)], else_=0
+            )).label("r3"),
+            func.sum(case(
+                [(StaticProvince.resource_production_type == 5, Province.resource_production)], else_=0
+            )).label("r5"),
+            func.sum(case(
+                [(StaticProvince.resource_production_type == 6, Province.resource_production)], else_=0
+            )).label("r6"),
+            func.sum(case(
+                [(StaticProvince.resource_production_type == 7, Province.resource_production)], else_=0
+            )).label("r7"),
+            func.sum(Province.tax_production).label("tax_production"),
+            func.sum(Province.resource_production).label("total_resource_production"),
+        ).select_from(Country) \
+            .join(Province) \
+            .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
+            .join(GameHasPlayer) \
+            .filter(StaticProvince.map_id == game.map_id)
+        if country_id == -1:
+            query = query.filter(Province.current_time == day_time) \
+                .group_by(Country.country_id)
+        else:
+            query = query.filter(Country.country_id == country_id).group_by(Province.current_time)
+
+    elif mode == "rising_power":
+        day_ago = get_nearest_time(game, day_time)
+        query = db.session.query(Country.country_id,
+                                 ((func.sum(
+                                     case(
+                                         [(Province.current_time == day_time, Province.victory_points)], else_=0
+                                     )
+                                 ))
+                                  -
+                                  func.sum(
+                                      case(
+                                          [(Province.current_time == day_ago, Province.victory_points)], else_=0
+                                      )
+                                  )
+                                  ).label("5_day")) \
+            .join(Province) \
+            .filter(Province.game_id == game.game_id) \
+            .order_by(desc("5_day")) \
+            .group_by(Country)
+
+    elif mode == "production":
+        query = db.session.query(Newspaper.country_id, Newspaper.wtyp,
+                                 func.sum(
+                                     case(
+                                         [(Newspaper.count > 0, Newspaper.count)], else_=0
+                                     )
+                                 ).label("noticed_weapons"),
+                                 func.sum(
+                                     case(
+                                         [(Newspaper.count < 0, Newspaper.count * -1)], else_=0
+                                     )
+                                 ).label("lost_weapons")
+                                 ) \
+            .select_from(Newspaper) \
+            .join(GameHasPlayer, GameHasPlayer.country_id == Newspaper.country_id) \
+            .filter(GameHasPlayer.game_id == game_id) \
+            .filter(Newspaper.time <= day_time) \
+            .group_by(Newspaper.country_id, Newspaper.wtyp)
+
+        if country_id != -1:
+            query = query.filter(Newspaper.country_id == country_id)
+
+    else:
+        query = db.session \
+            .query(Country.country_id, Country.team_id, Country.name.label("country_name"), Country.capital_id,
+                   Player.player_id, Country.defeated, Country.computer, Player.name.label("player_name")) \
+            .select_from(Country) \
+            .join(GameHasPlayer) \
+            .join(Player) \
+            .filter(GameHasPlayer.game_id == game_id)
+
+        if country_id != -1:
+            query.filter(Country.country_id == country_id)
+
+    # Execute different Queries
+
+    if mode == "stats":
+        output = {}
+        for country in query.all():
+            if country_id == -1:
+                output[country.country_id] = {
+                    "cid": country.country_id,
+                    "ct": round(country.current_time.timestamp()),
+                    "vp": int(country.victory_points),
+                    "ml": round(country.morale),
+                    "t_p": int(country.total_provinces),
+                    "t_c": int(country.total_cities),
+                    "t_ac": int(country.total_annexed_cities),
+                    "t_mlc": int(country.total_mainland_cities),
+                    "t_pc": int(country.total_provinces_cities),
+                    "2": int(country.r2),
+                    "3": int(country.r3),
+                    "5": int(country.r5),
+                    "6": int(country.r6),
+                    "7": int(country.r7),
+                    "21": int(country.tax_production),
+                    "trp": int(country.total_resource_production),
+                }
             else:
-                lastdays = 0
-            time_start = time.mktime(game["start_time"].timetuple()) + (int(request.args["day"]) * 3600 * 24) - (
-                        lastdays * 3600 * 24) - 300
-            time_end = time.mktime(game["current_time"].timetuple()) + 300
-            query = query.filter(
-                between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
-        if "country_id" in request.args:
-            query = query.filter(Country.country_id == int(request.args["country_id"]))
-        for country in query.filter(
-                GameHasPlayer.game_id == game_id
-        ).group_by(Country.country_id, Province.current_time).all():
-            output[country.country_id] = dict({
-                "country_id": country.country_id,
-                "current_time": round(country.current_time.timestamp()),
-                "morale": round(country.morale, 2),
-                "total_provinces": int(country.total_provinces),
-                "total_cities": int(country.total_cities),
-                "total_mainland_cities": int(country.total_mainland_cities),
-                "total_annexed_cities": int(country.total_annexed_cities),
-                "total": int(country.total),
-            })
+                if country.country_id not in output:
+                    output[country.country_id] = {
+                        "cid": country.country_id,
+                        "ts": {},
+                    }
+                output[country.country_id]["ts"][round(country.current_time.timestamp())] = {
+                    "ct": round(country.current_time.timestamp()),
+                    "vp": int(country.victory_points),
+                    "ml": round(country.morale),
+                    "t_p": int(country.total_provinces),
+                    "t_c": int(country.total_cities),
+                    "t_ac": int(country.total_annexed_cities),
+                    "t_mlc": int(country.total_mainland_cities),
+                    "t_pc": int(country.total_provinces_cities),
+                    "2": int(country.r2),
+                    "3": int(country.r3),
+                    "5": int(country.r5),
+                    "6": int(country.r6),
+                    "7": int(country.r7),
+                    "21": int(country.tax_production),
+                    "trp": int(country.total_resource_production),
+                }
         return jsonify(output)
-    query = db.session.query(Country.country_id, Country.name, Player.player_id, Player.name,
-                             Country.team_id,
-                             Country.capital_id, Country.defeated, Country.computer
-                             ).select_from(Country).join(
-        GameHasPlayer).join(Player
-                            ).filter(GameHasPlayer.game_id == game_id)
-    if "country_id" in request.args:
-        query = query.filter(GameHasPlayer.country_id == int(request.args["country_id"]))
-    for country in query.all():
-        output[country.country_id] = dict({
-            "player_id": country.player_id,
-            "player_name": country[3],
-            "country_id": country.country_id,
-            "country_name": country[1],
-            "team_id": country.team_id,
-            "capital_id": country.capital_id,
-            "defeated": country.defeated,
-            "computer": country.computer,
-        })
+
+    elif mode == "rising_power":
+        # Countrys sorted by last 5 days victorys
+        ids = {country.country_id: pos for pos, country in enumerate(query.all())}
+        query2 = db.session.query(
+            Country.country_id,
+            Province.current_time,
+            func.sum(Province.victory_points).label("victory_points"),
+            func.avg(Province.morale).label("morale"),
+            func.sum(Province.resource_production).label("total_resource_production"), ) \
+            .join(Province) \
+            .filter(Province.game_id == game_id) \
+            .group_by(Country, Province.current_time)
+
+        if country_id != -1:
+            query2 = query2.filter(Country.country_id == country_id)
+
+        # Retrieve Country data
+        # output = {key: {} for key in ids.keys()}
+        output = {}
+        for country in query2:
+            pos = ids[country.country_id]
+            if country.country_id not in output:
+                output[country.country_id] = {
+                    "cid": country.country_id,
+                    "rspos": pos,
+                    "ts": {}
+                }
+            output[country.country_id]["ts"][round(country.current_time.timestamp())] = {
+                "vp": int(country.victory_points),
+                "trp": int(country.total_resource_production),
+            }
+        return jsonify(output)
+
+    elif mode == "production":
+        output = {}
+        for country in query.all():
+            if country.country_id not in output:
+                output[country.country_id] = {
+                    "cid": country.country_id,
+                    "wp": {}
+                }
+            output[country.country_id]["wp"][country.wtyp] = {
+                "wtyp": int(country.wtyp),
+                "ntw": int(country.noticed_weapons),
+                "lsw": int(country.lost_weapons),
+            }
+        for country in output:
+            country = output[country]
+            country.update(get_production(country))
+        return jsonify(output)
+
+    else:
+        output = {}
+        for country in query.all():
+            output[country.country_id] = {
+                "cid": country.country_id,
+                "pyn": country.player_name,
+                "utid": country.team_id,
+                "cn": country.country_name,
+                "cpid": country.capital_id,
+                "df": bool(country.defeated),
+                "cp": bool(country.computer),
+            }
+        return jsonify(output)
+
+
+@app.route('/api/v1/trade/<int:game_id>')
+@cache.cached(timeout=500)
+def trade(game_id):
+    output = {}
+    query = db.session.query(Trade).filter(Trade.game_id == game_id)
+    for trade in query.all():
+        output[trade.trade_id] = {
+            "tdid": trade.trade_id,
+            "am": trade.amount,
+            "b": trade.buy,
+            "ct": round(trade.current_time.timestamp()),
+            "lm": trade.limit,
+            "odid": trade.order_id,
+            "oid": trade.owner_id,
+            "rsrt": trade.resource_type,
+        }
     return jsonify(output)
 
 
-@app.route('/api/v1/building')
-def building():
-    output = dict({})
-    filters = dict({})
+@app.route('/api/v1/static/province/<int:map_id>')
+@cache.cached(timeout=5000)
+def static_province(map_id):
+    output = {}
 
-    query = db.session.query(Province.province_id, Province.province_location_id, Building.building_id,
-                             Building.upgrade_id, Building.health, Province.current_time
-                             ).select_from(Building
-                                           ).join(ProvinceHasBuilding).join(Province)
-    if "game_id" in request.args:
-        query = query.filter(Province.game_id == request.args["game_id"])
-    if "current_time" in request.args:
-        query = query.filter(Province.current_time == datetime.fromtimestamp(float(request.args["current_time"])))
-    if "province_location_id" in request.args:
-        query = query.filter(Province.province_location_id == request.args["province_location_id"])
-    if "owner_id" in request.args:
-        query = query.filter(Province.owner_id == request.args["owner_id"])
-    for building in query.limit(100000).all():
-        output[f"{building.building_id}_{building.province_id}"] = dict({
-            "building_id": building.building_id,
-            "province_location_id": building.province_location_id,
-            "upgrade_id": building.upgrade_id,
-            "health": building.health,
-            "current_time": round(building.current_time.timestamp()),
-        })
-    return jsonify(output)
+    query = db.session.query(StaticProvince.province_location_id, StaticProvince.coordinate_x,
+                             StaticProvince.coordinate_y,
+                             StaticProvince.b, StaticProvince.mainland_id, StaticProvince.name, StaticProvince.region,
+                             StaticProvince.resource_production_type, StaticProvince.terrain_type
+                             ) \
+        .filter(StaticProvince.map_id == map_id)
 
-
-@app.route('/api/v1/trade')
-def trade():
-    output = dict({})
-    filters = dict({})
-    filters_exp = dict({})
-    table = inspect(Trade)
-
-    if "game_id" not in request.args:
-        return "game_id is needed"
-
-    if "day" in request.args:
-        filters_exp["day"] = int(request.args["day"])
-    for filter in table.c:
-        if filter.name in request.args:
-            filters[filter.name] = request.args[filter.name]
-
-    for trade in Trade.query.filter_by(**filters).all():
-        trade_dict = object_as_dict(trade)
-        trade_dict["current_time"] = round(trade_dict["current_time"].timestamp())
-        trade_dict.pop("game_id")
-        output[trade_dict["trade_id"]] = trade_dict
-    return jsonify(output)
-
-
-@app.route('/api/v1/static/province')
-def static_province():
-    output = dict({})
-    filters = dict({})
-    table = inspect(StaticProvince)
-
-    for filter in table.c:
-        if filter.name in request.args:
-            filters[filter.name] = request.args[filter.name]
-
-    for static_province in StaticProvince.query.filter_by(**filters).all():
-        static_province = object_as_dict(static_province)
-        static_province.pop("map_id")
-        static_province.pop("coastal")
-        static_province.pop("static_province_id")
-        output[static_province["province_location_id"]] = static_province
+    for static_province in query.all():
+        output[static_province.province_location_id] = {
+            "plid": static_province.province_location_id,
+            "bt": static_province.b,
+            "cdx": static_province.coordinate_x,
+            "cdy": static_province.coordinate_y,
+            "mlid": static_province.mainland_id,
+            "pn": static_province.name,
+            "rg": static_province.region,
+            "rpt": static_province.resource_production_type,
+            "tt": static_province.terrain_type,
+        }
     return jsonify(output)
 
 
 @app.route('/api/v1/static/research')
+@cache.cached()
 def static_research():
     return jsonify(data_researches)
 
 
 @app.route('/api/v1/static/upgrade')
+@cache.cached()
 def staic_upgrade():
     return jsonify(data_upgrades)
 
 
 @app.route('/api/v1/static/scenario')
+@cache.cached()
 def static_scenario():
     output = dict({})
     filters = dict({})
@@ -571,20 +516,46 @@ def static_scenario():
             filters[filter.name] = request.args[filter.name]
 
     for static_scenario in Scenario.query.filter_by(**filters).all():
-        static_scenario = object_as_dict(static_scenario)
-        output[static_scenario["scenario_id"]] = static_scenario
+        output[static_scenario.scenario_id] = {
+            "sid": static_scenario.scenario_id,
+            "mid": static_scenario.map_id,
+            "sn": static_scenario.name,
+            "sp": static_scenario.speed,
+        }
     return jsonify(output)
 
 
 def getGame(game_id):
-    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Scenario.speed, Scenario.map_id, Game.scenario_id).join(Scenario).filter(
+    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Scenario.speed, Scenario.map_id,
+                            Game.scenario_id).join(Scenario).filter(
         Game.game_id == game_id).first()
     return game
 
 
+@cache.cached(timeout=60000, key_prefix="scenarios")
 def getScenarios():
     scenarios = Scenario.query.all()
     return scenarios
+
+
+def get_newest_time(game, day):
+    time_start = time.mktime(game["start_time"].timetuple()) + (int(day) * 3600 * 24) - 300
+    time_end = time.mktime(game["start_time"].timetuple()) + int(day) * 3600 * 24 + 3600 * 24 + 300
+    query = db.session.query(func.max(Province.current_time)).filter(
+        between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
+    newest_time = query.scalar()
+    return newest_time
+
+def get_nearest_time(game, day_time: datetime):
+    query = db.session.query(
+        Province.current_time,
+        (func.abs(func.timestampdiff(text("SECOND"), Province.current_time, day_time - timedelta(days=5)))).label(
+            "nearest_time")) \
+        .filter(Province.game_id == game["game_id"]) \
+        .group_by(Province.current_time) \
+        .order_by("nearest_time")
+    newest_time = query.limit(1).all()[0][0]
+    return newest_time
 
 
 def object_as_dict(obj):

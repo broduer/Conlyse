@@ -1,31 +1,48 @@
 import Header from "./components/Header";
 import {BrowserRouter as Router, Routes, Route} from "react-router-dom";
-import Startpage from "./pages/Startpage";
-import React, {Component, useEffect, useState} from "react";
-import Game from "./groups/game";
+import Game from "./components/pages/game/game";
+import Startpage from "./components/pages/Startpage";
+import Dashboard from "./components/pages/game/dashboard";
+import Country from "./components/pages/game/country";
+import Countrys from "./components/pages/game/countrys";
+import React from "react";
 import {theme} from "./helper/theme";
 import {CssBaseline, ThemeProvider} from "@mui/material";
-import Countrys from "./components/game/countrys";
-import Country from "./components/game/country";
-import Dashboard from "./components/game/dashboard";
 
+import {QueryClientProvider, QueryClient} from "react-query";
+import { ReactQueryDevtools } from 'react-query/devtools'
+import Provinces from "./components/pages/game/provinces";
+import Map from "./components/pages/game/Map/map";
+import Mappage from "./components/pages/game/Map/Mappage";
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries:{
+            cacheTime: 10 * 60 * 1000,
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+        }
+    }
+});
 
 const App = () => {
-
-
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline/>
             <Router>
                 <div className="App">
                     <Header/>
-                    <Routes>
-                        <Route path={"/game/:game_id"} element={<Game/>} exact/>
-                        <Route path={"/game/:game_id/dashboard"} element={<Dashboard/>}/>
-                        <Route path={"/game/:game_id/countrys"} element={<Countrys/>}/>
-                        <Route path={"/game/:game_id/country/:country_id"} element={<Country/>}/>
-                        <Route path={"/"} element={<Startpage/>} exact/>
-                    </Routes>
+                    <QueryClientProvider client={queryClient}>
+                        <Routes>
+                            <Route path={"/game/:game_id"} element={<Game/>} exact/>
+                            <Route path={"/game/:game_id/dashboard"} element={<Dashboard/>}/>
+                            <Route path={"/game/:game_id/countrys"} element={<Countrys/>}/>
+                            <Route path={"/game/:game_id/country/:country_id"} element={<Country/>}/>
+                            <Route path={"/game/:game_id/provinces"} element={<Provinces/>}/>
+                            <Route path={"/game/:game_id/map"} element={<Mappage/>}/>
+                            <Route path={"/"} element={<Startpage/>} exact/>
+                        </Routes>
+                    </QueryClientProvider>
+
                 </div>
             </Router>
         </ThemeProvider>

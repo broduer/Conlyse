@@ -1,64 +1,49 @@
-import {getDifference} from "../time";
+import {getClosestTime, getDifference} from "../time";
+const interval = 5
+const max_days = 10
+export default function getRisingPowers(countrys, game){
+    let countrys_rs = {}
+    // Sort Countrys after Rising Powers Place if not set = 99
+    let sorted_countrys = Object.values(countrys)
+    sorted_countrys = sorted_countrys.sort((a, b) =>{
+        a["rspos"] = "rspos" in a ? a["rspos"] : 99
+        b["rspos"] = "rspos" in b ? b["rspos"] : 99
+        return b["rspos"] - a["rspos"]
+    }).reverse()
+    for (let country in sorted_countrys){
+        country = sorted_countrys[country]
+        countrys_rs[country["cid"]] = {}
+        countrys_rs[country["cid"]]["name"] = country["cn"]
+        countrys_rs[country["cid"]]["cid"] = country["cid"]
+        countrys_rs[country["cid"]]["rspos"] = country["rspos"]
+        countrys_rs[country["cid"]]["vps"] = {}
+        countrys_rs[country["cid"]]["trp"] = {}
 
-export default function getRisingPowers(countrys, countrys_adv, start_time, current_time){
-    var countrys_new = {}
-    for (var country in countrys){
-        country = countrys[country]
-        countrys_new[country.country_id] = {}
-        countrys_new[country.country_id]["country_id"] = country.country_id
-        countrys_new[country.country_id]["victory_points"] = {
-            "last_1": 0,
-            "last_5": 0,
-            "last_10": 0,
-        }
-        countrys_new[country.country_id]["economy"] = {
-            "last_1": 0,
-            "last_5": 0,
-            "last_10": 0,
-        }
-        countrys_new[country.country_id]["economy"]["data"] = []
-        countrys_new[country.country_id]["victory_points"]["data"] = []
-        countrys_new[country.country_id]["labels"] = []
-        countrys_new[country.country_id]["name"] = country["country_name"]
-        let current_country = Object.values(countrys_adv).filter(country_adv => {
-            return(country["country_id"] === country_adv["country_id"]
-            && country_adv["current_time"] === current_time)
-        })[0]
-        if(current_country == null) continue
-        let current_country_economy = getTotalEconomy(current_country)
-        let country_times = Object.values(countrys_adv).filter(country_adv => country["country_id"] === country_adv["country_id"])
-        for(let country_time in country_times){
-            country_time = country_times[country_time]
-            let total_economy = getTotalEconomy(country_time)
-            let day_difference = getDifference(country_time["current_time"] - 300, current_time,"D")
-            if(day_difference <=10){
-                countrys_new[country.country_id]["labels"].push(getDifference(start_time, country_time["current_time"], "D"))
-                countrys_new[country.country_id]["economy"]["data"].push(total_economy)
-                countrys_new[country.country_id]["victory_points"]["data"].push(country_time["victory_points"])
-            }
-            // eslint-disable-next-line default-case
-            switch (day_difference){
-                case 1:
-                    countrys_new[country.country_id]["economy"]["last_1"] = current_country_economy - total_economy
-                    countrys_new[country.country_id]["victory_points"]["last_1"] = current_country["victory_points"] - country_time["victory_points"]
-                    continue
-                case 5:
-                    countrys_new[country.country_id]["economy"]["last_5"] = current_country_economy - total_economy
-                    countrys_new[country.country_id]["victory_points"]["last_5"] = current_country["victory_points"] - country_time["victory_points"]
-                    continue
-                case 10:
-                    countrys_new[country.country_id]["economy"]["last_10"] = current_country_economy - total_economy
-                    countrys_new[country.country_id]["victory_points"]["last_10"] = current_country["victory_points"] - country_time["victory_points"]
+        if(Object.keys(country).includes("ts")){
+            countrys_rs[country["cid"]]["trp"]["data"] = Object.values(country["ts"]).map((ts) => ts["trp"])
+            countrys_rs[country["cid"]]["vps"]["data"] = Object.values(country["ts"]).map((ts) => ts["vp"])
+            countrys_rs[country["cid"]]["labels"] = Object.keys(country["ts"]).map((ts_k) => getDifference(game["st"], parseInt(ts_k), "D"))
+            let timestamps = Object.keys(country["ts"])
+            for (let day = 0; day <= max_days; day++){
+                if (( day === 1 || day % interval === 0) && day <= max_days){
+                    let time = getClosestTime(timestamps, game["ct"] - 3600 * 24 * day)
+                    if (day === 0){
+                        countrys_rs[country["cid"]]["vps"][`${day}`] = country["ts"][time]["vp"]
+                        countrys_rs[country["cid"]]["trp"][`${day}`] = country["ts"][time]["trp"]
+                    }
+                    else if (timestamps.includes(game["ct"].toString())){
+                        countrys_rs[country["cid"]]["vps"][`${day}`] = country["ts"][time]["vp"]
+                        countrys_rs[country["cid"]]["vps"][`l${day}`] = country["ts"][game["ct"]]["vp"] - country["ts"][time]["vp"]
+                        countrys_rs[country["cid"]]["trp"][`${day}`] = country["ts"][time]["trp"]
+                        countrys_rs[country["cid"]]["trp"][`l${day}`] = country["ts"][game["ct"]]["trp"] - country["ts"][time]["trp"]
+
+                    }
+                }
             }
         }
     }
-    var countrys_sorted = Object.values(countrys_new)
-    countrys_sorted.sort((a, b) => {
-        return b.victory_points.last_5 - a.victory_points.last_5;
-    });
-    return countrys_sorted
-}
-
-function getTotalEconomy(economy){
-    return economy["2"] + economy["3"] + economy["5"] + economy["6"] + economy["7"]
+    countrys_rs = Object.values(countrys_rs).sort((a, b) =>{
+        return b["rspos"] - a["rspos"]
+    }).reverse()
+    return countrys_rs
 }

@@ -35,17 +35,18 @@ export function getDatefromTimestamp(timestamp, format) {
 }
 
 export function getDifference(timestamp_start, timestamp_end, format){
-    var date_start = new Date(timestamp_start);
-    var date_end = new Date(timestamp_end);
-
-    var difference = date_end.getTime() - date_start.getTime()
-
-    var days = Math.floor(difference / (3600*24))
-
+    let difference = timestamp_end - timestamp_start
+    let days = difference / (3600*24)
     switch (format){
-        case "D": return days
+        case "D": return Math.floor(days)
         default: return difference
     }
+}
+
+export function getClosestTime(timestamp_array, timestamp){
+    return timestamp_array.reduce((a, b) => {
+        return Math.abs(b - timestamp) < Math.abs(a - timestamp) ? b : a;
+    })
 }
 
 export function getRealtime(timestamp_start, timestamp_current, speed){
