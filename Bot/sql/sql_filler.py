@@ -1,8 +1,8 @@
 from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
-from Bot_v2.sql.Models import Scenario, Trade, Player, Province, StaticProvince, Country, Game, GameHasPlayer, Team, \
+from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, Country, Game, GameHasPlayer, Team, \
     Building, ProvinceHasBuilding, Newspaper
-from Bot_v2.sql.sql import engine
+from Bot.sql.sql import engine
 from datetime import datetime
 
 

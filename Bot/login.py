@@ -1,3 +1,5 @@
+import base64
+import re
 from time import sleep
 
 from selenium.webdriver.support.wait import WebDriverWait
@@ -22,13 +24,10 @@ class Login:
             self.data_2 = self.getData_2()
             self.data_3 = self.getData_3()
             self.loginData = self.getLoginData()
-            self.fastloginData = self.getFastLoginData()
-            with open(f"fastlogin_{self.bot_data['game_id']}.json", "w") as file:
-                file.write(json.dumps(self.fastloginData, indent=2))
 
     def checkLoginPage(self):
         try:
-            login_register_box_element = self.driver.find_element(By.ID, "login-register-box")
+            self.driver.find_element(By.ID, "login-register-box")
             return True
         except:
             return False
@@ -62,34 +61,18 @@ class Login:
     def getLoginData(self):
         loginData = dict(
             {
-                "data_1": {
-                    "url": self.data_url[0]
-                },
-                "data_2": {
-                    "url": self.data_url[1],
-                    "body": self.data_2
-                },
-                "data_3": {
-                    "url": self.data_url[2],
-                    "body": self.data_3
-                }
+                "game_id": self.data_2["gameID"],
+                "version": self.data_2["version"],
+                "urls": self.data_url,
+                "hash": self.data_2["hash"],
+                "playerID": self.data_2["playerID"],
+                "siteUserID": self.data_2["siteUserID"],
+                "tstamp": self.data_2["tstamp"],
+                "authTstamp": re.findall("(?<=authTstamp=)[0-9]{10}", self.data_3)[0],
+                "userAuth": self.data_2["userAuth"],
             }
         )
         return loginData
-
-    def getFastLoginData(self):
-        data = json.loads(self.data_2)
-        fastLoginData = {
-            "version": data["version"],
-            "tstamp": data["tstamp"],
-            "hash": data["hash"],
-            "player_id": data["playerID"],
-            "site_user_id": data["siteUserID"],
-            "user_auth": data["userAuth"],
-            "game_id": data["gameID"],
-            "url": self.data_url[1],
-        }
-        return fastLoginData
 
     def getLog(self):
         return self.driver.get_log("performance")
@@ -98,7 +81,6 @@ class Login:
         logs = [json.loads(lr["message"])["message"] for lr in logs_raw]
         if number == 1:
             for log in filter(self.log_filter_1, logs):
-                request_id = log["params"]["requestId"]
                 return log["params"]["request"]["url"].split("?")[0]
         elif number == 2:
             for request in self.driver.requests:
@@ -126,7 +108,7 @@ class Login:
                     try:
                         body = json.loads(bytes.decode(request.body))
                         if body["@c"] == "ultshared.action.UltUpdateGameStateAction":
-                            return bytes.decode(request.body)
+                            return body
                     except:
                         pass
 
@@ -137,6 +119,7 @@ class Login:
                     try:
                         body = bytes.decode(request.body)
                         if "data" in body:
-                            return body
+                            print(body)
+                            return base64.b64decode(body[5:]).decode("utf-8")
                     except:
                         pass

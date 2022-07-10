@@ -1,16 +1,16 @@
 from selenium.webdriver import DesiredCapabilities
-import Bot_v2.constants as const
+import Bot.constants as const
 from seleniumwire import webdriver
-from Bot_v2.login import Login
-from Bot_v2.jsonscraper import WebScraper
-from Bot_v2.sort import sort
-from Bot_v2.sql.sql_filler import Filler
+from Bot.login import Login
+from Bot.scaper import WebScraper
+from Bot.sort import sort
+from Bot.sql.sql_filler import Filler
 from time import sleep
 
 
 options = webdriver.ChromeOptions()
 options.add_argument("--mute-audio")
-options.add_argument("--headless")
+# options.add_argument("--headless")
 capabilities = DesiredCapabilities.CHROME
 capabilities["goog:loggingPrefs"] = {"performance": "ALL"}  # chromedriver 75+
 
@@ -35,8 +35,11 @@ class Bot(webdriver.Chrome):
     def loginBot(self, bot_data):
         return Login(self, bot_data).loginData
 
-    def scrap(self, loginData):
-        return WebScraper(loginData).data
+    def scrap_static(self, botdata):
+        return WebScraper(botdata, True).data
+
+    def scrap_dynamic(self, botdata):
+        return WebScraper(botdata, False).data
 
     def sort(self, data):
         self.sorted_data = sort(data).sorted_data

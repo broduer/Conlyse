@@ -3,7 +3,7 @@ import math
 from datetime import datetime
 
 
-from Bot_v2.constants import FACTIONS
+from Bot.constants import FACTIONS
 
 
 class sort:

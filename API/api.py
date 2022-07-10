@@ -79,7 +79,7 @@ def game(game_id):
     return jsonify(output)
 
 
-@app.route('/api/v1/team/<game_id>/')
+@app.route('/api/v1/team/<game_id>')
 @cache.cached(timeout=500)
 def team(game_id):
     game = getGame(game_id)
