@@ -2,7 +2,6 @@ import json
 import math
 from datetime import datetime
 
-
 from Bot.constants import FACTIONS
 
 
@@ -10,15 +9,16 @@ class sort:
     def __init__(self, data):
         self.sorted_data = dict({})
         self.data = data
+        results = self.data[1]["result"]["states"].keys()
         self.sorted_data["game"] = self.sort_game(data[1])
-        self.sorted_data["static"] = self.sort_static(data[0], data[1], data[2])
-        if not data[1]["result"]["states"]["12"]["gameEnded"]:
-            self.sorted_data["countries"] = self.sort_countries(data[1])
-            self.sorted_data["teams"] = self.sort_teams(data[1])
-            self.sorted_data["players"] = self.sort_players(data[1])
-            self.sorted_data["provinces"] = self.sort_provinces(data[0], data[1])
-            self.sorted_data["trades"] = self.sort_trades(data[1])
-            self.sorted_data["newspaper"] = self.sort_newspaper(data[1])
+        self.sorted_data["static_province"] = self.sort_static_provinces(data[0], data[1])
+        self.sorted_data["static_scenarios"] = self.sort_static_provinces(data[0], data[2])
+        self.sorted_data["countries"] = self.sort_countries(data[1])
+        self.sorted_data["teams"] = self.sort_teams(data[1])
+        self.sorted_data["players"] = self.sort_players(data[1])
+        self.sorted_data["provinces"] = self.sort_provinces(data[0], data[1])
+        self.sorted_data["trades"] = self.sort_trades(data[1])
+        self.sorted_data["newspaper"] = self.sort_newspaper(data[1])
 
     def sort_game(self, data_2):
         data_game = data_2["result"]["states"]["12"]
@@ -29,7 +29,7 @@ class sort:
             "start_time": int(data_game["startOfGame"]),
             "end_time": getEndTime(data_game["startOfGame"], data_2["result"]["states"]["12"]["endOfGame"],
                                    1 / data_2["result"]["states"]["12"]["timeScale"]),
-            "current_time": getnormaltimestamp(data_game["timeStamp"]) if not self.data[1]["result"]["states"]["12"][
+            "current_time": getnormaltimestamp(data_game["timeStamp"]) if not data_2["result"]["states"]["12"][
                 "gameEnded"] else None,
             "next_day_time": getnormaltimestamp(data_game["nextDayTime"]),
             "next_heal_time": getnormaltimestamp(data_game["nextHealTime"]),
@@ -144,20 +144,13 @@ class sort:
                     })
         return trades
 
-    def sort_static(self, data_1, data_2, data_3):
-        static = dict({
-            "provinces": self.sort_static_provinces(data_1, data_2),
-            "scenarios": self.sort_static_scenarios(data_3),
-        })
-        return static
-
     def sort_static_provinces(self, data_1, data_2):
         data_1_locations = data_1["locations"][1]
         data_2_locations = data_2["result"]["states"]["3"]["map"]["locations"][1]
         provinces = dict({})
-        for province in data_1_locations:
-            province_2 = getProvincefromId(province["id"], data_2_locations)
-            if province["@c"] == "p":
+        for province_2 in data_2_locations:
+            province_1 = getProvincefromId(province_2["id"], data_1_locations)
+            if province_2["@c"] == "p":
                 if province_2["pst"] > 52:
                     typ = 1
                 else:
@@ -166,36 +159,36 @@ class sort:
                     coastal = True
                 else:
                     coastal = False
-                provinces[province["id"]] = dict({
-                    "province_location_id": int(province["id"]),
+                provinces[province_2["id"]] = dict({
+                    "province_location_id": int(province_2["id"]),
                     "map_id": self.data[1]["result"]["states"]["12"]["mapID"],
                     "typ": typ,
                     "name": province_2["n"],
-                    "coordinate_x": int(province["c"]["x"]),
-                    "coordinate_y": int(province["c"]["y"]),
-                    "mainland_id": int(province["ci"][0]),
-                    "region": int(province["r"]),
+                    "coordinate_x": int(province_1["c"]["x"]),
+                    "coordinate_y": int(province_1["c"]["y"]),
+                    "mainland_id": int(province_1["ci"][0]),
+                    "region": int(province_1["r"]),
                     "base_production": int(province_2["bp"]),
-                    "terrain_type": int(province["tt"]),
+                    "terrain_type": int(province_1["tt"]),
                     "resource_production_type": int(province_2["r"]),
-                    "b": province["b"],
+                    "b": province_1["b"],
                     "coastal": coastal,
                 })
 
             else:
-                provinces[province["id"]] = dict({
-                    "province_location_id": int(province["id"]),
+                provinces[province_1["id"]] = dict({
+                    "province_location_id": int(province_1["id"]),
                     "map_id": self.data[1]["result"]["states"]["12"]["mapID"],
                     "typ": 3,
                     "name": province_2["n"],
-                    "coordinate_x": int(province["c"]["x"]),
-                    "coordinate_y": int(province["c"]["y"]),
+                    "coordinate_x": int(province_1["c"]["x"]),
+                    "coordinate_y": int(province_1["c"]["y"]),
                     "mainland_id": None,
                     "region_id": None,
                     "base_production": None,
-                    "terrain_type": int(province["tt"]),
+                    "terrain_type": int(province_1["tt"]),
                     "resource_production_type": None,
-                    "b": province["b"],
+                    "b": province_1["b"],
                     "coastal": None,
                 })
         return provinces
@@ -243,7 +236,7 @@ class sort:
                         location = getProvincefromName(message.split("over")[1].split("\'")[1], provinces)["id"]
                     if "over the" in message:
                         location = \
-                        getProvincefromName(message.split("over the ")[1].split("</p>")[0][0:-1], provinces)["id"]
+                            getProvincefromName(message.split("over the ")[1].split("</p>")[0][0:-1], provinces)["id"]
                     new_article = {
                         "msg_typ": 2,
                         "country_id": article["senderID"],
@@ -379,6 +372,7 @@ def getSpecialNameCases(typ, faction):
         typ = f"{typ} EU & RU"
     return typ
 
+
 def getWarheadTyp(typ):
     warheads = {
         "Conventional": 2889,
@@ -386,6 +380,7 @@ def getWarheadTyp(typ):
         "Chemical": 2900,
     }
     return warheads.get(typ)
+
 
 def getResearchID(name, researches, mode, faction="", ):
     filtered = []
@@ -464,5 +459,3 @@ def startSort():
     with open("../Analysis of Conflict of Nations/All_Data/extra/newspaper-game_4474892.json", "r") as file:
         newspaper = json.loads(file.read())
     sort_newspaper(data[1], newspaper)
-
-

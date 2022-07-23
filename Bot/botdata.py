@@ -30,7 +30,7 @@ def setBotData(data):
             except ValueError:
                 print("Error: Bot_Data File couldn't load")
                 exit()
-        if "stateIDs" in data:
+        if "stateIDs" in data and "stateIDs" in data_json.get(data["game_id"]) and "tstamps" in data_json.get(data["game_id"]):
             stateIDs = {**data_json.get(data["game_id"]).get("stateIDs"), **data.get("stateIDs")}
             tstamps = {**data_json.get(data["game_id"]).get("tstamps"), **data.get("tstamps")}
             data_json[data["game_id"]] = {**data_json[data["game_id"]], **data, "stateIDs": stateIDs, "tstamps": tstamps}
