@@ -8,19 +8,18 @@ from Bot.sql.sql_filler import Filler
 from time import sleep
 
 
-options = webdriver.ChromeOptions()
+options = webdriver.FirefoxOptions()
 options.add_argument("--mute-audio")
 # options.add_argument("--headless")
-capabilities = DesiredCapabilities.CHROME
-capabilities["goog:loggingPrefs"] = {"performance": "ALL"}  # chromedriver 75+
+capabilities = DesiredCapabilities.FIREFOX
 
 
-class Bot(webdriver.Chrome):
-    def __init__(self, browser, teardown=True, chrome_options=options, desired_capabilities=capabilities):
+class Bot(webdriver.Firefox):
+    def __init__(self, browser, teardown=True, firefox_options=options, desired_capabilities=capabilities):
         self.teardown = teardown
         self.browser = browser
         if browser:
-            super(Bot, self).__init__(chrome_options=chrome_options, desired_capabilities=desired_capabilities)
+            super(Bot, self).__init__(options=firefox_options, desired_capabilities=desired_capabilities)
             self.implicitly_wait(15)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -41,8 +40,8 @@ class Bot(webdriver.Chrome):
     def scrap_dynamic(self, botdata):
         return WebScraper(botdata, False).data
 
-    def sort(self, data):
-        self.sorted_data = sort(data).sorted_data
+    def sort(self, game_id, data):
+        self.sorted_data = sort(game_id, data).sorted_data
         return self.sorted_data
 
     def fillSQL(self, data):

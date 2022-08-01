@@ -1,3 +1,5 @@
+import json
+
 import botdata
 from Bot.bot import Bot
 from time import sleep
@@ -12,6 +14,8 @@ game_data = [{}]*3
 def refreshData():
     with Bot(False) as bot:
         game_data[1] = bot.scrap_dynamic(botdata.getBotData(args.game_id))
+        sorted_data = bot.sort(args.game_id, game_data)
+        print(sorted_data)
         botdata.setBotData(botdata.getStates(args.game_id, game_data[1]))
 
 
@@ -24,10 +28,12 @@ def refreshTokens():
         game_data[0], game_data[2] = bot.scrap_static(botdata.getBotData(args.game_id))
 
 
-refreshTokens()
 while True:
+    with open(f"../../Conlyse_analytics/Version 5/data1.json") as file:
+        game_data[0] = json.loads(file.read())
+    with open(f"../../Conlyse_analytics/Version 5/data3.json") as file:
+        game_data[2] = json.loads(file.read())
     refreshData()
+    print(game_data[1]["result"])
     print(game_data[1]["result"]["states"].keys())
-    if len(game_data[1]["result"]["states"].keys()) > 1:
-        print(game_data[1]["result"]["states"])
-    sleep(60)
+    sleep(6)

@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as ec
 import json
 
 
-class Login:
+class WebBrowser:
     def __init__(self, driver: webdriver, bot_data):
         self.driver = driver
         self.bot_data = bot_data
@@ -19,10 +19,9 @@ class Login:
             self.typeData()
             self.submit()
             self.join()
-            self.log = self.getLog()
-            self.data_url = [self.getUrl(1, self.log), self.getUrl(2, self.log), self.getUrl(3, self.log)]
-            self.data_2 = self.getData_2()
-            self.data_3 = self.getData_3()
+            self.data_url = self.getUrls()
+            self.body = self.getBody()
+            self.data = self.getData()
             self.loginData = self.getLoginData()
 
     def checkLoginPage(self):
@@ -53,7 +52,7 @@ class Login:
         WebDriverWait(self.driver, 15).until(
             ec.frame_to_be_available_and_switch_to_it((By.ID, "ifm"))
         )
-        WebDriverWait(self.driver, 15).until(
+        WebDriverWait(self.driver, 60).until(
             ec.presence_of_element_located((By.ID, "layer3"))
         )
         sleep(5)
@@ -74,52 +73,39 @@ class Login:
         )
         return loginData
 
-    def getLog(self):
-        return self.driver.get_log("performance")
+    def getUrls(self):
+        urls = [None] * 3
+        for request in self.driver.requests:
+            if "https://static1.bytro.com/fileadmin/mapjson/live" in request.url:
+                urls[0] = request.url
+            if "https://congs" in request.url:
+                urls[1] = request.url
+            if "https://www.conflictnations.com/index.php?eID=api&key=ingameCon&action=getContentItems" in request.url:
+                urls[2] = request.url
+        return urls
 
-    def getUrl(self, number, logs_raw):
-        logs = [json.loads(lr["message"])["message"] for lr in logs_raw]
-        if number == 1:
-            for log in filter(self.log_filter_1, logs):
-                return log["params"]["request"]["url"].split("?")[0]
-        elif number == 2:
-            for request in self.driver.requests:
-                if request.response:
-                    if "https://congs" in request.url:
-                        return request.url
-        elif number == 3:
-            for request in self.driver.requests:
-                if request.response:
-                    if "https://www.conflictnations.com/index.php?eID=api&key=ingameCon&action=getContentItems" in request.url:
-                        return request.url
-
-    def log_filter_1(self, log_):
-        return (
-            # is an actual response
-                log_["method"] == "Network.requestWillBeSent"
-                # and json
-                and "https://static1.bytro.com/fileadmin/mapjson/live" in log_["params"]["request"]["url"]
-        )
-
-    def getData_2(self):
+    def getBody(self):
+        data = [None] * 5
         for request in self.driver.requests:
             if request.response:
+                if "https://static1.bytro.com/fileadmin/mapjson/live" in request.url:
+                    try:
+                        body = json.loads(bytes.decode(request.body))
+                        data[0] = body
+                    except:
+                        pass
                 if "https://congs" in request.url:
                     try:
                         body = json.loads(bytes.decode(request.body))
                         if body["@c"] == "ultshared.action.UltUpdateGameStateAction":
-                            return body
+                            data[1] = body
                     except:
                         pass
-
-    def getData_3(self):
-        for request in self.driver.requests:
-            if request.response:
                 if "https://www.conflictnations.com/index.php?eID=api&key=ingameCon&action=getContentItems" in request.url:
                     try:
                         body = bytes.decode(request.body)
                         if "data" in body:
-                            print(body)
-                            return base64.b64decode(body[5:]).decode("utf-8")
+                            data[2] = base64.b64decode(body[5:]).decode("utf-8")
                     except:
                         pass
+        return data
