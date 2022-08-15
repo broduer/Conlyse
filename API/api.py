@@ -1,5 +1,4 @@
 import json
-import sys
 import time
 from datetime import datetime, timedelta
 
@@ -556,11 +555,6 @@ def get_nearest_time(game, day_time: datetime):
         .order_by("nearest_time")
     newest_time = query.limit(1).all()[0][0]
     return newest_time
-
-
-def object_as_dict(obj):
-    return {c.key: getattr(obj, c.key)
-            for c in inspect(obj).mapper.column_attrs}
 
 
 # run flask app

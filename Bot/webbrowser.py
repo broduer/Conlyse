@@ -114,8 +114,6 @@ class Webbrowser(webdriver.Firefox):
                     if "https://congs" in request.url:
                         self.wait_for_request(request.path)
                         body = json.loads(bytes.decode(request.body, "utf-8"))
-                        if "gameID" in body:
-                            print(f"Bot: {self.login_data['game_id']} Real: {body['gameID']}")
                         if body["@c"] == "ultshared.action.UltUpdateGameStateAction" \
                                 and body["requestID"] == 2 \
                                 and self.login_data["game_id"] == body['gameID']:

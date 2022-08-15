@@ -303,7 +303,6 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
 
     // Draw all finished Drawings if drawings updated
     useEffect(() => {
-        console.log(drawings)
         let drawings_container = viewport.getChildByName("drawings_container")
         drawings_container.removeChildren()
         let drawings_graphic = new PIXI.Graphics()

@@ -1,7 +1,7 @@
 import re
 import logging
 
-from Bot_v3.webbrowser import Webbrowser
+from Bot.webbrowser import Webbrowser
 
 
 def long_scan(login_data):
