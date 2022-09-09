@@ -10,13 +10,19 @@ def long_scan(login_data):
     logging.debug("Starting Webbrowser")
     with Webbrowser(login_data=login_data) as browser:
         data_requests = browser.run()
+    error = False
+    for data_type in ["1", "2", "3"]:
+        if data_type not in data_requests:
+            logging.error(f"Data {data_type} couldn't fetch")
+            error = True
+    if error:
+        return data_requests, {}
     auth_data = get_auth_data(data_requests)
 
     return data_requests, auth_data
 
 
 def get_auth_data(data_requests):
-    print(data_requests["2"]["body"])
     return (
         {
             "game_id": data_requests["2"]["body"]["gameID"],

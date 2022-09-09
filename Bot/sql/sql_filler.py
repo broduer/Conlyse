@@ -1,27 +1,29 @@
 import json
 import logging
+import time
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
 
 from Bot.sort.helper import DateTimeEncoder
-from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, Country, Game, GameHasPlayer, Team, \
-    Building, Newspaper
+from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
+    GameHasPlayer, Team, \
+    Building, ArmyLossesGain, Research, Army, Command, WarfareUnit
 from Bot.sql.sql import engine
-from datetime import datetime
 from deepdiff import DeepDiff
 
 
 class Filler:
     def __init__(self, game_id, data):
-        Session = sessionmaker()
-        Session.configure(bind=engine)
-        self.session = Session()
+        session_maker = sessionmaker()
+        session_maker.configure(bind=engine)
+        self.session = session_maker()
         self.data = data
         self.timestamp = data["timestamp"]
         self.game_id = int(game_id)
+        self.map_id = data["map_id"]
 
-        self.static_provinces = None
+        self.static_provinces = {}
 
     def __enter__(self):
         return self
@@ -36,16 +38,19 @@ class Filler:
         if "static_provinces" in keys:
             logging.debug("Filling static_provinces and static_scenarios")
             self.fill_static_provinces(self.data["static_provinces"])
+            self.fill_static_countries(self.data["static_countries"])
             self.fill_static_scenarios(self.data["static_scenarios"])
+            self.session.commit()
             self.session.flush()
-
         if "game" in keys:
             self.fill_game(self.data["game"])
-            if int(self.data["game"]["end_time"]) != 0:
+            self.session.commit()
+            if self.data["game"]["end_time"] is not None:
                 return True
 
         if "teams" in keys:
             self.fill_teams(self.data["teams"])
+            self.session.commit()
 
         if all(ele in keys for ele in ["players", "countries"]):
             logging.debug(f"Filling {len(self.data['players'].values())} Players and Countries")
@@ -54,12 +59,24 @@ class Filler:
         if "trades" in keys:
             self.fill_trades(self.data["trades"])
 
-        if "newspaper" in keys:
-            self.fill_newspaper(self.data["newspaper"])
+        if "army_losses_gains" in keys:
+            self.fill_army_gains_losses(self.data["army_losses_gains"])
+
+        if "researches" in keys:
+            self.fill_researches(self.data["researches"])
 
         if "provinces" in keys:
             self.fill_provinces(self.data["provinces"])
             self.fill_buildings(self.data["buildings"])
+
+        if "armies" in keys:
+            self.fill_armies(self.data["armies"])
+            self.session.commit()
+            self.fill_commands(self.data["commands"])
+            self.session.flush()
+            self.session.commit()
+            self.fill_warfare_units(self.data["warfare_units"])
+            self.session.commit()
 
     def fill_game(self, data):
         game_sql = self.session.query(Game).filter_by(game_id=data["game_id"]).first()
@@ -67,26 +84,27 @@ class Filler:
             new_game = Game(
                 game_id=data["game_id"],
                 scenario_id=data["scenario_id"],
-                start_time=datetime.fromtimestamp(data["start_time"]),
-                end_time=None,
-                current_time=datetime.fromtimestamp(data["current_time"]),
-                next_day_time=datetime.fromtimestamp(data["next_day_time"]),
-                next_heal_time=datetime.fromtimestamp(data["next_heal_time"]),
+                start_time=data["start_time"],
+                end_time=data["end_time"],
+                current_time=data["current_time"],
+                next_day_time=data["next_day_time"],
+                next_heal_time=data["next_heal_time"],
             )
             self.session.add(new_game)
         else:
-            if data["end_time"] != 0:
-                game_sql.end_time = datetime.fromtimestamp(data["end_time"])
+            if data["end_time"]:
+                game_sql.end_time = data["end_time"]
                 game_sql.next_day_time = None
                 game_sql.next_heal_time = None
             else:
-                game_sql.next_day_time = datetime.fromtimestamp(data["next_day_time"])
-                game_sql.current_time = datetime.fromtimestamp(data["current_time"])
-                game_sql.next_heal_time = datetime.fromtimestamp(data["next_heal_time"])
+                game_sql.next_day_time = data["next_day_time"]
+                game_sql.current_time = data["current_time"]
+                game_sql.next_heal_time = data["next_heal_time"]
 
     def fill_player_country(self, data_players, data_countries):
         # Retrieve the latest Data from DB
         counties = self.session.query(Country).filter_by(game_id=self.game_id, valid_until=None).all()
+        static_counties = self.session.query(StaticCountry).filter_by(map_id=self.map_id).all()
         players = self.session.query(Player).join(GameHasPlayer).filter_by(game_id=self.game_id).all()
         teams = self.session.query(Team).filter_by(game_id=self.game_id).all()
 
@@ -121,15 +139,21 @@ class Filler:
                     team.universal_team_id for team in teams if team.team_id == data_country["team_id"])
             except StopIteration:
                 team_id = None
-            new_country = {**data_country, "team_id": team_id}
+            # Get the static_country_id and update the country_dict
+            try:
+                static_country_id = next(
+                    static_country.static_country_id for static_country in static_counties
+                    if static_country.country_id == data_country["country_id"])
+            except StopIteration:
+                static_country_id = None
 
+            new_country = {**data_country, "team_id": team_id, "static_country_id": static_country_id}
             # New Country if this country_id does not exist for this Game.
             if new_country["country_id"] not in countries_country_id:
                 new_countries.append(new_country)
             else:
                 # SQLALCHEMY object to dict
                 country_sql_dict = object_as_dict(counties[countries_country_id.index(new_country["country_id"])])
-
                 # Compare New Country to the latest in DB with some exceptions.
                 changes = DeepDiff(country_sql_dict,
                                    new_country,
@@ -137,14 +161,13 @@ class Filler:
                                                   "root['valid_from']",
                                                   "root['valid_until']"])
                 if changes:
-                    logging.debug(f"UPDATE Country {data_country['country_id']}: {changes.get('type_changes')} "
+                    logging.debug(f"UPDATE Country {new_country['country_id']}: {changes.get('type_changes')} "
                                   f"{changes.get('values_changed')}")
                     update_countries.append({
                         **country_sql_dict,
                         "valid_until": data_country["valid_from"]
                     })
-                    new_countries.append(data_country)
-
+                    new_countries.append(new_country)
         self.session.bulk_insert_mappings(Country, new_countries)
         self.session.bulk_update_mappings(Country, update_countries)
         self.session.bulk_insert_mappings(GameHasPlayer, new_player_countries)
@@ -303,7 +326,8 @@ class Filler:
                                                  if building["province_location_id"] == static_province[
                                                      "province_location_id"]]
             if old_building.upgrade_id not in new_province_building_upgrade_ids:
-                logging.debug(f"DELETE Building {static_province['province_location_id']} - {old_building.upgrade_id}: ")
+                logging.debug(
+                    f"DELETE Building {static_province['province_location_id']} - {old_building.upgrade_id}: ")
                 old_building_dict = object_as_dict(old_building)
                 update_buildings.append({
                     **old_building_dict,
@@ -312,19 +336,180 @@ class Filler:
         self.session.bulk_insert_mappings(Building, new_buildings)
         self.session.bulk_update_mappings(Building, update_buildings)
 
-    def fill_newspaper(self, data):
-        newspaper_all = [a for a in self.session.query(Newspaper).all()]
-        new_articles = list()
-        for article in data:
-            for newspaper_sql in newspaper_all:
-                if DeepDiff(object_as_dict(newspaper_sql),
-                            article,
-                            exclude_paths=["root['article_id']"]):
-                    break
+    def fill_armies(self, data):
+        old_armies = self.session.query(Army).filter_by(game_id=self.game_id, valid_until=None).all()
+        old_army_ids = [old_army.army_id for old_army in old_armies]
+
+        new_army_ids = [new_army["army_id"] for new_army in data]
+        new_armies = []
+        update_armies = []
+        for army in data:
+            static_province = self.get_static_province(province_location_id=army["province_location_id"])
+            if static_province:
+                army["static_province_id"] = static_province.get("static_province_id")
+            army.pop("province_location_id")
+            if army["army_id"] not in old_army_ids:
+                new_armies.append(army)
+                logging.debug(
+                    f"INSERT Army {army['army_id']}:"
+                    f"{json.dumps(army, indent=2, cls=DateTimeEncoder)}")
             else:
-                logging.debug(f"INSERT Newspaper-Article {json.dumps(article, cls=DateTimeEncoder, indent=2)}")
-                new_articles.append({**article, "game_id": self.game_id})
-        self.session.bulk_insert_mappings(Newspaper, new_articles)
+                old_army_sql = next(old_army for old_army in old_armies if old_army.army_id == army["army_id"])
+                old_army = object_as_dict(old_army_sql)
+                changes = DeepDiff(old_army, army,
+                                   exclude_paths=[
+                                       "root['universal_army_id']",
+                                       "root['static_province_id']",
+                                       "root['valid_from']",
+                                       "root['valid_until']"])
+                if changes:
+                    logging.debug(
+                        f"UPDATE Army {army['army_id']}:"
+                        f"{changes.get('type_changes')} "
+                        f"{changes.get('values_changed')}")
+                    update_armies.append({
+                        **old_army,
+                        "valid_until": army["valid_from"]
+                    })
+                    new_armies.append(army)
+        self.session.bulk_insert_mappings(Army, new_armies)
+        self.session.bulk_update_mappings(Army, update_armies)
+
+    def fill_commands(self, data):
+        old_commands = self.session.query(Command).filter_by(game_id=self.game_id, valid_until=None).all()
+
+        new_commands = []
+        update_commands = []
+        for command in data:
+            try:
+                old_command_sql = next(old_command for old_command in old_commands
+                                       if old_command.army_id == command["army_id"])
+                old_command_dict = object_as_dict(old_command_sql)
+            except StopIteration:
+                old_command_dict = None
+            if old_command_dict is None:
+                logging.debug(
+                    f"INSERT Command of Army {command['army_id']}:"
+                    f"{json.dumps(command, indent=2, cls=DateTimeEncoder)}")
+                new_commands.append(command)
+            else:
+                changes = DeepDiff(old_command_dict, command,
+                                   exclude_paths=[
+                                       "root['command_id']",
+                                       "root['valid_from']",
+                                       "root['valid_until']"])
+                if changes:
+                    # If new Command is stationary set the start_time to the new arrival_time
+                    if "sy" in command["command_type"]:
+                        command["start_time"] = old_command_dict["arrival_time"]
+
+                    logging.debug(
+                        f"UPDATE Command of Army {command['army_id']}:"
+                        f"{changes}")
+
+                    # If the old command is stationary set its arrival_time to the new start_time
+                    if old_command_dict["command_type"] and "sy" in old_command_dict["command_type"]:
+                        old_command_dict["arrival_time"] = command["start_time"]
+                    update_commands.append({
+                        **old_command_dict,
+                        "valid_until": command["valid_from"]
+                    })
+                    new_commands.append(command)
+
+        self.session.bulk_insert_mappings(Command, new_commands)
+        self.session.bulk_update_mappings(Command, update_commands)
+
+    def fill_warfare_units(self, data):
+        old_warfare_units = self.session.query(WarfareUnit).join(Army).filter(Army.game_id == self.game_id).all()
+        old_armies = self.session.query(Army).filter_by(game_id=self.game_id, valid_until=None).all()
+
+        new_warfare_units = []
+
+        # Checks if this specific warfare_unit is not saved for this army. Then it inserts it.
+        for warfare_unit in data:
+            try:
+                old_army = next(old_army for old_army in old_armies
+                                if old_army.army_id == warfare_unit["army_id"])
+            except StopIteration:
+                continue
+            old_army_warfare_unit_warfare_ids = [old_army_warfare_unit.warfare_id
+                                                 for old_army_warfare_unit in old_warfare_units
+                                                 if
+                                                 old_army_warfare_unit.universal_army_id == old_army.universal_army_id]
+            if warfare_unit["warfare_id"] not in old_army_warfare_unit_warfare_ids:
+                logging.debug(
+                    f"INSERT Warfare Unit {warfare_unit['warfare_id']}:"
+                    f"{json.dumps(warfare_unit, indent=2, cls=DateTimeEncoder)}")
+                new_warfare_units.append({
+                    **warfare_unit,
+                    "universal_army_id": old_army.universal_army_id
+                })
+        self.session.bulk_insert_mappings(WarfareUnit, new_warfare_units)
+
+    def fill_army_gains_losses(self, data):
+        old_army_gains_losses = self.session.query(ArmyLossesGain).filter_by(game_id=self.game_id).all()
+
+        new_army_gains_losses = []
+
+        for army_gains_loss in data:
+            exists = any([not bool(DeepDiff(object_as_dict(old_army_gains_loss), army_gains_loss,
+                                            exclude_paths=["army_loss_gain_id"]))
+                          for old_army_gains_loss in old_army_gains_losses])
+            if not exists:
+                new_army_gains_losses.append(army_gains_loss)
+
+        self.session.bulk_insert_mappings(ArmyLossesGain, new_army_gains_losses)
+
+    def fill_researches(self, data):
+        old_researches = self.session.query(Research).filter_by(game_id=self.game_id).all()
+
+        new_researches = []
+        update_researches = []
+
+        for research in data:
+            country_researches = [old_research for old_research in old_researches
+                                  if old_research.owner_id == research["owner_id"]]
+            country_column_ids = set([country_research.column_id for country_research in country_researches])
+            country_column_research_min_ids = set([country_research.research_min_id
+                                                   for country_research in country_researches
+                                                   if country_research.column_id == research["column_id"]])
+            if research["column_id"] not in country_column_ids:
+                logging.debug(f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
+                new_researches.append(research)
+            # Check if new research_min_id in column
+            elif any([old_research_min_id >= research["research_min_id"]
+                      for old_research_min_id in country_column_research_min_ids]):
+                for old_research_min_id in country_column_research_min_ids:
+                    if old_research_min_id >= research["research_min_id"]:
+                        old_research = next(country_research for country_research in country_researches
+                                            if old_research_min_id == country_research.research_min_id
+                                            and research["column_id"] == country_research.column_id)
+                        if time.mktime(old_research.valid_until.timetuple()) >= time.mktime(research["valid_until"].timetuple()):
+                            continue
+                        logging.debug(f"Update Research: "
+                                      f"old: valid_until {old_research.valid_until}"
+                                      f"new: valid_until {research['valid_until']}")
+                        old_research.valid_until = research["valid_until"]
+                        old_research.research_max_id = min(research["research_max_id"], old_research.research_max_id)
+                        update_researches.append(object_as_dict(old_research))
+                        break
+            elif any([old_research_min_id < research["research_min_id"]
+                      for old_research_min_id in country_column_research_min_ids]):
+                logging.debug(f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
+                new_researches.append(research)
+
+        self.session.bulk_update_mappings(Research, update_researches)
+        self.session.bulk_insert_mappings(Research, new_researches)
+
+    def fill_static_countries(self, data):
+        static_countries_all = [r.country_id
+                                for r in
+                                self.session.query(StaticCountry).filter_by(map_id=self.map_id).all()]
+        new_countries = list()
+        for static_country in data:
+            if static_country["country_id"] not in static_countries_all:
+                new_countries.append(static_country)
+        self.session.bulk_insert_mappings(StaticCountry, new_countries)
 
     def fill_static_scenarios(self, data):
         scenario_all = [r.scenario_id for r in self.session.query(Scenario.scenario_id)]
@@ -339,7 +524,7 @@ class Filler:
     def fill_static_provinces(self, data):
         static_provinces_all = [r.province_location_id for r in
                                 self.session.query(StaticProvince.province_location_id).filter_by(
-                                    map_id=self.data["game"]["map_id"]).all()]
+                                    map_id=self.map_id).all()]
         new_static_provinces = list()
         for province in data:
             province = data[province]
@@ -348,26 +533,24 @@ class Filler:
         self.session.bulk_insert_mappings(StaticProvince, new_static_provinces)
 
     def get_static_province(self, static_province_id=None, province_location_id=None):
-        if self.static_provinces is None:
-            self.static_provinces = self.session.query(StaticProvince) \
+        if not self.static_provinces:
+            static_provinces = self.session.query(StaticProvince) \
                 .join(Scenario, StaticProvince.map_id == Scenario.map_id) \
                 .join(Game) \
                 .filter_by(game_id=self.game_id).all()
+            self.static_provinces["province_location"] = {object_as_dict(static_province)
+                                                          ["province_location_id"]
+                                                          : object_as_dict(static_province)
+                                                          for static_province in static_provinces}
+            self.static_provinces["static_province"] = {object_as_dict(static_province)
+                                                        ["static_province_id"]
+                                                        : object_as_dict(static_province)
+                                                        for static_province in static_provinces}
 
         if province_location_id is not None:
-            try:
-                static_province = next(static_province for static_province in self.static_provinces
-                                       if static_province.province_location_id == province_location_id)
-                return object_as_dict(static_province)
-            except StopIteration:
-                return None
+            return self.static_provinces["province_location"].get(province_location_id)
         elif static_province_id is not None:
-            try:
-                static_province = next(static_province for static_province in self.static_provinces
-                                       if static_province.static_province_id == static_province_id)
-                return object_as_dict(static_province)
-            except StopIteration:
-                return None
+            return self.static_provinces["static_province"].get(static_province_id)
 
 
 def object_as_dict(obj):

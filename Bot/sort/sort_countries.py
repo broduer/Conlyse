@@ -14,7 +14,6 @@ def sort_countries(game_id, data_2):
                 countries[int(country["playerID"])] = dict({
                     "country_id": int(country["playerID"]),
                     "team_id": country["teamID"] if country["teamID"] != 0 else None,
-                    "name": country["nationName"],
                     "capital_id": int(country["capitalID"]),
                     "defeated": bool(country["defeated"]),
                     "computer": bool(country["computerPlayer"]),

@@ -2,7 +2,6 @@ import base64
 import gzip
 import json
 import os
-import time
 from time import sleep
 import logging
 
@@ -21,7 +20,6 @@ for log in ["seleniumwire", "hpack.hpack", "hpack.table", "urllib3.connectionpoo
     logger = logging.getLogger(log)
     logger.setLevel(logging.ERROR)
 
-
 seleniumwire_options = {
     "enable_har": False
 }
@@ -30,6 +28,7 @@ options = webdriver.FirefoxOptions()
 options.add_argument("--mute-audio")
 # options.add_argument("--headless")
 capabilities = DesiredCapabilities.FIREFOX
+capabilities["pageLoadStrategy"] = "eager"  # interactive
 
 
 class Webbrowser(webdriver.Firefox):
@@ -38,7 +37,9 @@ class Webbrowser(webdriver.Firefox):
         self.login_data = login_data
         self.teardown = teardown
         super(Webbrowser, self).__init__(service_log_path=os.path.devnull, seleniumwire_options=seleniumwire_options,
-                                         options=firefox_options, desired_capabilities=desired_capabilities)
+                                         options=firefox_options, capabilities=desired_capabilities)
+        # self.request_interceptor = self.interceptor
+
         self.implicitly_wait(15)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -50,7 +51,6 @@ class Webbrowser(webdriver.Firefox):
         if request.path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.ogg', '.webm', ".font")):
             request.abort()
 
-
     def check_login_page(self):
         try:
             self.find_element(By.ID, "login-register-box")
@@ -58,12 +58,16 @@ class Webbrowser(webdriver.Firefox):
         except exceptions.NoSuchElementException:
             return False
 
-    def check_game_hub_page(self):
+    def wait_game_hub_page(self):
         try:
-            self.find_element(By.ID, "login-register-box")
-            return True
-        except exceptions.NoSuchElementException:
-            return False
+            WebDriverWait(self, const.BROWSER_GAME_LOADING_TIMEOUT).until(
+                ec.frame_to_be_available_and_switch_to_it((By.ID, "ifm"))
+            )
+            WebDriverWait(self, const.BROWSER_GAME_LOADING_TIMEOUT).until(
+                ec.presence_of_element_located((By.ID, "mainContent"))
+            )
+        except exceptions.TimeoutException:
+            logging.warning("Couldn't verify that cookies are set.")
 
     def click_tab(self):
         try:
@@ -73,14 +77,16 @@ class Webbrowser(webdriver.Firefox):
             logging.warning("Couldn't log into Account")
 
     def type_login_credentials(self):
+        logging.debug("Inserting Login Credentials")
         try:
             input_username_element = self.find_element(By.ID, "loginbox_login_input")
             input_password_element = self.find_element(By.ID, "loginbox_password_input")
+            button_submit_element = self.find_element(By.CSS_SELECTOR, 'div[class="play-button"]')
 
             input_username_element.send_keys(self.login_data["bot_username"])
             input_password_element.send_keys(self.login_data["bot_password"])
+
             sleep(0.5)
-            button_submit_element = self.find_element(By.CSS_SELECTOR, 'div[class="play-button"]')
             button_submit_element.click()
         except exceptions.NoSuchElementException:
             logging.warning("Couldn't log into Account")
@@ -95,6 +101,7 @@ class Webbrowser(webdriver.Firefox):
             WebDriverWait(self, const.BROWSER_GAME_LOADING_TIMEOUT).until(
                 ec.presence_of_element_located((By.ID, "layer3"))
             )
+            logging.debug("Game loaded")
         except exceptions.TimeoutException:
             logging.error("TimeoutException: Joining Game took to long.")
 
@@ -137,9 +144,11 @@ class Webbrowser(webdriver.Firefox):
     def run(self):
         logging.debug("Requesting Login Page")
         self.get(const.BASE_URL)
+        logging.debug("Login Page Loaded")
         if self.check_login_page():
             self.click_tab()
             self.type_login_credentials()
+        self.wait_game_hub_page()
         self.join_game_round()
         data_requests = self.get_data_requests()
         return data_requests

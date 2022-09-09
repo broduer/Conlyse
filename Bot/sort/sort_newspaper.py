@@ -1,193 +1,263 @@
+import json
+import re
 from datetime import datetime
 
-from Bot.constants import FACTIONS
-from Bot.sort.helper import get_province_from_name, get_normal_timestamp, get_combined_number
+from Bot.game_constants import FACTIONS, STARTER_UNIT_NAMES
+from Bot.sort.helper import get_normal_timestamp, get_combined_number, DateTimeEncoder
+from deepdiff import DeepDiff
 
 
-def sort_newspaper(data_2, data_2_old):
-    # newspaper_articles = newspaper_data["result"]["articles"][1]
-    researches = data_2_old["result"]["states"]["11"]["researchTypes"]
-    if "@c" in researches:
-        researches.pop("@c")
-    countrys = data_2_old["result"]["states"]["1"]["players"]
-    provinces = data_2_old["result"]["states"]["3"]["map"]["locations"][1]
-    articles = []
-    newspaper_articles = data_2["result"]["states"]["2"]["articles"][1]
-    for article in newspaper_articles:
-        messages = article["messageBody"].split("<p>")
-        for message in messages:
-            message = message.replace(":", "")
-            # Does formatting for Weapons which are lost from a country
-            if "lost" in message:
-                mode = 1
-                faction = FACTIONS.get(countrys[f'{article["senderID"]}']["faction"])
-                typ = getSpecialNameCases(f"{message.split('lost')[1][3:-4].split(' over')[0]}", faction)
-                time = message.split(" ")[3]
-                count = get_combined_number(f"{message.split('lost')[1][1]}",
-                                          f"{message.split('lost')[1][2]}") * -1
-                division = get_combined_number(f"{message.split('The')[1][1]}", f"{message.split('The')[1][2]}")
-                location = None
-                if "over" in message and False == ("over the" in message):
-                    location = get_province_from_name(message.split("over")[1].split("\'")[1], provinces)["id"]
-                if "over the" in message:
-                    location = \
-                        get_province_from_name(message.split("over the ")[1].split("</p>")[0][0:-1], provinces)["id"]
-                new_article = {
-                    "msg_typ": 2,
-                    "country_id": article["senderID"],
-                    "wtyp": getResearchID(typ, researches, mode, faction),
-                    "division": division,
-                    "count": count,
-                    "time": datetime.fromtimestamp(get_normal_timestamp(time)),
+class NewspaperSorter:
+    def __init__(self, game_id, current_day, data_2, data_2_old):
+        self.warfare_unit_types = data_2_old["result"]["states"]["11"]["allUnitTypes"].copy()
+        self.data_researches = data_2_old["result"]["states"]["11"]["researchTypes"].copy()
+        if "@c" in self.warfare_unit_types:
+            self.warfare_unit_types.pop("@c")
+        if "@c" in self.data_researches:
+            self.data_researches.pop("@c")
+
+        self.countries = data_2_old["result"]["states"]["1"]["players"]
+        self.provinces = data_2_old["result"]["states"]["3"]["map"]["locations"][1]
+        self.data_articles = data_2["result"]["states"]["2"]["articles"][1]
+        self.game_id = int(game_id)
+        self.current_day = current_day
+        self.army_loses_gains = []
+        self.researches = []
+
+    def run(self):
+        for article in self.data_articles:
+            messages = article["messageBody"].split("<p>")
+            for message in messages:
+                message = message.replace(":", "")
+                country_id = article["senderID"]
+                # Does formatting for Weapons which are lost from a country
+                if "lost" in message:
+                    warfare_name = message.split('lost')[1][3:-4].split(' over')[0]
+                    warfare_type_ids = self.get_warfare_type_ids_from_name(warfare_name, article["senderID"])
+                    time = datetime.fromtimestamp(get_normal_timestamp(message.split(" ")[3]))
+                    count = get_combined_number(f"{message.split('lost')[1][1]}",
+                                                f"{message.split('lost')[1][2]}") * -1
+                    division = get_combined_number(f"{message.split('The')[1][1]}", f"{message.split('The')[1][2]}")
+                    if not warfare_type_ids:
+                        continue
+                    self.army_loses_gains.append({
+                        "owner_id": country_id,
+                        "warfare_type_id": min(warfare_type_ids),
+                        "division": division,
+                        "count": count,
+                        "game_id": self.game_id,
+                        "time": time,
+                    })
+                    # Not safe that country has researched it because you have some starter units of these types
+                    if warfare_name in STARTER_UNIT_NAMES:
+                        continue
+                    research_ids_from_warfare_type = self.get_research_ids_from_name(warfare_name, country_id)
+                    if research_ids_from_warfare_type:
+                        self.researches.append({
+                            "owner_id": country_id,
+                            "column_id": self.get_column_id(min(research_ids_from_warfare_type)),
+                            "research_min_id": min(research_ids_from_warfare_type),
+                            "research_max_id": max(research_ids_from_warfare_type),
+                            "game_id": self.game_id,
+                            "valid_from": time,
+                            "valid_until": time,
+                        })
+                # If a country either builds a new Aircraft Carrier or Officer
+                elif "recruits new" in message or "builds new" in message:
+                    if "recruits new" in message:
+                        warfare_name = message.split('recruits new')[1][1:-5]
+                    elif "builds new" in message:
+                        warfare_name = message.split('builds new')[1].split("\"")[0][1:-1]
+                    warfare_type_id = min(self.get_warfare_type_ids_from_name(warfare_name, article["senderID"]))
+                    time = datetime.fromtimestamp(get_normal_timestamp(message.split(" ")[3]))
+                    self.army_loses_gains.append({
+                        "owner_id": country_id,
+                        "warfare_type_id": warfare_type_id,
+                        "count": 1,
+                        "game_id": self.game_id,
+                        "time": time,
+                    })
+                    research_ids_from_warfare_type = self.get_research_ids_from_name(warfare_name, country_id)
+                    if research_ids_from_warfare_type:
+                        self.researches.append({
+                            "owner_id": country_id,
+                            "column_id": self.get_column_id(min(research_ids_from_warfare_type)),
+                            "research_min_id": min(research_ids_from_warfare_type),
+                            "research_max_id": max(research_ids_from_warfare_type),
+                            "game_id": self.game_id,
+                            "valid_from": time,
+                            "valid_until": time,
+                        })
+                # If a Country starts a weapon Program either nuclear or chemical
+                elif "According to an unnamed" in message:
+                    if "nuclear" in message:
+                        research_id = 2899
+                    elif "chemical" in message:
+                        research_id = 2900
+                    else:
+                        research_id = 0
+                    time = datetime.fromtimestamp(get_normal_timestamp(article["timeStamp"]))
+                    self.researches.append({
+                        "owner_id": country_id,
+                        "column_id": research_id,
+                        "research_min_id": research_id,
+                        "research_max_id": research_id,
+                        "game_id": self.game_id,
+                        "valid_from": time,
+                        "valid_until": time,
+                    })
+                if "has been destroyed by" in message or "was severely damaged by" in message or "was attacked by" in message:
+                    country_id = int(message.split("countryLink")[2].split("\'")[3])
+                    warfare_name = " ".join([part for part in message.split("by ")[1].split("(")[0].split(" ")
+                                             if not re.findall('[0-9]+', part)
+                                             and not part == "the"
+                                             and not part == "a"
+                                             and not part == ""])
+                    research_ids_from_warfare_type = self.get_research_ids_from_name(warfare_name, country_id)
+                    time = datetime.fromtimestamp(get_normal_timestamp(message.split(" ")[3]))
+
+                    # Not safe that country has researched it because you have some starter units of these types
+                    if warfare_name in STARTER_UNIT_NAMES:
+                        continue
+                    if research_ids_from_warfare_type:
+                        self.researches.append({
+                            "owner_id": country_id,
+                            "column_id": self.get_column_id(min(research_ids_from_warfare_type)),
+                            "research_min_id": min(research_ids_from_warfare_type),
+                            "research_max_id": max(research_ids_from_warfare_type),
+                            "game_id": self.game_id,
+                            "valid_from": time,
+                            "valid_until": time,
+                        })
+
+        # Filter Researches
+        filtered_researches = {}
+        for research in self.researches:
+            filtered_research = self.get_filtered_research(research, filtered_researches)
+            if filtered_research:
+                filtered_researches[f'{research["owner_id"]}_{research["research_min_id"]}'] = {
+                    "owner_id": research["owner_id"],
+                    "column_id": research["column_id"],
+                    "research_min_id": research["research_min_id"],
+                    "research_max_id": min(research["research_max_id"], filtered_research["research_max_id"]),
+                    "valid_from": min(research["valid_from"], filtered_research["valid_from"]),
+                    "valid_until": max(research["valid_until"], filtered_research["valid_until"]),
+                    "game_id": self.game_id,
                 }
-                if location is not None:
-                    new_article["location"] = location
-                for whtyp in ["Conventional", "Nuclear", "Chemical"]:
-                    if whtyp in message:
-                        new_article["whtyp"] = getWarheadTyp(
-                            message.split('lost')[1][3:-4].split(' over')[0].split(" ")[0])
-                articles.append(new_article)
+        self.researches = [filtered_research for filtered_research in filtered_researches.values()]
 
-            # If a country either builds a new Aircraft Carrier or Officer
-            if "recruits new" in message or "builds new" in message:
-                faction = FACTIONS.get(countrys[f'{article["senderID"]}']["faction"])
-                if "recruits new" in message:
-                    typ = f"{message.split('recruits new')[1][1:-5]}"
-                    mode = 1
-                elif "builds new" in message:
-                    typ = message.split('builds new')[1].split("\"")[0][1:-1]
-                    mode = 2
-                else:
-                    typ = "Unknown"
-                    mode = 0
-                time = message.split(" ")[3]
-                articles.append({
-                    "msg_typ": 2,
-                    "country_id": article["senderID"],
-                    "wtyp": getResearchID(typ, researches, mode, faction),
-                    "count": 1,
-                    "time": datetime.fromtimestamp(get_normal_timestamp(time)),
-                })
-            # If a Country starts a weapon Program either nuclear or chemical
-            if "According to an unnamed" in message:
-                if "nuclear" in message:
-                    wtyp = 2899
-                elif "chemical" in message:
-                    wtyp = 2900
-                else:
-                    wtyp = 0
-                time = article["timeStamp"]
-                articles.append({
-                    "msg_typ": 3,
-                    "country_id": article["senderID"],
-                    "wtyp": wtyp,
-                    "time": datetime.fromtimestamp(get_normal_timestamp(time)),
-                })
-            if "has been destroyed by" in message or "was severely damaged by" in message or "was attacked by" in message:
-                country_id = message.split("countryLink")[2].split("\'")[3]
-                faction = FACTIONS.get(countrys[country_id]["faction"])
-                typ = message.split("by ")[1].split("(")[0].split(" ")[3:-1]
-                division = get_combined_number(f"{message.split('by ')[1].split('(')[0].split(' ')[1][0]}",
-                                             f"{message.split('by ')[1].split('(')[0].split(' ')[1][1]}")
-                time = message.split(" ")[3]
-                count = 1
-                whtyp = None
-                wtyp = None
-                if len(typ) < 2:
+    def get_filtered_research(self, research, filtered_researches):
+        for filtered_research in filtered_researches.values():
+            changes = DeepDiff(filtered_research, research,
+                               exclude_paths=["root['research_max_id']",
+                                              "root['valid_from']",
+                                              "root['valid_until']"])
+            if not changes:
+                return filtered_research
+        else:
+            if len(filtered_researches.values()) == 0:
+                return research
+            try:
+                next(filtered_research for filtered_research in filtered_researches.values()
+                     if filtered_research["owner_id"] == research["owner_id"]
+                     and filtered_research["column_id"] == research["column_id"])
+            except StopIteration:
+                return research
+            return None
+
+    # Get all possible warfare_type_ids from Name
+    def get_warfare_type_ids_from_name(self, name, country_id):
+        faction = self.get_faction(country_id)
+
+        warfare_units = []
+
+        # formationNameSmall or formationNameBig
+        for warfare_unit in self.warfare_unit_types.values():
+            if warfare_unit["formationNameSmall"] == name \
+                    or warfare_unit["formationNameBig"] == name \
+                    or warfare_unit["typeName"] == name \
+                    or warfare_unit["nameFaction1"] == name:
+                research = self.get_research_from_warfare_type_id(warfare_unit["itemID"])
+                if not research:
                     continue
-                if "ICBM" in message:
-                    wtyp = 2882
-                    whtyp = 2899
-                    count = -1
-                if "Cruise" in typ[1]:
-                    count = -1
-                    wtyp = 2840
-                    whtyp = getWarheadTyp(typ[0])
-                if "Ballistic" == typ[1]:
-                    count = -1
-                    wtyp = 2861
-                    whtyp = getWarheadTyp(typ[0])
-                if "Stealth" in typ[0]:
-                    wtyp = getResearchID(f"{typ[0]} {typ[1]}", researches, 1, faction)
-                    if len([article_f for article_f in articles if
-                            article_f["country_id"] == int(country_id) and article_f["wtyp"] == wtyp]) < 1:
-                        articles.append({
-                            "msg_typ": 3,
-                            "country_id": int(country_id),
-                            "wtyp": wtyp,
-                            "time": datetime.fromtimestamp(get_normal_timestamp(time)),
-                        })
-                if count == -1:
-                    if len([article_f for article_f in articles if
-                            article_f["time"] == get_normal_timestamp(time) and article_f[
-                                "division"] == division]) < 1:
-                        articles.append({
-                            "msg_typ": 2,
-                            "country_id": article["senderID"],
-                            "wtyp": wtyp,
-                            "whtyp": whtyp,
-                            "division": division,
-                            "count": count,
-                            "time": datetime.fromtimestamp(get_normal_timestamp(time)),
-                        })
-    # print(json.dumps([article for article in articles if article.get("wtyp") == 2861],
-    # print(json.dumps([article for article in articles if article.get("whtyp") == 2899], indent=2))
-    # print(len([article for article in articles if article.get("whtyp") == 2899]))
-    # print(json.dumps(articles, indent=2))
-    return articles
+                # Research only possible if it is available at current day
+                if research["dayAvailable"] > self.current_day:
+                    continue
+                if "factionSpecificResearchConfig" in research:
+                    if faction in research["factionSpecificResearchConfig"]["factions"][1]:
+                        warfare_units.append(warfare_unit["itemID"])
+                else:
+                    faction_short = FACTIONS.get(faction)
+                    if faction_short in research["name"]:
+                        warfare_units.append(warfare_unit["itemID"])
+                    elif not any([every_faction in research["name"] for every_faction in FACTIONS.values()]):
+                        warfare_units.append(warfare_unit["itemID"])
+        if warfare_units and max(warfare_units) - min(warfare_units) == (len(warfare_units)) - 1:
+            return warfare_units
+        else:
+            return None
+
+    # Get all possible Researches from name
+    def get_research_ids_from_name(self, name, country_id):
+        warfare_type_ids = self.get_warfare_type_ids_from_name(name, country_id)
+        if not warfare_type_ids:
+            return None
+        research_ids_from_warfare_type = [self.get_research_id_from_warfare_type_id(warfare_type_id)
+                                          for warfare_type_id in warfare_type_ids]
+        return research_ids_from_warfare_type
+
+    def get_required_research(self, research_id, required_researches):
+        research = self.data_researches[str(research_id)]
+        for required_research in research["requiredResearches"]:
+            if "@c" == required_research:
+                continue
+            required_research = int(required_research)
+            if required_research not in required_researches:
+                required_researches.append(required_research)
+                self.get_required_research(required_research, required_researches)
+        return required_researches
+
+    def get_column_id(self, research_id):
+        research = self.data_researches[str(research_id)]
+        for required_research in research["requiredResearches"]:
+            if "@c" == required_research:
+                continue
+            required_research = int(required_research)
+            if research_id - required_research == 1:
+                self.get_column_id(required_research)
+
+        return research_id
+
+    def get_faction(self, country_id):
+        try:
+            country = next(country for country in self.countries.values()
+                           if country != "java.util.HashMap" and country["playerID"] == country_id)
+            return country["faction"]
+        except StopIteration:
+            return None
+
+    def get_research_from_warfare_type_id(self, warfare_id):
+        warfare_unit = self.warfare_unit_types[str(warfare_id)]
+        for key in warfare_unit["requiredResearches"].keys():
+            try:
+                int(key)
+                return self.data_researches[key]
+            except ValueError:
+                continue
+        return None
+
+    def get_research_id_from_warfare_type_id(self, warfare_id):
+        warfare_unit = self.warfare_unit_types[str(warfare_id)]
+        for key in warfare_unit["requiredResearches"].keys():
+            try:
+                return int(key)
+            except ValueError:
+                continue
+        return None
 
 
-def getSpecialNameCases(typ, faction):
-    if typ.startswith("Conventional") or typ.startswith("Nuclear") or typ.startswith("Chemical"):
-        typ = f'{typ.split(" ")[1]} {typ.split(" ")[2]}'
-    if typ.startswith("Elite"):
-        typ = typ.replace("Elite", "Season")
-    if "Airmobile Infantry" in typ:
-        typ = typ.replace("Airmobile", "Airborne")
-    if "Naval Infantry" in typ and faction != "US":
-        typ = f"{typ} EU & RU"
-    if "AWACS" in typ and faction != "US":
-        typ = f"{typ} EU & RU"
-    if "Insurgent" in typ:
-        typ = "Insurgent"
-    return typ
-
-
-def getWarheadTyp(typ):
-    warheads = {
-        "Conventional": 2889,
-        "Nuclear": 2899,
-        "Chemical": 2900,
-    }
-    return warheads.get(typ)
-
-
-def getResearchID(name, researches, mode, faction="", ):
-    filtered = []
-    if mode == 1:
-        if faction != "":
-            filtered = [research for research in researches if is_name(researches[research], f"{name} {faction}")]
-        if len(filtered) == 0:
-            filtered = [research for research in researches if is_name(researches[research], name)]
-        if len(filtered) == 0:
-            filtered = [research for research in researches if is_name(researches[research], f"{name} 1 {faction}")]
-    elif mode == 2:
-        filtered = [research for research in researches if is_faction_name(researches[research], name, faction)]
-    else:
-        return 0
-    research_id = sorted(filtered, key=lambda item: researches[item]["itemID"])
-
-    if len(research_id) == 0:
-        return 0
-    return int(research_id[0])
-
-
-def is_name(research, name):
-    return research["name"] == name
-
-
-def is_faction_name(research, name, faction):
-    if research["nameFaction1"] == name:
-        if research["name"].endswith(faction):
-            return True
-    return False
+if "__main__" == __name__:
+    with open("../../../Conlyse_analytics/Data/Version 9/data2.json", "r") as f:
+        data_2_old = json.loads(f.read())
+    newspaper_sorter = NewspaperSorter(12231, 4, data_2_old, data_2_old)
+    newspaper_sorter.run()
