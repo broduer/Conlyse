@@ -79,6 +79,7 @@ class Game(Base):
     current_time = Column(TIMESTAMP)
     next_day_time = Column(TIMESTAMP)
     next_heal_time = Column(TIMESTAMP)
+    open_slots = Column(Integer)
 
     scenario = relationship('Scenario')
 

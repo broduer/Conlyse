@@ -1,13 +1,13 @@
-import string
 import random
+import string
 
 
 def generate_random_string(length):
     characters = list(f'{string.ascii_letters}')
     random.shuffle(characters)
-    text = []
+    random_string = []
     for i in range(length):
-        text.append(random.choice(characters))
+        random_string.append(random.choice(characters))
 
-    random.shuffle(text)
-    return "".join(text)
+    random.shuffle(random_string)
+    return random_string

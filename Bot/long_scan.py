@@ -4,12 +4,12 @@ import logging
 from Bot.webbrowser import Webbrowser
 
 
-def long_scan(login_data):
+def long_scan(game_detail):
     # Retrieve Login Data
 
     logging.debug("Starting Webbrowser")
-    with Webbrowser(login_data=login_data) as browser:
-        data_requests = browser.run()
+    with Webbrowser(packet=game_detail) as browser:
+        data_requests = browser.run_game()
     error = False
     for data_type in ["1", "2", "3"]:
         if data_type not in data_requests:

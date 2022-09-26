@@ -6,7 +6,7 @@ import json
 import logging
 from charset_normalizer.api import logger
 
-from Bot.constants import SHORT_SCAN_SAVE
+from Bot.constants import SHORT_SCAN_SORTED_DATA_SAVE
 from Bot.sort.helper import DateTimeEncoder
 from Bot.sort.sort import sort
 from Bot.sql.sql_filler import Filler
@@ -42,7 +42,7 @@ def short_scan(data_requests, auth_data, states_data):
     # If the request didn't fail sort the data
     sorted_data = sort(bot_data["game_id"], data, data_requests)
 
-    if SHORT_SCAN_SAVE:
+    if SHORT_SCAN_SORTED_DATA_SAVE:
         with open(f"{time.time()}.json", "w") as f:
             f.write(json.dumps(sorted_data, indent=2, cls=DateTimeEncoder))
 

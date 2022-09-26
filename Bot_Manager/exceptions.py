@@ -1,0 +1,3 @@
+
+class ServerUUIDinUse(Exception):
+    pass

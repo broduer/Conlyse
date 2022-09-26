@@ -1,0 +1,31 @@
+# Manager:
+MAIN_LOOP_INTERVAL = 60
+
+# Manager Conflict of Nations Account
+MANAGER_USERNAME = "Juicy8533"
+MANAGER_PASSWORD = "QsSb9aDPXocYaCTm"
+
+# Communication Server
+COMMUNICATION_IP = "192.168.20.75"
+COMMUNICATION_PORT = 3458
+FORMAT = "utf-8"
+HEADER = 64
+
+# Account Planner:
+ACCOUNT_CREATE_RETRIES = 3
+
+# Game Planner:
+MIN_JOIN_GAME_OPEN_SLOTS = 5
+JOIN_SCENARIO_IDS = [5975, 5976]
+MAX_GAMES_PER_ACCOUNT = 8
+
+# Time Planner:
+DYNAMIC_DATA_REPORT_INTERVAL = 60  # in Seconds
+LOGIN_DATA_REPORT_INTERVAL = 12 * 3600  # in Seconds
+GAMES_LIST_DATA_REPORT_INTERVAL = 60 * 5  # in Seconds
+
+# Database:
+DB_NAME = "testing"
+DB_USERNAME = "testing"
+DB_PASSWORD = "JGVCDwuwXvmO"
+DB_IP = "192.168.20.75"

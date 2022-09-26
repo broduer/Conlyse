@@ -16,6 +16,6 @@ def sort_game(game_id, data_2):
             get_end_time(data_game["startOfGame"], data_game["endOfGame"], 1 / data_game["timeScale"]))
         if data_game["gameEnded"] else None,
         "current_time": datetime.fromtimestamp(get_normal_timestamp(data_game["timeStamp"])) if not data_game["gameEnded"] else None,
-        "next_day_time": datetime.fromtimestamp(get_normal_timestamp(data_game["nextHealTime"])),
+        "next_day_time": datetime.fromtimestamp(get_normal_timestamp(data_game["nextDayTime"])),
         "next_heal_time": datetime.fromtimestamp(get_normal_timestamp(data_game["nextHealTime"])) if data_game["nextHealTime"] != 0 else None,
     })
