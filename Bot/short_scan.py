@@ -5,19 +5,33 @@ import requests
 import json
 import logging
 from charset_normalizer.api import logger
+from dotenv import load_dotenv
+from os import getenv
+from deepdiff import DeepDiff
 
-from Bot.constants import SHORT_SCAN_SORTED_DATA_SAVE
+
 from Bot.sort.helper import DateTimeEncoder
 from Bot.sort.sort import sort
 from Bot.sql.sql_filler import Filler
 
 logger.setLevel(logging.ERROR)
+load_dotenv()
 
 
-def short_scan(data_requests, auth_data, states_data):
+def short_scan(data_requests, auth_data, states_data, game_detail):
     # Exiting if no long_scan is made
     if not data_requests or not auth_data:
         return states_data
+    proxy_dict = {}
+    try:
+        if game_detail.proxy_username and game_detail.proxy_password:
+            proxy_string = f'socks5://{game_detail.proxy_username}:{game_detail.proxy_password}@{game_detail.local_ip}:{game_detail.local_port}'
+            proxy_dict = {
+                "http": proxy_string,
+                "https": proxy_string
+            }
+    except AttributeError:
+        logging.warning("No Proxy")
 
     # Combining Data from long_scan and old short_scan
     bot_data = {**auth_data, **states_data}
@@ -27,8 +41,10 @@ def short_scan(data_requests, auth_data, states_data):
         "@c": "java.util.HashMap"}
 
     # Making the actual request
-    data2_data = f'{{"requestID":1,"@c":"ultshared.action.UltUpdateGameStateAction","stateType":0,"stateID":"0","addStateIDsOnSent":true,"option":null,"actions":null,"lastCallDuration":0,"version":{bot_data["version"]},"tstamps": {json.dumps(tstamps)}, "stateIDs": {json.dumps(stateIDs)}, "tstamp":"{bot_data["tstamp"]}","client":"con-client","hash":"{bot_data["hash"]}","sessionTstamp":0,"gameID":"{bot_data["game_id"]}","playerID":{bot_data["playerID"]},"siteUserID":"{bot_data["siteUserID"]}","adminLevel":null,"rights":"chat","userAuth":"{bot_data["userAuth"]}"}}'
-    response = requests.post(data_requests["2"]["url"], data=data2_data)
+    data2_data = f'{{"requestID":2,"@c":"ultshared.action.UltUpdateGameStateAction","stateType":0,"stateID":"0","addStateIDsOnSent":true,"option":null,"actions":null,"lastCallDuration":0,"version":{bot_data["version"]},"tstamps": {json.dumps(tstamps)}, "stateIDs": {json.dumps(stateIDs)}, "tstamp":"{bot_data["tstamp"]}","client":"con-client","hash":"{bot_data["hash"]}","sessionTstamp":0,"gameID":"{bot_data["game_id"]}","playerID":{bot_data["playerID"]},"siteUserID":"{bot_data["siteUserID"]}","adminLevel":null,"userAuth":"{bot_data["userAuth"]}"}}'
+    response = requests.post(data_requests["2"]["url"],
+                             data=data2_data,
+                             proxies=proxy_dict)
     if response.status_code != 200:
         return states_data
     try:
@@ -42,7 +58,7 @@ def short_scan(data_requests, auth_data, states_data):
     # If the request didn't fail sort the data
     sorted_data = sort(bot_data["game_id"], data, data_requests)
 
-    if SHORT_SCAN_SORTED_DATA_SAVE:
+    if bool(int(getenv("SHORT_SCAN_SORTED_DATA_SAVE"))):
         with open(f"{time.time()}.json", "w") as f:
             f.write(json.dumps(sorted_data, indent=2, cls=DateTimeEncoder))
 

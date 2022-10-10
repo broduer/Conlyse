@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from Bot.sql.game_list_filler import GameListFiller
 from webbrowser import Webbrowser
-from packet_types import GamesListSchedule
+from Networking.packet_types import GamesListSchedule
 
 
 class GameList:
@@ -11,11 +11,10 @@ class GameList:
         self.game_list_filler = GameListFiller()
 
     def game_list_run(self):
-        with Webbrowser(packet=self.games_list_schedule) as webbrowser:
-            game_list_raw = webbrowser.run_game_list()
-            game_list = self.sort_game_list(game_list_raw)
-            print(game_list)
-            self.game_list_filler.fill(game_list)
+        with Webbrowser(packet=self.games_list_schedule) as web:
+            game_list_raw = web.run_game_list()
+        game_list = self.sort_game_list(game_list_raw)
+        self.game_list_filler.fill(game_list)
 
     @staticmethod
     def sort_game_list(game_list_raw):

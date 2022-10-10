@@ -133,7 +133,8 @@ class Building(Base):
     valid_from = Column(TIMESTAMP, nullable=False)
     valid_until = Column(TIMESTAMP)
     game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False, index=True)
+    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False,
+                                index=True)
 
     game = relationship('Game')
     static_province = relationship('StaticProvince')
@@ -189,7 +190,8 @@ class Province(Base):
     valid_from = Column(TIMESTAMP, nullable=False)
     valid_until = Column(TIMESTAMP)
     game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False, index=True)
+    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False,
+                                index=True)
 
     game = relationship('Game')
     static_province = relationship('StaticProvince')
@@ -237,7 +239,8 @@ class Country(Base):
     valid_from = Column(TIMESTAMP, nullable=False)
     valid_until = Column(TIMESTAMP)
     game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    static_country_id = Column(ForeignKey('static_country.static_country_id'), primary_key=True, nullable=False, index=True)
+    static_country_id = Column(ForeignKey('static_country.static_country_id'), primary_key=True, nullable=False,
+                               index=True)
 
     game = relationship('Game')
     static_country = relationship('StaticCountry')
@@ -255,3 +258,24 @@ class WarfareUnit(Base):
     health_point = Column(Integer)
 
     universal_army = relationship('Army')
+
+
+class GamesAccount(Base):
+    __tablename__ = 'games_accounts'
+
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    account_id = Column(ForeignKey('account.account_id'), primary_key=True, nullable=False, index=True)
+    joined = Column(Boolean)
+    server_uuid = Column(String(45))
+
+    account = relationship('Account')
+    game = relationship('Game')
+
+
+class Account(Base):
+    __tablename__ = 'account'
+
+    account_id = Column(Integer, primary_key=True)
+    email = Column(String(45))
+    username = Column(String(45))
+    password = Column(String(45))

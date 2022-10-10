@@ -1,20 +1,27 @@
 import json
 import logging
 import time
+from dotenv import load_dotenv
+from os import getenv
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 from Bot.sort.helper import DateTimeEncoder
 from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
     GameHasPlayer, Team, \
     Building, ArmyLossesGain, Research, Army, Command, WarfareUnit
-from Bot.sql.sql import engine
 from deepdiff import DeepDiff
+
+load_dotenv()
 
 
 class Filler:
     def __init__(self, game_id, data):
+        connection_string = f"mysql+mysqlconnector://{getenv('DB_USERNAME')}:{getenv('DB_PASSWORD')}@{getenv('DB_IP')}/{getenv('DB_NAME')}?charset=utf8mb4"
+
+        engine = create_engine(connection_string, echo=False)
         session_maker = sessionmaker()
         session_maker.configure(bind=engine)
         self.session = session_maker()

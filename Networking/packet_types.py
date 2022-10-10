@@ -6,7 +6,16 @@ from typing import List
 @dataclass
 class ServerRegisterRequest:
     server_uuid: str
-    maximum_accounts: int
+
+
+@dataclass
+class ProxyRegisterRequest(ServerRegisterRequest):
+    pass
+
+
+@dataclass
+class BotRegisterRequest(ServerRegisterRequest):
+    maximum_games: int
 
 
 @dataclass
@@ -19,18 +28,18 @@ class ServerRegisterAnswer:
 @dataclass
 class AccountRegisterRequest:
     server_uuid: str
-    proxy_id: int
     email: str
     username: str
     password: str
     local_ip: str
     local_port: int
+    proxy_username: str = None
+    proxy_password: str = None
 
 
 @dataclass
 class AccountRegisterAnswer:
     server_uuid: str
-    proxy_id: int
     email: str
     username: str
     password: str
@@ -42,30 +51,50 @@ class AccountRegisterAnswer:
 
 @dataclass
 class TimeSchedule:
-    server_uuid: str
     start_date: datetime
     interval: int
+    game_id: int
+    account_id: int
+    server_uuid: str
+    email: str
+    username: str
+    password: str
+    local_ip: str
+    local_port: int
+    joined: bool
+    proxy_username: str = None
+    proxy_password: str = None
 
 
 @dataclass
 class GamesListSchedule(TimeSchedule):
-    username: str
-    password: str
+    pass
 
 
 @dataclass
 class LoginTimeSchedule(TimeSchedule):
-    game_id: int = None
+    pass
 
 
 @dataclass
 class DynamicTimeSchedule(TimeSchedule):
-    game_id: int = None
+    pass
 
 
 @dataclass
 class TimeTable:
     schedules: List[TimeSchedule]
+
+
+@dataclass
+class Proxy:
+    local_ip: str
+    local_port: int
+    account_id: int = None
+    proxy_username: str = None
+    proxy_password: str = None
+    exit_node_ip: str = None
+    exit_node_id: str = None
 
 
 @dataclass
@@ -79,8 +108,12 @@ class GameDetail:
     local_ip: str
     local_port: int
     joined: bool
+    proxy_username: str = None
+    proxy_password: str = None
 
 
 @dataclass
-class GameTable:
-    game_details: List[GameDetail]
+class ProxyTable:
+    proxies: List[Proxy]
+
+

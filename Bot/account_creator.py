@@ -1,16 +1,15 @@
 import logging
 
-from Bot.packet_types import AccountRegisterRequest, AccountRegisterAnswer
+from Networking.packet_types import AccountRegisterRequest, AccountRegisterAnswer
 from Bot.webbrowser import Webbrowser
 
 
 def create_account(packet: AccountRegisterRequest):
-    webbrowser = Webbrowser(packet)
-    result = webbrowser.run_register_account()
+    with Webbrowser(packet) as web:
+        result = web.run_register_account()
     if result:
         logging.debug(f"Created Account {packet.username} successfully")
         return AccountRegisterAnswer(server_uuid=packet.server_uuid,
-                                     proxy_id=packet.proxy_id,
                                      email=packet.email,
                                      username=packet.username,
                                      password=packet.password,
@@ -19,7 +18,6 @@ def create_account(packet: AccountRegisterRequest):
                                      successful=True)
     else:
         return AccountRegisterAnswer(server_uuid=packet.server_uuid,
-                                     proxy_id=packet.proxy_id,
                                      email=packet.email,
                                      username=packet.username,
                                      password=packet.password,

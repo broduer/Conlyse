@@ -1,20 +1,24 @@
 import logging
 import pickle
 import time
-from datetime import datetime
+from contextlib import closing
 from threading import Thread
+from operator import attrgetter
+import socket
+from dotenv import load_dotenv
+from os import getenv
 
 from Bot_Manager import logger
 from Bot_Manager.manager_helper import generate_random_string
-from packet_types import ServerRegisterAnswer, ServerRegisterRequest, TimeTable, GameTable, GamesListSchedule, \
-    AccountRegisterAnswer
-from constants import COMMUNICATION_PORT, MAIN_LOOP_INTERVAL, FORMAT, HEADER
+from Networking.packet_types import ServerRegisterAnswer, ServerRegisterRequest, TimeTable,\
+    AccountRegisterAnswer, BotRegisterRequest, ProxyRegisterRequest, ProxyTable, Proxy
 from Bot_Manager.sql.sql_filler import Filler
 from time_planner import TimePlanner
 from game_planner import GamePlanner
 from account_planner import AccountPlanner
-from exceptions import ServerUUIDinUse
-import socket
+from Networking.exceptions import ServerUUIDinUse
+
+load_dotenv()
 
 
 class Manager:
@@ -22,14 +26,28 @@ class Manager:
         self.socket = socket.socket(socket.AF_INET, socket.SOL_SOCKET)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        self.socket.bind(("127.0.0.1", COMMUNICATION_PORT))
+        self.socket.bind(("127.0.0.1", int(getenv("COMMUNICATION_PORT"))))
         self.socket.listen()
 
         self.account_planner = AccountPlanner()
         self.game_planner = GamePlanner()
         self.time_planner = TimePlanner()
         self.sql_filler = Filler()
+        self.proxies = {}
         self.clients = {}
+        self.sending_account_create_request = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self):
+        self.account_planner.close()
+        self.game_planner.close()
+        self.time_planner.close()
+        self.sql_filler.close()
 
     def run(self):
         communication_accept_thread = Thread(target=self.connection_accept_listen)
@@ -42,19 +60,27 @@ class Manager:
         while True:
             new_game_allocated, account_creation_needed = self.game_planner.allocate_games_to_accounts()
 
+            # Allocates the games to servers and updates their allocated_games value in self.clients dictionary
+            updated_servers = self.game_planner.allocate_games_to_servers(self.get_clients_by("type", "bot"))
+            self.update_game_allocation_on_servers(updated_servers)
+
             if new_game_allocated:
                 self.send_plans_to_servers()
 
             if account_creation_needed:
                 self.send_account_register_request()
 
-            time.sleep(start_time + i * MAIN_LOOP_INTERVAL - time.time())
+            self.account_planner.sql_filler.session.commit()
+            self.game_planner.sql_filler.session.commit()
+            self.time_planner.sql_filler.session.commit()
+            self.sql_filler.session.commit()
+            time.sleep(abs(start_time + i * int(getenv("MAIN_LOOP_INTERVAL")) - time.time()))
             i = i + 1
 
     def listen(self, conn):
         while True:
             try:
-                buffer_size = conn.recv(HEADER).decode(FORMAT)
+                buffer_size = conn.recv(int(getenv("HEADER"))).decode(getenv("FORMAT"))
                 if not buffer_size:
                     self.disconnect_client("conn", conn)
                     break
@@ -73,8 +99,11 @@ class Manager:
             if isinstance(packet, ServerRegisterRequest):
                 self.register_server(conn, packet)
 
-            if isinstance(packet, AccountRegisterAnswer):
+            elif isinstance(packet, AccountRegisterAnswer):
                 self.register_account(packet)
+
+            elif isinstance(packet, ProxyTable):
+                self.register_proxy_table(packet)
 
     def register_client(self, conn, addr):
         for i in range(10):
@@ -91,10 +120,19 @@ class Manager:
         else:
             logging.warning(f"Couldn't register Client {addr[0]}")
 
+    def update_game_allocation_on_servers(self, servers):
+        if not servers:
+            return
+        for server in servers.values():
+            self.clients[server["client_uuid"]]["allocated_games"] = server["allocated_games"]
+
     def register_server(self, conn, packet):
-        if not self.sql_filler.server_exists(packet.server_uuid):
-            self.sql_filler.fill_server_request(packet)
-            logging.debug(f"Filled new Server {packet.server_uuid}")
+        if isinstance(packet, BotRegisterRequest):
+            type = "bot"
+        elif isinstance(packet, ProxyRegisterRequest):
+            type = "proxy_controller"
+        else:
+            type = "server"
         if self.get_client_by("server_uuid", packet.server_uuid):
             logging.warning(f"{packet.server_uuid} already in use.")
             result = ServerRegisterAnswer(server_uuid=packet.server_uuid,
@@ -106,38 +144,67 @@ class Manager:
             client = self.get_client_by("conn", conn)
             self.clients[client["client_uuid"]] = {**client,
                                                    "server_uuid": packet.server_uuid,
-                                                   "type": "server"}
+                                                   "type": type}
+
             result = ServerRegisterAnswer(server_uuid=packet.server_uuid,
                                           successful=True)
             self.send_packet(conn, result)
 
-            self.send_plans_to_servers()
+            if type == "bot":
+                self.clients[client["client_uuid"]]["maximum_games"] = packet.maximum_games
+                self.clients[client["client_uuid"]]["allocated_games"] = 0
+                updated_servers = self.game_planner.allocate_games_to_servers(self.get_clients_by("type", "bot"))
+                self.update_game_allocation_on_servers(updated_servers)
+                self.send_plans_to_servers()
+
+    def register_proxy_table(self, packet: ProxyTable):
+        for new_proxy in packet.proxies:
+            self.proxies[new_proxy.exit_node_id] = new_proxy
+
+        proxies_account_ids = [proxy.account_id for proxy in self.proxies.values()]
+
+        self.account_planner.allocate_proxies_to_accounts(self.proxies)
+
+    def get_proxy_by(self, datas: dict) -> Proxy | None:
+        if len(datas.values()) <= 1:
+            data = list(datas.values())[0]
+        else:
+            data = tuple(datas.values())
+
+        try:
+            return next(proxy for proxy in self.proxies.values()
+                        if attrgetter(*datas.keys())(proxy) == data)
+        except StopIteration:
+            return None
+        except AttributeError:
+            return None
 
     def send_plans_to_servers(self):
-        time_table = self.time_planner.get_time_table(self.get_client_by("type", "server"))
-        game_table = self.game_planner.get_rounds_details_table()
+        time_table = self.time_planner.get_time_table(self.get_client_by("type", "bot"), list(self.proxies.values()))
         logging.debug("Sending plans to all servers")
-        logging.debug(f"Surveillance on {len(time_table.schedules) - 1} games.")
-        game_list_schedule = next(schedule for schedule in time_table.schedules
-                                  if isinstance(schedule, GamesListSchedule))
+        game_ids = set([schedule.game_id for schedule in time_table.schedules])
+        logging.debug(f"Surveillance on {len(game_ids) - 1} games.")
+        if len(time_table.schedules) < 1:
+            return
         for client_uuid, server_data in self.clients.items():
-            if server_data["type"] == "server":
+            if server_data["type"] == "bot":
                 server_uuid = server_data["server_uuid"]
                 custom_schedules = [schedule for schedule in time_table.schedules
                                     if schedule.server_uuid == server_uuid]
 
-                custom_game_details = [game_detail for game_detail in game_table.game_details
-                                       if game_detail.server_uuid == server_uuid]
-
-                if game_list_schedule.server_uuid == server_uuid:
-                    custom_schedules.append(game_list_schedule)
-
-                self.send_packet(server_data["conn"], GameTable(game_details=custom_game_details))
                 self.send_packet(server_data["conn"], TimeTable(schedules=custom_schedules))
 
     def send_account_register_request(self):
-        account_register_request = self.account_planner.get_register_account()
+        if self.sending_account_create_request:
+            logging.debug("Already sending account create request")
+            return
+        account_register_request = self.account_planner.get_register_account(list(self.get_clients_by("type", "bot")
+                                                                                  .values()),
+                                                                             self.get_proxy_by({
+                                                                                 "account_id": None
+                                                                             }))
         if account_register_request:
+            self.sending_account_create_request = True
             client = self.get_client_by("server_uuid", account_register_request.server_uuid)
             logging.debug(f"Sending Account Register Request to {client['client_uuid']}")
             self.send_packet(client["conn"], account_register_request)
@@ -147,7 +214,13 @@ class Manager:
             logging.warning(f"Couldn't register new Account {packet.username}")
             return
         logging.debug(f"Registered Account {packet}")
-        self.sql_filler.fill_account(packet)
+        account_id = self.sql_filler.fill_account(packet)
+        proxy = self.get_proxy_by({
+            "local_ip": packet.local_ip,
+            "local_port": packet.local_port,
+        })
+        self.proxies[proxy.exit_node_id].account_id = account_id
+        self.sending_account_create_request = False
 
     def disconnect_client(self, key, data):
         client = self.get_client_by(key, data)
@@ -157,6 +230,10 @@ class Manager:
             if client["conn"]:
                 client["conn"].close()
 
+    def get_clients_by(self, key, data):
+        return {client_uuid: client for client_uuid, client in self.clients.items()
+                if client.get(key) == data}
+
     def get_client_by(self, key, data):
         if key and data:
             for client_uuid, client_data in self.clients.items():
@@ -164,17 +241,18 @@ class Manager:
                     return client_data
         return None
 
-    def send_to_all_server(self, packet):
+    def send_to_all_bot(self, packet):
         for client_uuid, client_data in self.clients.items():
-            if client_data["type"] == "server":
+            if client_data["type"] == "bot":
                 self.send_packet(client_data["conn"], packet)
 
     def send_packet(self, conn, packet):
         packet_encoded = pickle.dumps(packet)
         buffer_length = len(packet_encoded)
 
-        buffer_enc_length = str(buffer_length).encode(FORMAT)
-        buffer_enc_length += b' ' * (HEADER - len(buffer_enc_length))  # fill up buffer, until it has the expected size
+        buffer_enc_length = str(buffer_length).encode(getenv("FORMAT"))
+        buffer_enc_length += b' ' * (
+                int(getenv("HEADER")) - len(buffer_enc_length))  # fill up buffer, until it has the expected size
 
         try:
             conn.send(buffer_enc_length)
@@ -194,5 +272,5 @@ class Manager:
 
 if "__main__" == __name__:
     logger.initLogger(logging.DEBUG)
-    manager = Manager()
-    manager.run()
+    with Manager() as manager:
+        manager.run()

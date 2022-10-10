@@ -1,25 +1,28 @@
 import logging
 import pickle
 import socket
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from time import sleep
 
 from Bot.GameList import GameList
 from Bot.account_creator import create_account
-from constants import SERVER_UUID, MAXIMUM_ACCOUNTS, COMMUNICATION_IP, COMMUNICATION_PORT, HEADER, FORMAT, \
-    RECONNECT_TRIES
-from packet_types import ServerRegisterRequest, ServerRegisterAnswer, TimeTable, DynamicTimeSchedule, \
-    LoginTimeSchedule, GamesListSchedule, GameTable, GameDetail, AccountRegisterRequest
+from dotenv import load_dotenv
+from os import getenv
+from Networking.packet_types import ServerRegisterAnswer, TimeTable, DynamicTimeSchedule, \
+    LoginTimeSchedule, GamesListSchedule, AccountRegisterRequest, BotRegisterRequest, GameDetail
 from game import Game
 import logger
-import exceptions
+
+load_dotenv()
 
 
 class Bot:
     def __init__(self):
+
         logger.initLogger(logging.DEBUG)
         self.registered = False
-        self.server_uuid = SERVER_UUID
+        self.server_uuid = getenv("SERVER_UUID")
         self.client = socket.socket()
         self.connected = False
         self.scheduler = BackgroundScheduler()
@@ -31,13 +34,13 @@ class Bot:
 
     def run(self):
         self.scheduler.start()
-        self.connect_to_server((COMMUNICATION_IP, COMMUNICATION_PORT))
+        self.connect_to_server((getenv("COMMUNICATION_IP"), int(getenv("COMMUNICATION_PORT"))))
         if self.connected:
             self.register_server()
             self.main_loop()
 
     def connect_to_server(self, server_addr):
-        for i in range(RECONNECT_TRIES):
+        for i in range(int(getenv("RECONNECT_TRIES"))):
             try:
                 self.client = socket.socket()
                 self.client.connect(server_addr)
@@ -53,21 +56,22 @@ class Bot:
         packet_encoded = pickle.dumps(packet)
         buffer_length = len(packet_encoded)
 
-        buffer_enc_length = str(buffer_length).encode(FORMAT)
-        buffer_enc_length += b' ' * (HEADER - len(buffer_enc_length))  # fill up buffer, until it has the expected size
+        buffer_enc_length = str(buffer_length).encode(getenv("FORMAT"))
+        buffer_enc_length += b' ' * (
+                int(getenv("HEADER")) - len(buffer_enc_length))  # fill up buffer, until it has the expected size
 
         self.client.send(buffer_enc_length)
         self.client.send(packet_encoded)
 
     def register_server(self):
-        server = ServerRegisterRequest(server_uuid=SERVER_UUID,
-                                       maximum_accounts=MAXIMUM_ACCOUNTS)
-        self.send_packet(server)
+        packet = BotRegisterRequest(server_uuid=getenv("SERVER_UUID"),
+                                    maximum_games=int(getenv("MAXIMUM_GAMES")))
+        self.send_packet(packet)
 
     def main_loop(self):
         while True:
             try:
-                buffer_size = self.client.recv(HEADER).decode(FORMAT)
+                buffer_size = self.client.recv(int(getenv("HEADER"))).decode(getenv("FORMAT"))
                 if not buffer_size:
                     break
             except OSError:
@@ -83,8 +87,6 @@ class Bot:
                 self.handle_register_server_answer(packet)
             elif isinstance(packet, AccountRegisterRequest):
                 self.handle_register_account_request(packet)
-            elif isinstance(packet, GameTable):
-                self.handle_game_table(packet)
             elif isinstance(packet, TimeTable):
                 self.handle_time_table(packet)
 
@@ -98,35 +100,52 @@ class Bot:
         answer = create_account(packet)
         self.send_packet(answer)
 
-    def handle_game_table(self, packet: GameTable):
-        self.game_table = packet
-        for game_detail in self.game_table.game_details:
-            if not any([game_detail.game_id == game.game_id for game in self.games]):
-                self.games.append(Game(game_detail))
-
     def handle_time_table(self, packet: TimeTable):
         self.time_table = packet
 
+        # Add all necessary Games
+        for schedule in self.time_table.schedules:
+            game_detail = GameDetail(
+                game_id=schedule.game_id,
+                account_id=schedule.account_id,
+                server_uuid=schedule.server_uuid,
+                email=schedule.email,
+                username=schedule.username,
+                password=schedule.password,
+                local_ip=schedule.local_ip,
+                local_port=schedule.local_port,
+                joined=schedule.joined,
+                proxy_username=schedule.proxy_username,
+                proxy_password=schedule.proxy_password,
+            )
+            if not any([schedule.game_id == game.game_id for game in self.games]):
+                self.games.append(Game(game_detail))
+            else:
+                for game in self.games:
+                    if game.game_id == schedule.game_id:
+                        game.game_detail = game_detail
+                        break
+
         self.scheduler.remove_all_jobs()
-        print(packet)
         for schedule in self.time_table.schedules:
             if isinstance(schedule, GamesListSchedule):
-                pass
-                # game = Game(GameDetail(6106314, 231, "SAZUGFASJIUGBIORFGISODBQPYIJGIOBASIBASU9",
-                #                       "iashdih", "asdgsrds", "rSsUe3NXwzs56Md7", "None", "None", False))
-                # game.long_game_scan()
-                # game.short_game_scan()
-                # self.games_list = GameList(schedule)
-                # self.games_list.game_list_run()
-                # self.scheduler.add_job(self.games_list.login, "interval", hours=12)
-                # self.scheduler.add_job(self.games_list.game_list_scan, "interval", seconds=schedule.interval)
+                if self.games_list is None:
+                    self.games_list = GameList(schedule)
+                self.scheduler.add_job(self.games_list.game_list_run, "interval",
+                                       start_date=schedule.start_date, seconds=schedule.interval)
             else:
                 schedule: DynamicTimeSchedule | LoginTimeSchedule
                 game = self.get_game("game_id", schedule.game_id)
                 if isinstance(schedule, DynamicTimeSchedule):
-                    self.scheduler.add_job(game.short_game_scan, "interval", seconds=schedule.interval)
+                    dynamic_job = self.scheduler.add_job(game.short_game_scan, "interval",
+                                                         start_date=schedule.start_date, seconds=schedule.interval)
+                    game.dynamic_job = dynamic_job
                 elif isinstance(schedule, LoginTimeSchedule):
-                    self.scheduler.add_job(game.long_game_scan, "interval", seconds=schedule.interval)
+                    login_job = self.scheduler.add_job(game.long_game_scan, "interval",
+                                                       start_date=schedule.start_date, seconds=schedule.interval)
+                    game.login_job = login_job
+                    if not game.auth_data:
+                        game.long_game_scan()
 
     def get_game(self, key, data):
         for game in self.games:
