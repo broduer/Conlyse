@@ -11,14 +11,14 @@ from sqlalchemy import create_engine
 from Bot.sort.helper import DateTimeEncoder
 from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
     GameHasPlayer, Team, \
-    Building, ArmyLossesGain, Research, Army, Command, WarfareUnit
+    Building, ArmyLossesGain, Research, Army, Command, WarfareUnit, GamesAccount
 from deepdiff import DeepDiff
 
 load_dotenv()
 
 
 class Filler:
-    def __init__(self, game_id, data):
+    def __init__(self, game_id, data, game_detail):
         connection_string = f"mysql+mysqlconnector://{getenv('DB_USERNAME')}:{getenv('DB_PASSWORD')}@{getenv('DB_IP')}/{getenv('DB_NAME')}?charset=utf8mb4"
 
         engine = create_engine(connection_string, echo=False)
@@ -29,6 +29,7 @@ class Filler:
         self.timestamp = data["timestamp"]
         self.game_id = int(game_id)
         self.map_id = data["map_id"]
+        self.game_detail = game_detail
 
         self.static_provinces = {}
 
@@ -43,7 +44,7 @@ class Filler:
         logging.debug(f"Filling Game {self.game_id}")
         keys = list(self.data.keys())
         if "static_provinces" in keys:
-            logging.debug("Filling static_provinces and static_scenarios")
+            logging.log(5, "Filling static_provinces and static_scenarios")
             self.fill_static_provinces(self.data["static_provinces"])
             self.fill_static_countries(self.data["static_countries"])
             self.fill_static_scenarios(self.data["static_scenarios"])
@@ -53,14 +54,15 @@ class Filler:
             self.fill_game(self.data["game"])
             self.session.commit()
             if self.data["game"]["end_time"] is not None:
-                return True
+                self.remove_game_account()
+                return
 
         if "teams" in keys:
             self.fill_teams(self.data["teams"])
             self.session.commit()
 
         if all(ele in keys for ele in ["players", "countries"]):
-            logging.debug(f"Filling {len(self.data['players'].values())} Players and Countries")
+            logging.log(5, f"Filling {len(self.data['players'].values())} Players and Countries")
             self.fill_player_country(self.data["players"], self.data["countries"])
 
         if "trades" in keys:
@@ -84,6 +86,11 @@ class Filler:
             self.session.commit()
             self.fill_warfare_units(self.data["warfare_units"])
             self.session.commit()
+
+    def remove_game_account(self):
+        self.session.query(GamesAccount).filter_by(account_id=self.game_detail.account_id,
+                                                   game_id=self.game_detail.game_id).delete()
+        self.session.commit()
 
     def fill_game(self, data):
         game_sql = self.session.query(Game).filter_by(game_id=data["game_id"]).first()
@@ -168,8 +175,8 @@ class Filler:
                                                   "root['valid_from']",
                                                   "root['valid_until']"])
                 if changes:
-                    logging.debug(f"UPDATE Country {new_country['country_id']}: {changes.get('type_changes')} "
-                                  f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Country {new_country['country_id']}: {changes.get('type_changes')} "
+                                   f"{changes.get('values_changed')}")
                     update_countries.append({
                         **country_sql_dict,
                         "valid_until": data_country["valid_from"]
@@ -188,7 +195,7 @@ class Filler:
             team = data[team]
             if team["team_id"] not in teams_team_id:
                 new_teams.append(team)
-                logging.debug(f"INSERT Team: {json.dumps(team, cls=DateTimeEncoder, indent=2)}")
+                logging.log(5, f"INSERT Team: {json.dumps(team, cls=DateTimeEncoder, indent=2)}")
             else:
                 team_exists = object_as_dict(teams[teams_team_id.index(team["team_id"])])
                 changes = DeepDiff(team_exists, team,
@@ -200,8 +207,8 @@ class Filler:
                         "name": team["name"],
                         "deleted": team["deleted"],
                     })
-                    logging.debug(f"UPDATE Team {team['team_id']}: {changes.get('type_changes')} "
-                                  f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Team {team['team_id']}: {changes.get('type_changes')} "
+                                   f"{changes.get('values_changed')}")
         self.session.bulk_insert_mappings(Team, new_teams)
         self.session.bulk_update_mappings(Team, updated_teams)
 
@@ -216,7 +223,7 @@ class Filler:
         for trade in data.values():
             if trade["order_id"] not in old_order_ids:
                 new_trades.append(trade)
-                logging.debug(f"INSERT Trade: {json.dumps(trade, cls=DateTimeEncoder, indent=2)}")
+                logging.log(5, f"INSERT Trade: {json.dumps(trade, cls=DateTimeEncoder, indent=2)}")
             else:
                 old_trade_sql = next(
                     old_trade_sql for old_trade_sql in old_trades if old_trade_sql.order_id == trade["order_id"])
@@ -227,8 +234,8 @@ class Filler:
                                                   "root['valid_from']",
                                                   "root['valid_until']"])
                 if changes:
-                    logging.debug(f"UPDATE Trade {trade['order_id']}: {changes.get('type_changes')} "
-                                  f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Trade {trade['order_id']}: {changes.get('type_changes')} "
+                                   f"{changes.get('values_changed')}")
                     update_trades.append({
                         **old_trade_dict,
                         "valid_until": trade["valid_from"]
@@ -238,7 +245,7 @@ class Filler:
         # Check if new Trade doesn't exist
         for old_trade in old_trades:
             if old_trade.order_id not in new_order_ids:
-                logging.debug(f"DELETE Trade {old_trade.order_id}")
+                logging.log(5, f"DELETE Trade {old_trade.order_id}")
                 old_trade_dict = object_as_dict(old_trade)
                 update_trades.append({
                     **old_trade_dict,
@@ -275,9 +282,9 @@ class Filler:
                                        "root['valid_until']",
                                        "root['upgrades']"])
                 if changes:
-                    logging.debug(
-                        f"UPDATE Province {static_province['province_location_id']}: {changes.get('type_changes')} "
-                        f"{changes.get('values_changed')}")
+                    logging.log(5,
+                                f"UPDATE Province {static_province['province_location_id']}: {changes.get('type_changes')} "
+                                f"{changes.get('values_changed')}")
                     update_provinces.append({
                         **old_province_dict,
                         "valid_until": province["valid_from"]
@@ -300,7 +307,7 @@ class Filler:
             building["static_province_id"] = static_province["static_province_id"]
             if building["upgrade_id"] not in old_province_building_upgrade_ids:
                 new_buildings.append(building)
-                logging.debug(f"INSERT Building: {json.dumps(building, cls=DateTimeEncoder, indent=2)}")
+                logging.log(5, f"INSERT Building: {json.dumps(building, cls=DateTimeEncoder, indent=2)}")
             else:
                 old_province_building = next(
                     old_province_building for old_province_building in old_province_buildings if
@@ -314,10 +321,10 @@ class Filler:
                                        "root['valid_from']",
                                        "root['valid_until']"])
                 if changes:
-                    logging.debug(
-                        f"UPDATE Building {static_province['province_location_id']} - {building['upgrade_id']}: "
-                        f"{changes.get('type_changes')} "
-                        f"{changes.get('values_changed')}")
+                    logging.log(5,
+                                f"UPDATE Building {static_province['province_location_id']} - {building['upgrade_id']}: "
+                                f"{changes.get('type_changes')} "
+                                f"{changes.get('values_changed')}")
                     update_buildings.append({
                         **old_province_building_dict,
                         "valid_until": building["valid_from"]
@@ -333,8 +340,8 @@ class Filler:
                                                  if building["province_location_id"] == static_province[
                                                      "province_location_id"]]
             if old_building.upgrade_id not in new_province_building_upgrade_ids:
-                logging.debug(
-                    f"DELETE Building {static_province['province_location_id']} - {old_building.upgrade_id}: ")
+                logging.log(5,
+                            f"DELETE Building {static_province['province_location_id']} - {old_building.upgrade_id}: ")
                 old_building_dict = object_as_dict(old_building)
                 update_buildings.append({
                     **old_building_dict,
@@ -357,9 +364,9 @@ class Filler:
             army.pop("province_location_id")
             if army["army_id"] not in old_army_ids:
                 new_armies.append(army)
-                logging.debug(
-                    f"INSERT Army {army['army_id']}:"
-                    f"{json.dumps(army, indent=2, cls=DateTimeEncoder)}")
+                logging.log(5,
+                            f"INSERT Army {army['army_id']}:"
+                            f"{json.dumps(army, indent=2, cls=DateTimeEncoder)}")
             else:
                 old_army_sql = next(old_army for old_army in old_armies if old_army.army_id == army["army_id"])
                 old_army = object_as_dict(old_army_sql)
@@ -370,10 +377,10 @@ class Filler:
                                        "root['valid_from']",
                                        "root['valid_until']"])
                 if changes:
-                    logging.debug(
-                        f"UPDATE Army {army['army_id']}:"
-                        f"{changes.get('type_changes')} "
-                        f"{changes.get('values_changed')}")
+                    logging.log(5,
+                                f"UPDATE Army {army['army_id']}:"
+                                f"{changes.get('type_changes')} "
+                                f"{changes.get('values_changed')}")
                     update_armies.append({
                         **old_army,
                         "valid_until": army["valid_from"]
@@ -395,9 +402,9 @@ class Filler:
             except StopIteration:
                 old_command_dict = None
             if old_command_dict is None:
-                logging.debug(
-                    f"INSERT Command of Army {command['army_id']}:"
-                    f"{json.dumps(command, indent=2, cls=DateTimeEncoder)}")
+                logging.log(5,
+                            f"INSERT Command of Army {command['army_id']}:"
+                            f"{json.dumps(command, indent=2, cls=DateTimeEncoder)}")
                 new_commands.append(command)
             else:
                 changes = DeepDiff(old_command_dict, command,
@@ -410,9 +417,9 @@ class Filler:
                     if "sy" in command["command_type"]:
                         command["start_time"] = old_command_dict["arrival_time"]
 
-                    logging.debug(
-                        f"UPDATE Command of Army {command['army_id']}:"
-                        f"{changes}")
+                    logging.log(5,
+                                f"UPDATE Command of Army {command['army_id']}:"
+                                f"{changes}")
 
                     # If the old command is stationary set its arrival_time to the new start_time
                     if old_command_dict["command_type"] and "sy" in old_command_dict["command_type"]:
@@ -444,9 +451,9 @@ class Filler:
                                                  if
                                                  old_army_warfare_unit.universal_army_id == old_army.universal_army_id]
             if warfare_unit["warfare_id"] not in old_army_warfare_unit_warfare_ids:
-                logging.debug(
-                    f"INSERT Warfare Unit {warfare_unit['warfare_id']}:"
-                    f"{json.dumps(warfare_unit, indent=2, cls=DateTimeEncoder)}")
+                logging.log(5,
+                            f"INSERT Warfare Unit {warfare_unit['warfare_id']}:"
+                            f"{json.dumps(warfare_unit, indent=2, cls=DateTimeEncoder)}")
                 new_warfare_units.append({
                     **warfare_unit,
                     "universal_army_id": old_army.universal_army_id
@@ -481,7 +488,7 @@ class Filler:
                                                    for country_research in country_researches
                                                    if country_research.column_id == research["column_id"]])
             if research["column_id"] not in country_column_ids:
-                logging.debug(f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
+                logging.log(5, f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
                 new_researches.append(research)
             # Check if new research_min_id in column
             elif any([old_research_min_id >= research["research_min_id"]
@@ -491,18 +498,19 @@ class Filler:
                         old_research = next(country_research for country_research in country_researches
                                             if old_research_min_id == country_research.research_min_id
                                             and research["column_id"] == country_research.column_id)
-                        if time.mktime(old_research.valid_until.timetuple()) >= time.mktime(research["valid_until"].timetuple()):
+                        if time.mktime(old_research.valid_until.timetuple()) >= time.mktime(
+                                research["valid_until"].timetuple()):
                             continue
-                        logging.debug(f"Update Research: "
-                                      f"old: valid_until {old_research.valid_until}"
-                                      f"new: valid_until {research['valid_until']}")
+                        logging.log(5, f"Update Research: "
+                                       f"old: valid_until {old_research.valid_until}"
+                                       f"new: valid_until {research['valid_until']}")
                         old_research.valid_until = research["valid_until"]
                         old_research.research_max_id = min(research["research_max_id"], old_research.research_max_id)
                         update_researches.append(object_as_dict(old_research))
                         break
             elif any([old_research_min_id < research["research_min_id"]
                       for old_research_min_id in country_column_research_min_ids]):
-                logging.debug(f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
+                logging.log(5, f"INSERT Research: {json.dumps(research, cls=DateTimeEncoder, indent=2)}")
                 new_researches.append(research)
 
         self.session.bulk_update_mappings(Research, update_researches)

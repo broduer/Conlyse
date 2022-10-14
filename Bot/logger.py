@@ -7,6 +7,7 @@ def initLogger(level=logging.DEBUG):
         logging.basicConfig(
             format='%(asctime)s - %(module)s - %(levelname)s - %(message)s',
             level=level)
+        logging.addLevelName(5, "TRACE")
     else:
         # Display less stuff for info mode
         logging.basicConfig(format='%(levelname)s: %(message)s', level=level)

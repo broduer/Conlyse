@@ -21,7 +21,7 @@ load_dotenv()
 def short_scan(data_requests, auth_data, states_data, game_detail):
     # Exiting if no long_scan is made
     if not data_requests or not auth_data:
-        return states_data
+        return states_data, False
     proxy_dict = {}
     try:
         if game_detail.proxy_username and game_detail.proxy_password:
@@ -46,12 +46,12 @@ def short_scan(data_requests, auth_data, states_data, game_detail):
                              data=data2_data,
                              proxies=proxy_dict)
     if response.status_code != 200:
-        return states_data
+        return states_data, False
     try:
         data = json.loads(response.text)
     except json.JSONDecodeError:
         logging.exception("Couldn't load short_scan data")
-        return states_data
+        return states_data, False
     else:
         logging.debug(f"Loaded short_scan data successfully. Took {round(response.elapsed.microseconds / 1000)} ms.")
 
@@ -62,10 +62,13 @@ def short_scan(data_requests, auth_data, states_data, game_detail):
         with open(f"{time.time()}.json", "w") as f:
             f.write(json.dumps(sorted_data, indent=2, cls=DateTimeEncoder))
 
-    with Filler(game_id=bot_data["game_id"], data=sorted_data) as filler:
+    with Filler(game_id=bot_data["game_id"], data=sorted_data, game_detail=game_detail) as filler:
         filler.fill()
-
-    return getStates(data, states_data)
+    if "game" in sorted_data:
+        game_ended = sorted_data["game"]["end_time"] is not None
+    else:
+        game_ended = False
+    return getStates(data, states_data), game_ended
 
 
 def getStates(data, states_data):

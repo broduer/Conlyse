@@ -1,6 +1,7 @@
 import logging
 import pickle
 import socket
+from threading import Thread
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from time import sleep
@@ -82,13 +83,16 @@ class Bot:
                 break
 
             packet = pickle.loads(data)
-
+            answer_thread = None
             if isinstance(packet, ServerRegisterAnswer):
-                self.handle_register_server_answer(packet)
+                answer_thread = Thread(target=self.handle_register_server_answer, args=(packet,))
             elif isinstance(packet, AccountRegisterRequest):
-                self.handle_register_account_request(packet)
+                answer_thread = Thread(target=self.handle_register_account_request, args=(packet,))
             elif isinstance(packet, TimeTable):
-                self.handle_time_table(packet)
+                answer_thread = Thread(target=self.handle_time_table, args=(packet,))
+
+            if answer_thread:
+                answer_thread.start()
 
     def handle_register_server_answer(self, packet: ServerRegisterAnswer):
         if packet.successful:
@@ -129,10 +133,12 @@ class Bot:
         self.scheduler.remove_all_jobs()
         for schedule in self.time_table.schedules:
             if isinstance(schedule, GamesListSchedule):
-                if self.games_list is None:
-                    self.games_list = GameList(schedule)
+                needs_run = not isinstance(self.games_list, GameList)
+                self.games_list = GameList(schedule)
                 self.scheduler.add_job(self.games_list.game_list_run, "interval",
                                        start_date=schedule.start_date, seconds=schedule.interval)
+                if needs_run:
+                    self.games_list.game_list_run()
             else:
                 schedule: DynamicTimeSchedule | LoginTimeSchedule
                 game = self.get_game("game_id", schedule.game_id)

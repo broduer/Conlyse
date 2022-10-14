@@ -60,7 +60,6 @@ class AccountPlanner:
             if len(accounts) == 0:
                 break
             proxies[proxy.exit_node_id].account_id = accounts.pop(0).account_id
-        print(proxies)
         return proxies
 
     # Checks if username or email is already in use

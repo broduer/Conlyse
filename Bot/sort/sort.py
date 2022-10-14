@@ -26,44 +26,44 @@ def sort(game_id, data, data_requests):
     sorted_data["timestamp"] = datetime.fromtimestamp(get_normal_timestamp(data["result"]["timeStamp"]))
     sorted_data["map_id"] = data_requests["2"]["data"]["result"]["states"]["12"]["mapID"]
     if "12" in states:
-        logging.debug("Sorting Game State")
+        logging.log(5, "Sorting Game State")
         sorted_data["game"] = sort_game(game_id, data)
 
     if len(states) > 5:
-        logging.debug("Sorting Static Countries")
+        logging.log(5, "Sorting Static Countries")
         sorted_data["static_countries"] = sort_static_countries(sorted_data["map_id"],
                                                                 data_requests["2"]["data"])
-        logging.debug("Sorting Static Provinces")
+        logging.log(5, "Sorting Static Provinces")
         sorted_data["static_provinces"] = sort_static_provinces(data_requests["1"]["data"],
                                                                 data_requests["2"]["data"])
-        logging.debug("Sorting Static Scenarios")
+        logging.log(5, "Sorting Static Scenarios")
         sorted_data["static_scenarios"] = sort_static_scenarios(data_requests["3"]["data"])
 
     if "1" in states:
-        logging.debug("Sorting Countries, Teams and Players")
+        logging.log(5, "Sorting Countries, Teams and Players")
         sorted_data["countries"] = sort_countries(game_id, data)
         sorted_data["teams"] = sort_teams(game_id, data)
         sorted_data["players"] = sort_players(data)
 
     if "3" in states:
         amount_provinces = len(data['result']['states']['3']['map']['locations'][1])
-        logging.debug(f"Sorting {amount_provinces} dynamic Provinces")
+        logging.log(5, f"Sorting {amount_provinces} dynamic Provinces")
         sorted_data["provinces"] = sort_provinces(game_id, data_requests["1"]["data"], data, data_requests["2"]["data"])
         sorted_data["buildings"] = sort_buildings(game_id, data)
 
     if "6" in states:
         amount_armies = len(data['result']['states']['6']['armies']) - 1
-        logging.debug(f"Sorting {amount_armies} Armies")
+        logging.log(5, f"Sorting {amount_armies} Armies")
         sorted_data["armies"] = sort_armies(game_id, data)
         sorted_data["commands"] = sort_commands(game_id, data)
         sorted_data["warfare_units"] = sort_warfare_units(game_id, data)
 
     if "4" in states:
-        logging.debug("Sorting Trades")
+        logging.log(5, "Sorting Trades")
         sorted_data["trades"] = sort_trades(game_id, data)
 
     if "2" in states:
-        logging.debug("Sorting Newspaper Articles")
+        logging.log(5, "Sorting Newspaper Articles")
         newspaper_sorter = NewspaperSorter(game_id, day, data, data_requests["2"]["data"])
         newspaper_sorter.run()
         sorted_data["researches"] = newspaper_sorter.researches

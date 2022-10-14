@@ -17,13 +17,21 @@ class Game:
         self.auth_data = {}
 
     def short_game_scan(self):
-        self.states_data = short_scan(self.data_requests, self.auth_data, self.states_data, self.game_detail)
+        self.states_data, game_ended = short_scan(self.data_requests, self.auth_data, self.states_data,
+                                                  self.game_detail)
+        if game_ended:
+            logging.debug(f"G: {self.game_id} - Game Ended")
+            self.remove_jobs()
 
     def long_game_scan(self):
         try:
             self.data_requests, self.auth_data = long_scan(self.game_detail)
         except GameJoinError:
-            if self.login_job and self.dynamic_job:
-                logging.debug(f"Remove Game Jobs because of GameJoinError Game: {self.game_id}")
-                self.login_job.remove()
-                self.dynamic_job.remove()
+            logging.debug(f"G: {self.game_id} - Remove Game Jobs because of GameJoinError ")
+            self.remove_jobs()
+
+    def remove_jobs(self):
+        if self.login_job:
+            self.login_job.remove()
+        if self.dynamic_job:
+            self.dynamic_job.remove()

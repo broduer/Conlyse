@@ -18,16 +18,22 @@ class GamePlanner:
         self.sql_filler.close()
 
     def allocate_games_to_accounts(self):
-        accounts = self.sql_filler.get_free_accounts()
+        accounts = self.sql_filler.get_accounts()
         games = self.sql_filler.get_unassigned_games()
         join_scenario_ids = [int(scenario_id) for scenario_id in getenv("JOIN_SCENARIO_IDS").split(",")]
-        new_game_allocated = False
-        account_creation_needed = False
-        # No Free Accounts -> Account needs to be created
-        if len(accounts) == 0:
-            account_creation_needed = True
         account_games = {account.account_id: account.games_count for account in accounts}
         games_count_total = sum(account_games.values())
+
+        new_game_allocated = False
+        account_creation_needed = False
+
+        # If games_count_current < max_games and every account has maximum amount of games assigned
+        # -> Create new account
+        if games_count_total < int(getenv("MAX_GAMES_TOTAL")) and \
+            not any([account.games_count < int(getenv("MAX_GAMES_PER_ACCOUNT"))
+                     for account in accounts]):
+            account_creation_needed = True
+
         for game in games:
             time_diff = (datetime.now() - game.start_time) / game.speed
             if games_count_total < int(getenv("MAX_GAMES_TOTAL")) and \

@@ -1,6 +1,7 @@
 import json
 import re
 import logging
+from time import sleep
 
 from Bot.sql.game_list_filler import GameListFiller
 from Bot.webbrowser import Webbrowser

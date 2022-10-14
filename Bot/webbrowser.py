@@ -8,7 +8,7 @@ from os import getenv
 from socket import gethostname, gethostbyname
 
 from Networking.exceptions import GameJoinError
-from Networking.packet_types import AccountRegisterRequest, GameDetail
+from Networking.packet_types import GameDetail
 
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumwire import webdriver
@@ -49,7 +49,7 @@ class Webbrowser(webdriver.Remote):
                     'no_proxy': 'localhost,127.0.0.1'
                 }
         except AttributeError:
-            logging.warning("No Proxy")
+            self.log(logging.WARNING, "No Proxy")
         self.packet = packet
 
         super(Webbrowser, self).__init__(
@@ -69,22 +69,24 @@ class Webbrowser(webdriver.Remote):
         self.wait_game_hub_page()
         joined = self.check_joined()
         if not joined:
-            logging.debug("Needs to first time Join the Game")
+            self.log(logging.DEBUG, "Needs to first time Join the Game")
             joined = self.join_game()
         else:
             self.get(f"{getenv('BASE_URL')}play.php?gameID={self.packet.game_id}")
         if joined:
             self.wait_game_round()
             self.select_random_country()
+            self.wait_map()
             data_requests = self.get_data_requests()
             return data_requests
+        self.log(logging.DEBUG, f"Couldn't first time Join Game {self.packet.game_id}")
         raise GameJoinError(f"Couldn't first time join Game {self.packet.game_id}")
 
     def run_game_list(self):
         self.login()
         self.wait_game_hub_page()
         self.click_new_games_tab()
-        logging.debug("Scrolling to reveal all Games")
+        self.log(logging.DEBUG, "Scrolling to reveal all Games")
         for i in range(50):
             self.execute_script("window.scrollTo(0,document.body.scrollHeight)")
             sleep(0.4)
@@ -92,9 +94,9 @@ class Webbrowser(webdriver.Remote):
         return self.get_game_list_requests()
 
     def run_register_account(self):
-        logging.debug("Requesting Login Page")
+        self.log(logging.DEBUG, "Requesting Login Page")
         self.get(getenv('BASE_URL'))
-        logging.debug("Login Page Loaded")
+        self.log(logging.DEBUG, "Login Page Loaded")
         if self.check_login_page():
             self.click_register_tab()
             self.type_registration_details()
@@ -106,9 +108,9 @@ class Webbrowser(webdriver.Remote):
         return False
 
     def login(self):
-        logging.debug("Requesting Login Page")
+        self.log(logging.DEBUG, "Requesting Login Page")
         self.get(getenv('BASE_URL'))
-        logging.debug("Login Page Loaded")
+        self.log(logging.DEBUG, "Login Page Loaded")
         if self.check_login_page():
             self.click_login_tab()
             self.type_login_credentials()
@@ -136,7 +138,7 @@ class Webbrowser(webdriver.Remote):
             sleep(0.3)
             search_box.send_keys(Keys.ENTER)
         except NoSuchElementException:
-            logging.debug("Couldn't find Search box")
+            self.log(logging.DEBUG, "Couldn't find Search box")
             return False
 
         try:
@@ -144,20 +146,31 @@ class Webbrowser(webdriver.Remote):
                 ec.presence_of_element_located((By.XPATH, f'//button[@data-game-id="{self.packet.game_id}"]'))
             ).click()
             WebDriverWait(self, int(getenv('BROWSER_VALIDATION_LOADING_TIMEOUT'))).until(
-                ec.presence_of_element_located((By.XPATH, f'//button[@class="default_button func_confirm_dialog_accept"]'))
+                ec.presence_of_element_located(
+                    (By.XPATH, f'//button[@class="default_button func_confirm_dialog_accept"]'))
             ).click()
+
+            self.switch_to.window(self.window_handles[1])
             return True
         except TimeoutException:
-            logging.debug(f"Couldn't find Game Button for Game {self.packet.game_id}")
+            self.log(logging.DEBUG, f"Couldn't find Game Button for Game {self.packet.game_id}")
             return False
 
     def select_random_country(self):
+        self.switch_to.default_content()
+        try:
+            WebDriverWait(self, int(getenv('BROWSER_GAME_LOADING_TIMEOUT'))).until(
+                ec.frame_to_be_available_and_switch_to_it((By.ID, "ifm"))
+            )
+        except TimeoutException:
+            self.log(logging.WARNING, "Couldn't switch to frame 'ifm' -> Selection Country")
+
         try:
             WebDriverWait(self, int(getenv('BROWSER_VALIDATION_LOADING_TIMEOUT'))).until(
                 ec.presence_of_element_located((By.ID, "func_cat_chooser_random"))
             ).click()
         except TimeoutException:
-            logging.debug("Couldn't select random Country")
+            self.log(logging.DEBUG, "Couldn't select random Country")
 
     def check_login_page(self):
         try:
@@ -174,19 +187,19 @@ class Webbrowser(webdriver.Remote):
             WebDriverWait(self, int(getenv('BROWSER_GAME_LOADING_TIMEOUT'))).until(
                 ec.presence_of_element_located((By.ID, "mainContent"))
             )
-            logging.debug("Game Hub Page Loaded")
-            logging.debug("Closing any ADs")
+            self.log(logging.DEBUG, "Game Hub Page Loaded")
+            self.log(logging.DEBUG, "Closing any ADs")
             try:
                 WebDriverWait(self, int(getenv('BROWSER_VALIDATION_LOADING_TIMEOUT'))).until(
                     ec.presence_of_element_located((By.XPATH, '//div[@class="func_close_button close_button_s"]'))
                 ).click()
             except TimeoutException:
-                logging.debug("No Ads found")
+                self.log(logging.DEBUG, "No Ads found")
         except TimeoutException:
-            logging.warning("Couldn't verify that cookies are set.")
+            self.log(logging.WARNING, "Couldn't verify that cookies are set.")
 
     def type_login_credentials(self):
-        logging.debug("Inserting Login Credentials")
+        self.log(logging.DEBUG, "Inserting Login Credentials")
         try:
             input_username_element = self.find_element(By.ID, "loginbox_login_input")
             input_password_element = self.find_element(By.ID, "loginbox_password_input")
@@ -198,10 +211,10 @@ class Webbrowser(webdriver.Remote):
             sleep(0.5)
             button_submit_element.click()
         except NoSuchElementException:
-            logging.warning("Couldn't log into Account")
+            self.log(logging.WARNING, "Couldn't log into Account")
 
     def type_registration_details(self):
-        logging.debug("Inserting Registration Details")
+        self.log(logging.DEBUG, "Inserting Registration Details")
         try:
             input_username_element = self.find_element(By.ID, "username")
             input_password_element = self.find_element(By.ID, "password")
@@ -212,7 +225,7 @@ class Webbrowser(webdriver.Remote):
             input_email_element.send_keys(self.packet.email)
 
         except NoSuchElementException:
-            logging.warning("Couldn't register Account")
+            self.log(logging.WARNING, "Couldn't register Account")
 
     def check_valid_register_inputs(self):
         try:
@@ -229,7 +242,7 @@ class Webbrowser(webdriver.Remote):
                     (By.XPATH, '//div[@id="sg_emailcheck_wrapper" and contains(@class,"valid")]'))
             )
         except TimeoutException:
-            logging.warning("Inputs are invalid")
+            self.log(logging.WARNING, "Inputs are invalid")
             return False
         try:
             WebDriverWait(self, int(getenv("BROWSER_VALIDATION_LOADING_TIMEOUT"))).until(
@@ -238,20 +251,33 @@ class Webbrowser(webdriver.Remote):
             button_submit_element = self.find_element(By.ID, 'func_ok_button')
             button_submit_element.click()
         except TimeoutException:
-            logging.debug("Couldn't click register button")
+            self.log(logging.DEBUG, "Couldn't click register button")
         return True
 
     def wait_game_round(self):
+        self.switch_to.default_content()
         try:
             WebDriverWait(self, int(getenv('BROWSER_GAME_LOADING_TIMEOUT'))).until(
                 ec.frame_to_be_available_and_switch_to_it((By.ID, "ifm"))
             )
+        except TimeoutException:
+            self.log(logging.WARNING, "Couldn't switch to frame 'ifm'")
+
+        try:
             WebDriverWait(self, int(getenv('BROWSER_GAME_LOADING_TIMEOUT'))).until(
                 ec.presence_of_element_located((By.ID, "layer3"))
             )
-            logging.debug("Game loaded")
+            self.log(logging.DEBUG, "Game loaded")
         except TimeoutException:
-            logging.error("TimeoutException: Joining Game took to long.")
+            self.log(logging.ERROR, "Joining Game took to long.")
+
+    def wait_map(self):
+        try:
+            WebDriverWait(self, int(getenv('BROWSER_GAME_LOADING_TIMEOUT'))).until(
+                ec.presence_of_element_located((By.ID, "menuContainer"))
+            )
+        except TimeoutException:
+            self.log(logging.DEBUG, "Couldn't load map")
 
     def get_game_list_requests(self):
         game_list = []
@@ -303,8 +329,8 @@ class Webbrowser(webdriver.Remote):
                             "body": base64.b64decode(bytes.decode(request.body)[5:]).decode("utf-8"),
                             "data": json.loads(gzip.decompress(request.response.body)),
                         }
-                except Exception:
-                    logging.exception("Loading of Data failed")
+                except Exception as exception:
+                    self.log(logging.ERROR, f"{exception}Loading of Data failed")
         return data_requests
 
     def click_new_games_tab(self):
@@ -313,9 +339,9 @@ class Webbrowser(webdriver.Remote):
                 ec.element_to_be_clickable((By.ID, 'ui_open_new_games'))
             )
             new_games_button.click()
-            logging.debug("Clicked Open New Games Tab")
+            self.log(logging.DEBUG, "Clicked Open New Games Tab")
         except TimeoutException:
-            logging.warning("Couldn't click new Games Tab")
+            self.log(logging.WARNING, "Couldn't click new Games Tab")
 
     def click_login_tab(self):
         try:
@@ -323,30 +349,52 @@ class Webbrowser(webdriver.Remote):
                 ec.element_to_be_clickable((By.CSS_SELECTOR, 'div[data-form="login"]'))
             ).click()
         except TimeoutException:
-            logging.warning("Couldn't click Login Tab Button")
+            self.log(logging.WARNING, "Couldn't click Login Tab Button")
 
     def click_register_tab(self):
         try:
             register_tab_element = self.find_element(By.CSS_SELECTOR, 'div[data-form="register"]')
             register_tab_element.click()
         except NoSuchElementException:
-            logging.warning("Couldn't click Register Tab Button")
+            self.log(logging.warning, "Couldn't click Register Tab Button")
 
     def interceptor(self, request):
         # Block PNG, JPEG and GIF images
         if request.path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.ogg', '.webm', ".font", ".svg", ".mp4",)):
             request.abort()
 
+    def log(self, log_level, text):
+        if not log_level or not text:
+            return
+        try:
+            logging.log(log_level, f"G: {self.packet.game_id} A: {self.packet.account_id} - {text}")
+            return
+        except AttributeError:
+            pass
+        try:
+            logging.log(log_level, f"G: {self.packet.game_id} - {text}")
+            return
+        except AttributeError:
+            pass
+        try:
+            logging.log(log_level, f"A: {self.packet.account_id} - {text}")
+            return
+        except AttributeError:
+            pass
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     with Webbrowser(GameDetail(email="gfdgdfhdfg@gmail.com",
-                               username="asdgsrds",
-                               password="rSsUe3NXwzs56Md7",
-                               local_ip="93.190.245.171",
-                               local_port=9197,
+                               username="9aNHmVOw7KuqaMpv",
+                               password="7462HHHTJM5#KoBb",
+                               local_ip="185.199.228.220",
+                               local_port=7300,
+                               proxy_username="fwxvjepu",
+                               proxy_password="gpmezr56qo3a",
                                server_uuid="sijdj>GIJsogkOKG",
                                account_id=23,
-                               game_id=6206857,
+                               game_id=6219301,
                                joined=False)) as web:
+        sleep(10000)
         web.run_game()

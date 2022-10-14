@@ -31,8 +31,10 @@ class Filler:
         self.session.commit()
         self.session.close()
 
-    def get_accounts(self) -> List[Account]:
-        return self.session.query(Account).all()
+    def get_accounts(self):
+        return self.session.query(Account.account_id, Account.email, Account.username, Account.password,
+                                  func.count(GamesAccount.account_id).label("games_count")) \
+            .join(GamesAccount, isouter=True).group_by(Account).all()
 
     def get_free_accounts(self):
         accounts = self.session.query(Account.account_id, Account,
@@ -66,7 +68,8 @@ class Filler:
         unassigned_games = self.session.query(
             Game.game_id, Game.start_time, Game.current_time, Game.end_time, Game.next_day_time, Game.next_heal_time,
             Game.open_slots, Scenario.scenario_id, Scenario.name, Scenario.map_id, Scenario.speed
-        ).join(Scenario).filter(~Game.game_id.in_(assigned_games)).order_by(desc(Game.start_time)).all()
+        ).join(Scenario).filter(~Game.game_id.in_(assigned_games), Game.end_time == None).order_by(
+            desc(Game.start_time)).all()
         return unassigned_games
 
     def get_assigned_games(self):
