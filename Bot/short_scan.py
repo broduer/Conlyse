@@ -10,9 +10,9 @@ from os import getenv
 from deepdiff import DeepDiff
 
 
-from Bot.sort.helper import DateTimeEncoder
-from Bot.sort.sort import sort
-from Bot.sql.sql_filler import Filler
+from helper import DateTimeEncoder
+from sort import sort
+from sql.sql_filler import Filler
 
 logger.setLevel(logging.ERROR)
 load_dotenv()

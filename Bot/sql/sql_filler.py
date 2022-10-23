@@ -8,8 +8,8 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-from Bot.sort.helper import DateTimeEncoder
-from Bot.sql.Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
+from helper import DateTimeEncoder
+from sql.Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
     GameHasPlayer, Team, \
     Building, ArmyLossesGain, Research, Army, Command, WarfareUnit, GamesAccount
 from deepdiff import DeepDiff

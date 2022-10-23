@@ -3,8 +3,8 @@ import re
 import logging
 from time import sleep
 
-from Bot.sql.game_list_filler import GameListFiller
-from Bot.webbrowser import Webbrowser
+from sql.game_list_filler import GameListFiller
+from webbrowser import Webbrowser
 from Networking.exceptions import GameJoinError
 from Networking.packet_types import GameDetail
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from Bot.sql.game_list_filler import GameListFiller
+from sql.game_list_filler import GameListFiller
 from webbrowser import Webbrowser
 from Networking.packet_types import GamesListSchedule
 

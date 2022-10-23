@@ -5,7 +5,7 @@ from os import getenv
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-from Bot.sql.Models import Game, GamesAccount, Scenario
+from sql.Models import Game, GamesAccount, Scenario
 
 
 class GameListFiller:

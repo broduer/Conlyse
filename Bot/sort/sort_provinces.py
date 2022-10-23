@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from Bot.sort.helper import get_province_from_id, get_normal_timestamp
+from helper import get_province_from_id, get_normal_timestamp
 
 
 def sort_provinces(game_id, data_1, data_2, data_2_old):

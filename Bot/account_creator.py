@@ -1,7 +1,7 @@
 import logging
 
 from Networking.packet_types import AccountRegisterRequest, AccountRegisterAnswer
-from Bot.webbrowser import Webbrowser
+from webbrowser import Webbrowser
 
 
 def create_account(packet: AccountRegisterRequest):

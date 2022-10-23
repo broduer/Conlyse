@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from os import getenv
 from typing import List
 
-from Bot_Manager.sql.Models import Account
+from sql.Models import Account
 from sql.sql_filler import Filler
 from Networking.packet_types import AccountRegisterRequest, Proxy
 

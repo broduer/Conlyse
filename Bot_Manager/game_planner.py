@@ -5,7 +5,7 @@ from typing import Dict
 from dotenv import load_dotenv
 from os import getenv
 
-from Bot_Manager.sql.sql_filler import Filler
+from sql.sql_filler import Filler
 
 load_dotenv()
 

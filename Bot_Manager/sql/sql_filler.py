@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from os import getenv
 
 from Networking.packet_types import AccountRegisterAnswer
-from Bot_Manager.sql.Models import Account, Game, GamesAccount, Scenario
+from sql.Models import Account, Game, GamesAccount, Scenario
 
 load_dotenv()
 

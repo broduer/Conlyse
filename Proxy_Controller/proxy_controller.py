@@ -7,7 +7,7 @@ from time import sleep, time
 from dotenv import load_dotenv
 from os import getenv
 
-from Proxy_Controller import logger
+import logger
 from Networking.packet_types import ProxyRegisterRequest, ServerRegisterAnswer, Proxy, ProxyTable
 import requests
 

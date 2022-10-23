@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from Bot.sort.helper import get_normal_timestamp
+from helper import get_normal_timestamp
 
 
 def sort_countries(game_id, data_2):

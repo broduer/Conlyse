@@ -8,11 +8,11 @@ import socket
 from dotenv import load_dotenv
 from os import getenv
 
-from Bot_Manager import logger
-from Bot_Manager.manager_helper import generate_random_string
+import logger
+from manager_helper import generate_random_string
 from Networking.packet_types import ServerRegisterAnswer, ServerRegisterRequest, TimeTable,\
     AccountRegisterAnswer, BotRegisterRequest, ProxyRegisterRequest, ProxyTable, Proxy
-from Bot_Manager.sql.sql_filler import Filler
+from sql.sql_filler import Filler
 from time_planner import TimePlanner
 from game_planner import GamePlanner
 from account_planner import AccountPlanner

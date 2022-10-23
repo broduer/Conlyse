@@ -1,4 +1,4 @@
-from Bot.sort.helper import get_province_from_id
+from helper import get_province_from_id
 
 
 def sort_static_provinces(data_1, data_2_old):

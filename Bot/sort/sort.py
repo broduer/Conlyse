@@ -2,18 +2,18 @@ import json
 import logging
 from datetime import datetime
 
-from Bot.sort.helper import get_normal_timestamp
-from Bot.sort.sort_armies import sort_armies, sort_commands, sort_warfare_units
-from Bot.sort.sort_countries import sort_countries
-from Bot.sort.sort_static_countries import sort_static_countries
-from Bot.sort.sort_game import sort_game
-from Bot.sort.sort_newspaper import NewspaperSorter
-from Bot.sort.sort_players import sort_players
-from Bot.sort.sort_provinces import sort_provinces, sort_buildings
-from Bot.sort.sort_scenarios import sort_static_scenarios
-from Bot.sort.sort_static_provinces import sort_static_provinces
-from Bot.sort.sort_teams import sort_teams
-from Bot.sort.sort_trades import sort_trades
+from helper import get_normal_timestamp
+from sort_armies import sort_armies, sort_commands, sort_warfare_units
+from sort_countries import sort_countries
+from sort_static_countries import sort_static_countries
+from sort_game import sort_game
+from sort_newspaper import NewspaperSorter
+from sort_players import sort_players
+from sort_provinces import sort_provinces, sort_buildings
+from sort_scenarios import sort_static_scenarios
+from sort_static_provinces import sort_static_provinces
+from sort_teams import sort_teams
+from sort_trades import sort_trades
 
 
 def sort(game_id, data, data_requests):

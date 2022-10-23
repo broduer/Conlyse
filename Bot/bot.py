@@ -6,8 +6,8 @@ from threading import Thread
 from apscheduler.schedulers.background import BackgroundScheduler
 from time import sleep
 
-from Bot.GameList import GameList
-from Bot.account_creator import create_account
+from GameList import GameList
+from account_creator import create_account
 from dotenv import load_dotenv
 from os import getenv
 from Networking.packet_types import ServerRegisterAnswer, TimeTable, DynamicTimeSchedule, \
