@@ -26,6 +26,9 @@ class Bot:
         self.server_uuid = getenv("SERVER_UUID")
         self.client = socket.socket()
         self.connected = False
+
+        self.login_scan_queue = []
+        self.working_on_login_scan_queue = False
         self.scheduler = BackgroundScheduler()
         self.scheduler.remove_all_jobs()
         self.games_list = None
@@ -89,10 +92,23 @@ class Bot:
             elif isinstance(packet, AccountRegisterRequest):
                 answer_thread = Thread(target=self.handle_register_account_request, args=(packet,))
             elif isinstance(packet, TimeTable):
-                answer_thread = Thread(target=self.handle_time_table, args=(packet,))
+                self.time_table_thread = Thread(target=self.handle_time_table, args=(packet,))
+                self.time_table_thread.start()
 
             if answer_thread:
                 answer_thread.start()
+
+    def work_login_scan_queue(self):
+        if not self.working_on_login_scan_queue:
+            self.working_on_login_scan_queue = True
+            while len(self.login_scan_queue) > 0:
+                game = self.login_scan_queue.pop(0)
+                if not game.auth_data:
+                    try:
+                        game.long_game_scan()
+                    except Exception as exception:
+                        print(exception)
+        self.working_on_login_scan_queue = False
 
     def handle_register_server_answer(self, packet: ServerRegisterAnswer):
         if packet.successful:
@@ -138,7 +154,8 @@ class Bot:
                 self.scheduler.add_job(self.games_list.game_list_run, "interval",
                                        start_date=schedule.start_date, seconds=schedule.interval)
                 if needs_run:
-                    self.games_list.game_list_run()
+                    game_list_thread = Thread(target=self.games_list.game_list_run)
+                    game_list_thread.start()
             else:
                 schedule: DynamicTimeSchedule | LoginTimeSchedule
                 game = self.get_game("game_id", schedule.game_id)
@@ -151,7 +168,9 @@ class Bot:
                                                        start_date=schedule.start_date, seconds=schedule.interval)
                     game.login_job = login_job
                     if not game.auth_data:
-                        game.long_game_scan()
+                        self.login_scan_queue.append(game)
+
+        self.work_login_scan_queue()
 
     def get_game(self, key, data):
         for game in self.games:
