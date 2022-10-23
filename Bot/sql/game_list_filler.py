@@ -5,7 +5,7 @@ from os import getenv
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-from sql.Models import Game, GamesAccount, Scenario
+from Models import Game, GamesAccount, Scenario
 
 
 class GameListFiller:
@@ -45,10 +45,15 @@ class GameListFiller:
     def update_single_game(self, data: dict):
         old_game = self.session.query(Game).filter(Game.game_id == data["game_id"]).scalar()
         if old_game:
-            old_game.open_slots = data["open_slots"]
+            if data.get("open_slots"):
+                old_game.open_slots = data["open_slots"]
+
+            if data.get("joined"):
+                old_game.joined = data["joined"]
         self.session.commit()
 
     def remove_game_account(self, game_detail):
         self.session.query(GamesAccount).filter(GamesAccount.game_id == game_detail.game_id,
-                                                GamesAccount.account_id == game_detail.account_id).delete()
+                                                GamesAccount.account_id == game_detail.account_id,
+                                                GamesAccount.joined == False).delete()
         self.session.commit()

@@ -1,22 +1,22 @@
 import logging
 import pickle
-import time
-from contextlib import closing
-from threading import Thread
-from operator import attrgetter
 import socket
-from dotenv import load_dotenv
+import time
+from operator import attrgetter
 from os import getenv
+from threading import Thread
+
+from dotenv import load_dotenv
 
 import logger
-from manager_helper import generate_random_string
-from Networking.packet_types import ServerRegisterAnswer, ServerRegisterRequest, TimeTable,\
+from Networking.exceptions import ServerUUIDinUse
+from Networking.packet_types import ServerRegisterAnswer, ServerRegisterRequest, TimeTable, \
     AccountRegisterAnswer, BotRegisterRequest, ProxyRegisterRequest, ProxyTable, Proxy
+from account_planner import AccountPlanner
+from game_planner import GamePlanner
+from manager_helper import generate_random_string
 from sql.sql_filler import Filler
 from time_planner import TimePlanner
-from game_planner import GamePlanner
-from account_planner import AccountPlanner
-from Networking.exceptions import ServerUUIDinUse
 
 load_dotenv()
 
@@ -26,7 +26,7 @@ class Manager:
         self.socket = socket.socket(socket.AF_INET, socket.SOL_SOCKET)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        self.socket.bind(("127.0.0.1", int(getenv("COMMUNICATION_PORT"))))
+        self.socket.bind((getenv("COMMUNICATION_IP"), int(getenv("COMMUNICATION_PORT"))))
         self.socket.listen()
 
         self.account_planner = AccountPlanner()

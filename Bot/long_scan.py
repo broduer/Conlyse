@@ -16,6 +16,11 @@ def long_scan(game_detail: GameDetail):
     with Webbrowser(packet=game_detail) as browser:
         try:
             data_requests = browser.run_game()
+            with GameListFiller() as glf:
+                glf.update_single_game({
+                    "game_id": game_detail.game_id,
+                    "joined": True,
+                })
         except GameJoinError:
             # If Join wasn't possible it should remove the round -> Not possible to join
             with GameListFiller() as glf:

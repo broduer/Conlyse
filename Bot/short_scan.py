@@ -10,8 +10,8 @@ from os import getenv
 from deepdiff import DeepDiff
 
 
-from helper import DateTimeEncoder
-from sort import sort
+from sort.helper import DateTimeEncoder
+from sort.sort import sort
 from sql.sql_filler import Filler
 
 logger.setLevel(logging.ERROR)
@@ -56,7 +56,7 @@ def short_scan(data_requests, auth_data, states_data, game_detail):
         logging.debug(f"Loaded short_scan data successfully. Took {round(response.elapsed.microseconds / 1000)} ms.")
 
     # If the request didn't fail sort the data
-    sorted_data = sort(bot_data["game_id"], data, data_requests)
+    sorted_data = sort
 
     if bool(int(getenv("SHORT_SCAN_SORTED_DATA_SAVE"))):
         with open(f"{time.time()}.json", "w") as f:

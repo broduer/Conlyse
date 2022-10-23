@@ -5,7 +5,6 @@ from time import sleep
 import logging
 from dotenv import load_dotenv
 from os import getenv
-from socket import gethostname, gethostbyname
 
 from Networking.exceptions import GameJoinError
 from Networking.packet_types import GameDetail
@@ -38,7 +37,7 @@ class Webbrowser(webdriver.Remote):
         # Disable images
         firefox_options.set_preference('permissions.default.image', 2)
         seleniumwire_options = {
-            'addr': gethostbyname(gethostname()),
+            'addr': getenv("BOT_IP"),
         }
         try:
             if packet.proxy_username and packet.proxy_password:
