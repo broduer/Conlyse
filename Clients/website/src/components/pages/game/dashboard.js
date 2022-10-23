@@ -11,7 +11,7 @@ import Risingpowers from "./dashboard/risingpowers";
 import getRisingPowers from "../../../helper/dashboard/RisingPowersGetter";
 import Trades from "./dashboard/trades";
 import HighvalueCities from "./dashboard/highvalueCities";
-import {getCombined} from "../../../helper/CombinedArray";
+import {getCombined} from "../../../helper/Array_Helper";
 import {useQueries, useQuery} from "react-query";
 import * as api from "../../../helper/api";
 import {getTeamsbyVP} from "../../../helper/staticinformation";
@@ -34,17 +34,35 @@ export default function Dashboard(){
 
 function DashboardDiv({game}){
     const day = getDifference(game.st, game.ct, "D")
-    const results = useQueries([
+    let made_rising_power_queries = false
+    let results = useQueries([
         { queryKey: ['teams', game.gid], queryFn: () => api.getTeams(game.gid)},
-        { queryKey: ['countrys', game.gid, "normal", "-1", "-1"], queryFn: () => api.getCountrys(game.gid, "normal", "-1", "-1")},
-        { queryKey: ['countrys', game.gid, "stats", "-1", day], queryFn: () => api.getCountrys(game.gid, "stats", "-1", day)},
-        { queryKey: ['countrys', game.gid, "rising_power", "-1", day], queryFn: () => api.getCountrys(game.gid, "rising_power", "-1",day)},
+        { queryKey: ['countrys', game.gid, "normal", "-1", "0"], queryFn: () => api.getCountrys(game.gid, "normal", "-1", "0")},
+        { queryKey: ['countrys', game.gid, "stats", "-1", "0"], queryFn: () => api.getCountrys(game.gid, "stats", "-1", "0")},
+        { queryKey: ['countrys', game.gid, "rising_power", "0", "0"], queryFn: () => api.getCountrys(game.gid, "rising_power", "-1","0")},
         { queryKey: ['trades', game.gid], queryFn: () => api.getTrades(game.gid)},
-        { queryKey: ['provinces', game.gid, "normal", day], queryFn: () => api.getProvinces(game.gid, "normal", day)},
-        { queryKey: ['provinces', game.gid, "value", day], queryFn: () => api.getProvinces(game.gid, "value", day)},
+        { queryKey: ['provinces', game.gid, "normal", "0"], queryFn: () => api.getProvinces(game.gid, "normal", "0")},
+        { queryKey: ['provinces', game.gid, "value", "0"], queryFn: () => api.getProvinces(game.gid, "value", "0")},
         { queryKey: ['static_provinces', game.mid], queryFn: () => api.getStaticProvinces(game.mid)},
         { queryKey: ['static_upgrades'], queryFn: api.getStaticUpgrades},
     ])
+    // Does the queries for the podium of rising power countries
+    let countrys_rising_power_podium = [{"cid": 0, "pos": 1}, {"cid": 1, "pos":2}, {"cid": 2, "pos": 3}]
+    if (results[3].isSuccess){
+        countrys_rising_power_podium = Object.values(results[3]["data"]).sort(function(first, second) {
+            return first["pos"] - second["pos"];
+        })}
+    let queries = []
+    for (let i = 0; i < 3; i++){
+        queries.push(
+            { queryKey: ['countrys', game.gid, "stats", countrys_rising_power_podium[i]["cid"], "-1"],
+                queryFn: () => api.getCountrys(game.gid, "stats", countrys_rising_power_podium[i]["cid"], "-1"),
+                enabled: countrys_rising_power_podium.length !== 3
+            },
+         )
+    }
+    const countrys_rising_power_queries = useQueries(queries)
+    results = results.concat(countrys_rising_power_queries)
     const isLoading = results.some(query => query.isLoading)
     const isError = results.some(query => query.isError)
     const isFetching = results.some(query => query.isFetching)
@@ -68,10 +86,9 @@ function DashboardDiv({game}){
     const static_upgrades = results[8]["data"]
 
     const combined_countrys = getCombined([Object.values(countrys), Object.values(countrys_stats), Object.values(countrys_rising_power)], "cid")
-
+    console.log(combined_countrys)
     const combined_provinces = getCombined([Object.values(provinces), Object.values(static_provinces)], "plid")
     const combined_provinces_value = getCombined([provinces_value, Object.values(static_provinces)], "plid")
-
 
     return(
         <CustomDrawer game_id={game["gid"]}>

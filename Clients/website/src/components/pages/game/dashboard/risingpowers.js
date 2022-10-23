@@ -12,7 +12,7 @@ export default function Risingpowers({rising_powers_countrys}){
         }}>
             <Carousel interval={10000}>
                 {Object.values(rising_powers_countrys).slice(0,3).map((rising_power_country => (
-                    <Risingpower key={rising_power_country["cid"]} country={rising_power_country} number={rising_power_country["rspos"]+1}/>
+                    <Risingpower key={rising_power_country["cid"]} country={rising_power_country} number={rising_power_country["rs_pos"]+1}/>
                 )))}
             </Carousel>
         </Box>

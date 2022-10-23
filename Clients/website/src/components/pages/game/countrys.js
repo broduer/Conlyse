@@ -15,7 +15,7 @@ import {IconButton, Stack, TextField} from "@mui/material";
 import {theme} from "../../../helper/theme";
 import getRows from "../../../helper/countrys/RowsGetter";
 import {useQueries, useQuery} from "react-query";
-import {getCombined} from "../../../helper/CombinedArray";
+import {getCombined} from "../../../helper/Array_Helper";
 import * as api from "../../../helper/api";
 import {isEqual} from "lodash";
 

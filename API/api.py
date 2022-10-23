@@ -3,27 +3,35 @@ import time
 from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, request
-from flask_caching import Cache
+# from flask_caching import Cache
 from flask_compress import Compress
-from flask_sqlalchemy import inspect
-from sqlalchemy import func, between, case, desc, text
+from flask_sqlalchemy import inspect, SQLAlchemy
+from sqlalchemy import func, between, case, desc, text, and_, or_, distinct, select, bindparam
+from sqlalchemy.types import TIMESTAMP
+from sqlalchemy.orm import aliased
 from flask_cors import CORS
 
 from helpers.province_buidings import get_province_buildings, province_sort_by_building_cost
-import constants
+
+from dotenv import load_dotenv
+from os import getenv
+
 from helpers.production import get_production
-from models import *
+from models import Province, StaticProvince, Game, \
+    GamesAccount, ArmyLossesGain, Country, StaticCountry, \
+    Team, Trade, Scenario, Building, GameHasPlayer, Player
 
 # create the object of Flask
 
+load_dotenv()
 
 app = Flask(__name__)
 
-app.config['SECRET_KEY'] = constants.FLASK_SECRET
+app.config['SECRET_KEY'] = getenv("FLASK_SECRET")
 
 # SqlAlchemy Datadb.Model Configuration With Mysql
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{constants.MYSQL_USER}:{constants.MYSQL_USER_PASSWORD}@{constants.MYSQL_IP_ADDR}/{constants.MYSQL_DATABASE}'
+    'SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://{getenv("MYSQL_USER")}:{getenv("MYSQL_USER_PASSWORD")}@{getenv("MYSQL_IP_ADDR")}/{getenv("MYSQL_DATABASE")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['SQLALCHEMY_ECHO'] = True
 
@@ -34,7 +42,6 @@ app.config["CACHE_DEFAULT_TIMEOUT"] = 300
 db = SQLAlchemy(app)
 Compress(app)
 CORS(app)
-cache = Cache(app)
 
 with open("static_informations/upgrades.json") as file:
     data_upgrades = json.loads(file.read())
@@ -42,16 +49,16 @@ with open("static_informations/upgrades.json") as file:
 with open("static_informations/researches.json") as file:
     data_researches = json.loads(file.read())
 
-
+'''
 @app.route('/load')
 def load():
     for k in cache.cache._cache:
         print(k, cache.get(k))
+'''
 
 
 # creating our routes
-@app.route('/api/v1/game/<game_id>')
-@cache.cached(timeout=5000)
+@app.route('/api/v2/game/<game_id>')
 def game(game_id):
     output = {}
     game_id = int(game_id)
@@ -62,6 +69,8 @@ def game(game_id):
 
     if game_id != -1:
         query = query.filter(Game.game_id == game_id)
+    else:
+        query = query.filter(Game.next_day_time != None)
 
     for game in query.all():
         output[game.game_id] = {
@@ -78,8 +87,7 @@ def game(game_id):
     return jsonify(output)
 
 
-@app.route('/api/v1/team/<game_id>')
-@cache.cached(timeout=500)
+@app.route('/api/v2/team/<game_id>')
 def team(game_id):
     game = getGame(game_id)
     output = {}
@@ -96,79 +104,87 @@ def team(game_id):
     return jsonify(output)
 
 
-@app.route('/api/v1/provinces/<game_id>/<mode>/<day>')
-@cache.cached(timeout=50000)
-def provinces(game_id, mode, day):
+@app.route('/api/v2/provinces/<game_id>/<mode>/<timestamp>')
+def provinces(game_id, mode, timestamp):
     output = {}
     game = getGame(game_id)
-    day_time = get_newest_time(game, day)
-    print(day_time)
+    timestamp = int(timestamp)
+    if timestamp == 0:
+        date_timestamp = None
+    else:
+        date_timestamp = datetime.fromtimestamp(timestamp)
 
     if "value" == mode:
         query = db.session.query(Province.province_id, Province.owner_id, Building.upgrade_id, Building.health,
-                                 StaticProvince.province_location_id) \
+                                 StaticProvince.static_province_id, Building.valid_until) \
             .select_from(Province) \
-            .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
-            .join(ProvinceHasBuilding) \
-            .join(Building) \
-            .filter(StaticProvince.map_id == game.map_id) \
-            .filter(Province.game_id == game.game_id) \
-            .filter(Province.current_time == day_time)
+            .join(StaticProvince, Province.static_province_id == StaticProvince.static_province_id) \
+            .join(Building,
+                  and_(Province.game_id == Building.game_id,
+                       Province.static_province_id == Building.static_province_id)) \
+            .filter(Province.game_id == game.game_id)
+        query = add_timestamp_filter_building(date_timestamp, query)
 
     elif "list" == mode:
-        query = db.session.query(Province.province_id, StaticProvince.province_location_id, Province.owner_id,
-                                 Building.upgrade_id, Building.health, Province.morale, Province.province_state_id,
+        query = db.session.query(Province.province_id, StaticProvince.static_province_id, Province.owner_id,
+                                 Building.upgrade_id, Building.health, Province.morale,
+                                 Province.province_state_id,
                                  Province.victory_points,
                                  case(
-                                     [(StaticProvince.resource_production_type == 2, Province.resource_production)],
+                                     [(StaticProvince.resource_production_type == 2,
+                                       Province.resource_production)],
                                      else_=0
                                  ).label("r2"),
                                  case(
-                                     [(StaticProvince.resource_production_type == 3, Province.resource_production)],
+                                     [(StaticProvince.resource_production_type == 3,
+                                       Province.resource_production)],
                                      else_=0
                                  ).label("r3"),
                                  case(
-                                     [(StaticProvince.resource_production_type == 5, Province.resource_production)],
+                                     [(StaticProvince.resource_production_type == 5,
+                                       Province.resource_production)],
                                      else_=0
                                  ).label("r5"),
                                  case(
-                                     [(StaticProvince.resource_production_type == 6, Province.resource_production)],
+                                     [(StaticProvince.resource_production_type == 6,
+                                       Province.resource_production)],
                                      else_=0
                                  ).label("r6"),
                                  case(
-                                     [(StaticProvince.resource_production_type == 7, Province.resource_production)],
+                                     [(StaticProvince.resource_production_type == 7,
+                                       Province.resource_production)],
                                      else_=0
                                  ).label("r7"),
                                  Province.tax_production) \
             .select_from(Province) \
-            .join(Country) \
-            .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
-            .join(ProvinceHasBuilding) \
-            .join(Building) \
-            .filter(Province.game_id == game.game_id) \
-            .filter(StaticProvince.map_id == game.map_id) \
-            .filter(Province.current_time == day_time)
-
+            .join(StaticProvince) \
+            .join(Building,
+                  and_(Province.game_id == Building.game_id,
+                       Province.static_province_id == Building.static_province_id)) \
+            .filter(Province.game_id == game.game_id)
+        query = add_timestamp_filter_building(date_timestamp, query)
     else:
-        query = db.session.query(Province).filter(Game.game_id == game_id).filter(Province.current_time == day_time)
+        query = db.session.query(Province).filter(Game.game_id == game_id)
+
+    query = add_timestamp_filter_province(date_timestamp, query)
+
 
     if "value" == mode:
         province_buildings = {}
 
         for province in query.all():
-            if province.province_id not in province_buildings:
-                province_buildings[province.province_id] = {
+            if province.static_province_id not in province_buildings:
+                province_buildings[province.static_province_id] = {
                     "pid": province.province_id,
-                    "plid": province.province_location_id,
+                    "plid": province.static_province_id,
                     "oid": province.owner_id,
                     "upg": {},
                 }
-            province_buildings[province.province_id]["upg"][province.upgrade_id] = {
+            province_buildings[province.static_province_id]["upg"][province.upgrade_id] = {
                 "upid": province.upgrade_id,
-                "ht": province.health
+                "ht": province.health,
             }
-        for province in province_buildings:
-            province = province_buildings[province]
+        for province in province_buildings.values():
             province.update(get_province_buildings(province, data_upgrades, True))
         output = sorted(list(province_buildings.values()), reverse=True, key=province_sort_by_building_cost)[0:30]
         return jsonify(output)
@@ -176,10 +192,10 @@ def provinces(game_id, mode, day):
     if "list" == mode:
         province_buildings = {}
         for province in query.all():
-            if province.province_id not in province_buildings:
-                province_buildings[province.province_id] = {
+            if province.static_province_id not in province_buildings:
+                province_buildings[province.static_province_id] = {
                     "pid": province.province_id,
-                    "plid": province.province_location_id,
+                    "plid": province.static_province_id,
                     "ml": province.morale,
                     "psid": province.province_state_id,
                     "vp": province.victory_points,
@@ -192,24 +208,23 @@ def provinces(game_id, mode, day):
                     "21": province.tax_production,
                     "upg": {},
                 }
-            province_buildings[province.province_id]["upg"][province.upgrade_id] = {
+            province_buildings[province.static_province_id]["upg"][province.upgrade_id] = {
                 "upid": province.upgrade_id,
                 "ht": province.health
             }
-        for province in province_buildings:
-            province = province_buildings[province]
+        for province in province_buildings.values():
             province.update(get_province_buildings(province, data_upgrades, False))
 
         output = province_buildings
         return jsonify(output)
 
-    for province in query.limit(1000000).all():
-        output[province.province_id] = {
-            "ct": round(province.current_time.timestamp()),
+    for province in query.all():
+        output[province.static_province_id] = {
+            "ct": round(province.valid_from.timestamp()),
             "ml": province.morale,
             "oid": province.owner_id,
             "pid": province.province_id,
-            "plid": province.province_location_id,
+            "plid": province.static_province_id,
             "psid": province.province_state_id,
             "rp": province.resource_production,
             "stid": province.stationary_army_id,
@@ -219,196 +234,202 @@ def provinces(game_id, mode, day):
     return jsonify(output)
 
 
-@app.route('/api/v1/countrys/<int:game_id>/<mode>/<country_id>/<day>')
-@cache.cached(timeout=50000)
-def countrys(game_id, mode, country_id, day):
+@app.route('/api/v2/countrys/<int:game_id>/<mode>/<country_id>/<timestamp>')
+def countrys(game_id, mode, country_id, timestamp):
     if game_id is None:
         return "game_id is needed"
     country_id = int(country_id)
-    day = int(day)
+    timestamp = int(timestamp)
     game = getGame(game_id)
-    day_time = get_newest_time(game, day)
+
+    # Timestamp needs to be converted from unix format to datetime
+    if timestamp > 0:
+        date_timestamp = datetime.fromtimestamp(timestamp)
+    # Timestamp == 0 -> Timestamp should be newest
+    elif timestamp == 0:
+        date_timestamp = game.current_time
+    # Timestamp is not supplied -> All Times should be calculated
+    else:
+        date_timestamp = None
+
     # Define Queries for different modes
     if mode == "stats":
+        province_b = aliased(Province)
+        if date_timestamp:
+            timestamps = select(
+                distinct(bindparam("date_timestamp", value=date_timestamp, type_=TIMESTAMP)).label("valid_from"),
+                Province.owner_id.label("owner_id")) \
+                .filter(Province.game_id == game_id)
+        else:
+            timestamps = select([distinct(Province.valid_from).label("valid_from"),
+                                 Province.owner_id.label("owner_id")]) \
+                .filter(Province.game_id == game_id)
+
+        if country_id != -1:
+            timestamps = timestamps.filter(Province.owner_id == country_id)
+
+        timestamps = timestamps.alias("timestamp_a")
+        timestamp_a = timestamps
         query = db.session.query(
-            Country.country_id,
-            Province.current_time,
-            func.sum(Province.victory_points).label("victory_points"),
-            func.avg(Province.morale).label("morale"),
+            timestamp_a.c.owner_id,
+            timestamp_a.c.valid_from,
+            func.sum(province_b.victory_points).label("victory_points"),
+            func.avg(province_b.morale).label("morale"),
             func.sum(case(
-                [(Province.province_state_id <= 52, 1)], else_=0
+                [(province_b.province_state_id <= 52, 1)], else_=0
             )).label("total_provinces"),
             func.sum(case(
-                [(Province.province_state_id >= 53, 1)], else_=0
+                [(province_b.province_state_id >= 53, 1)], else_=0
             )).label("total_cities"),
             func.sum(case(
-                [(Province.province_state_id == 55, 1)], else_=0
+                [(province_b.province_state_id == 55, 1)], else_=0
             )).label("total_mainland_cities"),
             func.sum(case(
-                [(Province.province_state_id == 54, 1)], else_=0
+                [(province_b.province_state_id == 54, 1)], else_=0
             )).label("total_annexed_cities"),
-            func.count(Province.province_id).label("total_provinces_cities"),
+            func.count(province_b.province_id).label("total_provinces_cities"),
             func.sum(case(
-                [(StaticProvince.resource_production_type == 2, Province.resource_production)], else_=0
+                [(StaticProvince.resource_production_type == 2, province_b.resource_production)], else_=0
             )).label("r2"),
             func.sum(case(
-                [(StaticProvince.resource_production_type == 3, Province.resource_production)], else_=0
+                [(StaticProvince.resource_production_type == 3, province_b.resource_production)], else_=0
             )).label("r3"),
             func.sum(case(
-                [(StaticProvince.resource_production_type == 5, Province.resource_production)], else_=0
+                [(StaticProvince.resource_production_type == 5, province_b.resource_production)], else_=0
             )).label("r5"),
             func.sum(case(
-                [(StaticProvince.resource_production_type == 6, Province.resource_production)], else_=0
+                [(StaticProvince.resource_production_type == 6, province_b.resource_production)], else_=0
             )).label("r6"),
             func.sum(case(
-                [(StaticProvince.resource_production_type == 7, Province.resource_production)], else_=0
+                [(StaticProvince.resource_production_type == 7, province_b.resource_production)], else_=0
             )).label("r7"),
-            func.sum(Province.tax_production).label("tax_production"),
-            func.sum(Province.resource_production).label("total_resource_production"),
-        ).select_from(Country) \
-            .join(Province) \
-            .join(StaticProvince, Province.province_location_id == StaticProvince.province_location_id) \
-            .join(GameHasPlayer) \
-            .filter(StaticProvince.map_id == game.map_id)
-        if country_id == -1:
-            query = query.filter(Province.current_time == day_time) \
-                .group_by(Country.country_id)
-        else:
-            query = query.filter(Country.country_id == country_id).group_by(Province.current_time)
+            func.sum(province_b.tax_production).label("tax_production"),
+            func.sum(province_b.resource_production).label("total_resource_production"),
+        ).select_from(timestamps) \
+            .join(province_b,
+                  and_(
+                      province_b.game_id == game_id,
+                      and_(province_b.owner_id == timestamp_a.c.owner_id,
+                           and_(or_(
+                               and_(province_b.valid_from <= timestamp_a.c.valid_from,
+                                    province_b.valid_until > timestamp_a.c.valid_from),
+
+                               (province_b.valid_from == timestamp_a.c.valid_from),
+
+                               and_(province_b.valid_until == None,
+                                    province_b.valid_from < timestamp_a.c.valid_from)
+                           ))))) \
+            .join(StaticProvince, province_b.static_province_id == StaticProvince.static_province_id) \
+            .group_by(timestamp_a.c.valid_from, timestamp_a.c.owner_id)
 
     elif mode == "rising_power":
-        day_ago = get_nearest_time(game, day_time)
-        query = db.session.query(Country.country_id,
+        # Currently Rising Power isn't implemented to be calculated for every timestamp
+        if not date_timestamp:
+            return
+        current_time = date_timestamp
+        day_ago = current_time - timedelta(days=5)
+        query = db.session.query(Province.owner_id,
                                  ((func.sum(
                                      case(
-                                         [(Province.current_time == day_time, Province.victory_points)], else_=0
+                                         [((or_(
+                                             and_(Province.valid_from <= current_time,
+                                                  Province.valid_until > current_time),
+
+                                             (Province.valid_from == current_time),
+
+                                             and_(Province.valid_until == None,
+                                                  Province.valid_from < current_time)
+                                         )), Province.victory_points)], else_=0
                                      )
                                  ))
                                   -
                                   func.sum(
                                       case(
-                                          [(Province.current_time == day_ago, Province.victory_points)], else_=0
+                                          [((or_(
+                                              and_(Province.valid_from <= day_ago,
+                                                   Province.valid_until > day_ago),
+
+                                              (Province.valid_from == day_ago),
+
+                                              and_(Province.valid_until == None,
+                                                   Province.valid_from < day_ago)
+                                          )), Province.victory_points)], else_=0
                                       )
                                   )
-                                  ).label("5_day")) \
-            .join(Province) \
+                                  ).label("day_5")) \
             .filter(Province.game_id == game.game_id) \
-            .order_by(desc("5_day")) \
-            .group_by(Country)
-
-    elif mode == "production":
-        query = db.session.query(Newspaper.country_id, Newspaper.wtyp,
-                                 func.sum(
-                                     case(
-                                         [(Newspaper.count > 0, Newspaper.count)], else_=0
-                                     )
-                                 ).label("noticed_weapons"),
-                                 func.sum(
-                                     case(
-                                         [(Newspaper.count < 0, Newspaper.count * -1)], else_=0
-                                     )
-                                 ).label("lost_weapons")
-                                 ) \
-            .select_from(Newspaper) \
-            .join(GameHasPlayer, GameHasPlayer.country_id == Newspaper.country_id) \
-            .filter(GameHasPlayer.game_id == game_id) \
-            .filter(Newspaper.time <= day_time) \
-            .group_by(Newspaper.country_id, Newspaper.wtyp)
-
-        if country_id != -1:
-            query = query.filter(Newspaper.country_id == country_id)
-
+            .order_by(desc("day_5")) \
+            .group_by(Province.owner_id)
     else:
+        if not date_timestamp:
+            return
         query = db.session \
-            .query(Country.country_id, Country.team_id, Country.name.label("country_name"), Country.capital_id,
-                   Player.player_id, Country.defeated, Country.computer, Player.name.label("player_name")) \
-            .select_from(Country) \
-            .join(GameHasPlayer) \
+            .query(Country.country_id, Country.capital_id, Country.computer, Country.defeated, Country.team_id,
+                   StaticCountry.name.label("country_name"), StaticCountry.native_computer,
+                   Player.player_id, Player.site_user_id, Player.name.label("player_name")) \
+            .join(GameHasPlayer, and_(
+                Country.country_id == GameHasPlayer.country_id,
+                or_(
+                    and_(Country.valid_from <= date_timestamp,
+                         Country.valid_until > date_timestamp),
+
+                    (Country.valid_from == date_timestamp),
+
+                    and_(Country.valid_until == None,
+                         Country.valid_from < date_timestamp),
+
+                    and_(Country.valid_until == None,
+                         date_timestamp == None)
+
+                )
+            )) \
             .join(Player) \
+            .join(StaticCountry) \
             .filter(GameHasPlayer.game_id == game_id)
 
         if country_id != -1:
             query.filter(Country.country_id == country_id)
-
     # Execute different Queries
 
     if mode == "stats":
         output = {}
         for country in query.all():
-            if country_id == -1:
-                output[country.country_id] = {
-                    "cid": country.country_id,
-                    "ct": round(country.current_time.timestamp()),
-                    "vp": int(country.victory_points),
-                    "ml": round(country.morale),
-                    "t_p": int(country.total_provinces),
-                    "t_c": int(country.total_cities),
-                    "t_ac": int(country.total_annexed_cities),
-                    "t_mlc": int(country.total_mainland_cities),
-                    "t_pc": int(country.total_provinces_cities),
-                    "2": int(country.r2),
-                    "3": int(country.r3),
-                    "5": int(country.r5),
-                    "6": int(country.r6),
-                    "7": int(country.r7),
-                    "21": int(country.tax_production),
-                    "trp": int(country.total_resource_production),
+            if country.owner_id not in output:
+                output[country.owner_id] = {
+                    "cid": country.owner_id,
+                    "ts": {},
                 }
+            if isinstance(country.valid_from, str):
+                valid_from = round(datetime.fromisoformat(country.valid_from).timestamp())
             else:
-                if country.country_id not in output:
-                    output[country.country_id] = {
-                        "cid": country.country_id,
-                        "ts": {},
-                    }
-                output[country.country_id]["ts"][round(country.current_time.timestamp())] = {
-                    "ct": round(country.current_time.timestamp()),
-                    "vp": int(country.victory_points),
-                    "ml": round(country.morale),
-                    "t_p": int(country.total_provinces),
-                    "t_c": int(country.total_cities),
-                    "t_ac": int(country.total_annexed_cities),
-                    "t_mlc": int(country.total_mainland_cities),
-                    "t_pc": int(country.total_provinces_cities),
-                    "2": int(country.r2),
-                    "3": int(country.r3),
-                    "5": int(country.r5),
-                    "6": int(country.r6),
-                    "7": int(country.r7),
-                    "21": int(country.tax_production),
-                    "trp": int(country.total_resource_production),
-                }
+                valid_from = round(country.valid_from.timestamp())
+            output[country.owner_id]["ts"][valid_from] = {
+                "ct": valid_from,
+                "vp": int(country.victory_points),
+                "ml": round(country.morale),
+                "t_p": int(country.total_provinces),
+                "t_c": int(country.total_cities),
+                "t_ac": int(country.total_annexed_cities),
+                "t_mlc": int(country.total_mainland_cities),
+                "t_pc": int(country.total_provinces_cities),
+                "2": int(country.r2),
+                "3": int(country.r3),
+                "5": int(country.r5),
+                "6": int(country.r6),
+                "7": int(country.r7),
+                "21": int(country.tax_production),
+                "trp": int(country.total_resource_production),
+            }
         return jsonify(output)
 
     elif mode == "rising_power":
         # Countrys sorted by last 5 days victorys
-        ids = {country.country_id: pos for pos, country in enumerate(query.all())}
-        query2 = db.session.query(
-            Country.country_id,
-            Province.current_time,
-            func.sum(Province.victory_points).label("victory_points"),
-            func.avg(Province.morale).label("morale"),
-            func.sum(Province.resource_production).label("total_resource_production"), ) \
-            .join(Province) \
-            .filter(Province.game_id == game_id) \
-            .group_by(Country, Province.current_time)
-
-        if country_id != -1:
-            query2 = query2.filter(Country.country_id == country_id)
-
-        # Retrieve Country data
-        # output = {key: {} for key in ids.keys()}
         output = {}
-        for country in query2:
-            pos = ids[country.country_id]
-            if country.country_id not in output:
-                output[country.country_id] = {
-                    "cid": country.country_id,
-                    "rspos": pos,
-                    "ts": {}
-                }
-            output[country.country_id]["ts"][round(country.current_time.timestamp())] = {
-                "vp": int(country.victory_points),
-                "trp": int(country.total_resource_production),
+        for pos, country in enumerate(query.all()):
+            output[country.owner_id] = {
+                "cid": country.owner_id,
+                "rs_pos": pos,
+                "day_5": int(country.day_5),
             }
         return jsonify(output)
 
@@ -445,17 +466,16 @@ def countrys(game_id, mode, country_id, day):
         return jsonify(output)
 
 
-@app.route('/api/v1/trade/<int:game_id>')
-@cache.cached(timeout=500)
+@app.route('/api/v2/trade/<int:game_id>')
 def trade(game_id):
     output = {}
-    query = db.session.query(Trade).filter(Trade.game_id == game_id)
+    query = db.session.query(Trade).filter(Trade.game_id == game_id).filter(Trade.valid_until == None)
     for trade in query.all():
         output[trade.trade_id] = {
             "tdid": trade.trade_id,
             "am": trade.amount,
             "b": trade.buy,
-            "ct": round(trade.current_time.timestamp()),
+            "ct": round(trade.valid_from.timestamp()),
             "lm": trade.limit,
             "odid": trade.order_id,
             "oid": trade.owner_id,
@@ -464,12 +484,11 @@ def trade(game_id):
     return jsonify(output)
 
 
-@app.route('/api/v1/static/province/<int:map_id>')
-@cache.cached(timeout=5000)
+@app.route('/api/v2/static/province/<int:map_id>')
 def static_province(map_id):
     output = {}
 
-    query = db.session.query(StaticProvince.province_location_id, StaticProvince.coordinate_x,
+    query = db.session.query(StaticProvince.static_province_id, StaticProvince.coordinate_x,
                              StaticProvince.coordinate_y,
                              StaticProvince.b, StaticProvince.mainland_id, StaticProvince.name, StaticProvince.region,
                              StaticProvince.resource_production_type, StaticProvince.terrain_type
@@ -477,8 +496,8 @@ def static_province(map_id):
         .filter(StaticProvince.map_id == map_id)
 
     for static_province in query.all():
-        output[static_province.province_location_id] = {
-            "plid": static_province.province_location_id,
+        output[static_province.static_province_id] = {
+            "plid": static_province.static_province_id,
             "bt": static_province.b,
             "cdx": static_province.coordinate_x,
             "cdy": static_province.coordinate_y,
@@ -491,20 +510,17 @@ def static_province(map_id):
     return jsonify(output)
 
 
-@app.route('/api/v1/static/research')
-@cache.cached()
+@app.route('/api/v2/static/research')
 def static_research():
     return jsonify(data_researches)
 
 
-@app.route('/api/v1/static/upgrade')
-@cache.cached()
+@app.route('/api/v2/static/upgrade')
 def staic_upgrade():
     return jsonify(data_upgrades)
 
 
-@app.route('/api/v1/static/scenario')
-@cache.cached()
+@app.route('/api/v2/static/scenario')
 def static_scenario():
     output = dict({})
     filters = dict({})
@@ -531,30 +547,29 @@ def getGame(game_id):
     return game
 
 
-@cache.cached(timeout=60000, key_prefix="scenarios")
 def getScenarios():
     scenarios = Scenario.query.all()
     return scenarios
 
 
-def get_newest_time(game, day):
-    time_start = time.mktime(game["start_time"].timetuple()) + (int(day) * 3600 * 24) - 300
-    time_end = time.mktime(game["start_time"].timetuple()) + int(day) * 3600 * 24 + 3600 * 24 + 300
-    query = db.session.query(func.max(Province.current_time)).filter(
-        between(Province.current_time, func.FROM_UNIXTIME(time_start), func.FROM_UNIXTIME(time_end)))
-    newest_time = query.scalar()
-    return newest_time
+def add_timestamp_filter_building(date_timestamp, query):
+    if date_timestamp:
+        return query.filter(or_(Building.valid_from == date_timestamp,
+                                Building.valid_from < date_timestamp < Building.valid_until,
+                                and_(Building.valid_until == None,
+                                     Building.valid_from < date_timestamp)))
+    else:
+        return query.filter(Building.valid_until == None)
 
-def get_nearest_time(game, day_time: datetime):
-    query = db.session.query(
-        Province.current_time,
-        (func.abs(func.timestampdiff(text("SECOND"), Province.current_time, day_time - timedelta(days=5)))).label(
-            "nearest_time")) \
-        .filter(Province.game_id == game["game_id"]) \
-        .group_by(Province.current_time) \
-        .order_by("nearest_time")
-    newest_time = query.limit(1).all()[0][0]
-    return newest_time
+
+def add_timestamp_filter_province(date_timestamp, query):
+    if date_timestamp:
+        return query.filter(or_(Province.valid_from == date_timestamp,
+                                Province.valid_from < date_timestamp < Province.valid_until,
+                                and_(Province.valid_until == None,
+                                     Province.valid_from < date_timestamp)))
+    else:
+        return query.filter(Province.valid_until == None)
 
 
 # run flask app

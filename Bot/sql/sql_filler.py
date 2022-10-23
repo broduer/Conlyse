@@ -50,6 +50,8 @@ class Filler:
             self.fill_static_scenarios(self.data["static_scenarios"])
             self.session.commit()
             self.session.flush()
+
+        self.fill_game_update(self.data["timestamp"])
         if "game" in keys:
             self.fill_game(self.data["game"])
             self.session.commit()
@@ -87,10 +89,15 @@ class Filler:
             self.fill_warfare_units(self.data["warfare_units"])
             self.session.commit()
 
+        self.session.commit()
     def remove_game_account(self):
         self.session.query(GamesAccount).filter_by(account_id=self.game_detail.account_id,
                                                    game_id=self.game_detail.game_id).delete()
         self.session.commit()
+
+    def fill_game_update(self, timestamp):
+        game_sql = self.session.query(Game).filter_by(game_id=self.game_id).first()
+        game_sql.current_time = timestamp
 
     def fill_game(self, data):
         game_sql = self.session.query(Game).filter_by(game_id=data["game_id"]).first()

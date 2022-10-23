@@ -45,7 +45,7 @@ export function getGraphics(provinces){
     g.interactive = true
     g.lineStyle(2, 0x000000)
     for (let province in provinces){
-       province = provinces[province]
+        province = provinces[province]
         let polygon = new PIXI.Polygon(getPoints(province["bt"]))
         province["points"] = polygon.points
         g.beginFill(color_schema[province["oid"] % 150])

@@ -1,167 +1,277 @@
-from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Index, Integer, String, TIMESTAMP
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
 
-db = SQLAlchemy()
-
-
-class Building(db.Model):
-    __tablename__ = 'building'
-
-    building_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    upgrade_id = db.Column(db.Integer, nullable=False)
-    health = db.Column(db.Integer)
-
-    provinces = db.relationship('Province', secondary='province_has_building', overlaps="provinces")
+Base = declarative_base()
+metadata = Base.metadata
 
 
-class Player(db.Model):
+class Account(Base):
+    __tablename__ = 'account'
+
+    account_id = Column(Integer, autoincrement=True, primary_key=True)
+    email = Column(String(45))
+    username = Column(String(45))
+    password = Column(String(45))
+
+
+class Player(Base):
     __tablename__ = 'player'
 
-    player_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    site_user_id = db.Column(db.Integer, primary_key=True, nullable=False)
-    name = db.Column(db.String(75), nullable=False)
+    player_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    site_user_id = Column(Integer, primary_key=True, nullable=False)
+    name = Column(String(75), nullable=False)
 
 
-class Scenario(db.Model):
+class Scenario(Base):
     __tablename__ = 'scenario'
 
-    scenario_id = db.Column(db.Integer, primary_key=True)
-    map_id = db.Column(db.Integer)
-    name = db.Column(db.String(45))
-    speed = db.Column(db.Integer)
-
-    game = db.relationship("Game", back_populates="scenario")
+    scenario_id = Column(Integer, primary_key=True)
+    map_id = Column(Integer)
+    name = Column(String(45))
+    speed = Column(Integer)
 
 
-class StaticProvince(db.Model):
+class StaticCountry(Base):
+    __tablename__ = 'static_country'
+
+    static_country_id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(45))
+    map_id = Column(Integer)
+    native_computer = Column(Boolean)
+    country_id = Column(Integer)
+    faction = Column(Integer)
+
+
+class StaticProvince(Base):
     __tablename__ = 'static_province'
 
-    static_province_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    province_location_id = db.Column(db.Integer, nullable=False)
-    map_id = db.Column(db.Integer)
-    province_type = db.Column(db.Integer)
-    name = db.Column(db.String(50))
-    coordinate_x = db.Column(db.Integer)
-    coordinate_y = db.Column(db.Integer)
-    mainland_id = db.Column(db.Integer)
-    region = db.Column(db.Integer)
-    db.Model_production = db.Column(db.Integer)
-    terrain_type = db.Column(db.Integer)
-    resource_production_type = db.Column(db.Integer)
-    b = db.Column(db.String(10000))
-    coastal = db.Column(db.BOOLEAN)
+    static_province_id = Column(Integer, primary_key=True, autoincrement=True)
+    province_location_id = Column(Integer, nullable=False)
+    map_id = Column(Integer)
+    province_type = Column(Integer)
+    name = Column(String(50))
+    coordinate_x = Column(Integer)
+    coordinate_y = Column(Integer)
+    mainland_id = Column(Integer)
+    region = Column(Integer)
+    base_production = Column(Integer)
+    terrain_type = Column(Integer)
+    resource_production_type = Column(Integer)
+    b = Column(String(10000))
+    coastal = Column(Boolean)
 
 
-class Game(db.Model):
+class Game(Base):
     __tablename__ = 'game'
 
-    game_id = db.Column(db.Integer, primary_key=True)
-    scenario_id = db.Column(db.ForeignKey('scenario.scenario_id'), nullable=False, index=True)
-    start_time = db.Column(db.TIMESTAMP)
-    end_time = db.Column(db.TIMESTAMP)
-    current_time = db.Column(db.TIMESTAMP)
-    next_day_time = db.Column(db.TIMESTAMP)
-    next_heal_time = db.Column(db.TIMESTAMP)
+    game_id = Column(Integer, primary_key=True)
+    scenario_id = Column(ForeignKey('scenario.scenario_id'), nullable=False, index=True)
+    start_time = Column(TIMESTAMP)
+    end_time = Column(TIMESTAMP)
+    current_time = Column(TIMESTAMP)
+    next_day_time = Column(TIMESTAMP)
+    next_heal_time = Column(TIMESTAMP)
+    open_slots = Column(Integer)
 
-    scenario = db.relationship('Scenario', back_populates="game")
-
-
-class Team(db.Model):
-    __tablename__ = 'team'
-
-    universal_team_id = db.Column(db.Integer, primary_key=True, nullable=False, autoincrement=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    team_id = db.Column(db.Integer)
-    name = db.Column(db.String(45))
-    leader_id = db.Column(db.Integer)
-    deleted = db.Column(db.BOOLEAN)
-
-    game = db.relationship('Game')
+    scenario = relationship('Scenario')
 
 
-class Country(db.Model):
-    __tablename__ = 'country'
+class Army(Base):
+    __tablename__ = 'army'
 
-    country_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    player_id = db.Column(db.Integer)
-    team_id = db.Column(db.ForeignKey('team.universal_team_id'), index=True)
-    name = db.Column(db.String(45))
-    capital_id = db.Column(db.Integer)
-    defeated = db.Column(db.BOOLEAN)
-    computer = db.Column(db.BOOLEAN)
+    universal_army_id = Column(BigInteger, primary_key=True, nullable=False, unique=True, autoincrement=True)
+    army_id = Column(BigInteger)
+    owner_id = Column(BigInteger)
+    presentation_warfare_id = Column(Integer)
+    army_number = Column(Integer)
+    kills = Column(Integer)
+    health_point = Column(Float)
+    next_attack_time = Column(TIMESTAMP)
+    next_anti_aircraft_attack_time = Column(TIMESTAMP)
+    radar_type = Column(Integer)
+    radar_size = Column(Integer)
+    valid_from = Column(TIMESTAMP, nullable=False)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    static_province_id = Column(ForeignKey('static_province.static_province_id'), index=True)
 
-    team = db.relationship('Team')
+    game = relationship('Game')
+    static_province = relationship('StaticProvince')
 
 
-class GameHasPlayer(db.Model):
+class ArmyLossesGain(Base):
+    __tablename__ = 'army_losses_gains'
+
+    army_loss_gain_id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
+    owner_id = Column(BigInteger, nullable=False)
+    warfare_type_id = Column(Integer, nullable=False)
+    division = Column(Integer)
+    count = Column(Integer)
+    time = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+
+    game = relationship('Game')
+
+
+class Building(Base):
+    __tablename__ = 'building'
+    __table_args__ = (
+        Index('index2', 'building_id', 'health', 'upgrade_id'),
+    )
+
+    building_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    upgrade_id = Column(Integer, nullable=False)
+    health = Column(Integer)
+    valid_from = Column(TIMESTAMP, nullable=False)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False, index=True)
+
+    game = relationship('Game')
+    static_province = relationship('StaticProvince')
+
+
+class Command(Base):
+    __tablename__ = 'command'
+
+    command_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    army_id = Column(BigInteger)
+    command_type = Column(String(4))
+    transport_level = Column(Integer)
+    start_coordinate_x = Column(Integer)
+    start_coordinate_y = Column(Integer)
+    target_coordinate_x = Column(Integer)
+    target_coordinate_y = Column(Integer)
+    start_time = Column(TIMESTAMP)
+    arrival_time = Column(TIMESTAMP)
+    valid_from = Column(TIMESTAMP)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+
+    game = relationship('Game')
+
+
+class GameHasPlayer(Base):
     __tablename__ = 'game_has_player'
 
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    player_id = db.Column(db.ForeignKey('player.player_id'), primary_key=True, nullable=False, index=True)
-    country_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    player_id = Column(ForeignKey('player.player_id'), primary_key=True, nullable=False, index=True)
+    country_id = Column(BigInteger, nullable=False, index=True)
 
-    country = db.relationship('Country')
-    game = db.relationship('Game')
-    player = db.relationship('Player')
+    game = relationship('Game')
+    player = relationship('Player')
 
 
-class Province(db.Model):
+class GamesAccount(Base):
+    __tablename__ = 'games_accounts'
+
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    account_id = Column(ForeignKey('account.account_id'), primary_key=True, nullable=False, index=True)
+    joined = Column(Boolean)
+    server_uuid = Column(String(45))
+
+    account = relationship('Account')
+    game = relationship('Game')
+
+
+class Province(Base):
     __tablename__ = 'province'
+    __table_args__ = (
+        Index('ix_gid_plid_vf_vl', 'game_id', 'province_id', 'valid_from', 'valid_until'),
+        Index('ix_game_id_valid_from_valid_until', 'owner_id', 'game_id', 'valid_from', 'valid_until', 'resource_production'),
+        Index('ix_game_id_province_location_id_valid_from_valid_until', 'game_id', 'valid_from', 'valid_until')
+    )
 
-    province_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    province_location_id = db.Column(db.Integer, nullable=False)
-    owner_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    morale = db.Column(db.Integer)
-    province_state_id = db.Column(db.Integer)
-    stationary_army_id = db.Column(db.Integer)
-    victory_points = db.Column(db.Integer)
-    resource_production = db.Column(db.Integer)
-    tax_production = db.Column(db.Integer)
-    current_time = db.Column(db.TIMESTAMP, nullable=False)
-    map_id = db.Column(db.Integer)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    province_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    owner_id = Column(BigInteger, nullable=False)
+    morale = Column(Integer)
+    province_state_id = Column(Integer)
+    stationary_army_id = Column(Integer)
+    victory_points = Column(Integer)
+    resource_production = Column(Integer)
+    tax_production = Column(Integer)
+    valid_from = Column(TIMESTAMP, nullable=False)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False)
+    static_province_id = Column(ForeignKey('static_province.static_province_id'), primary_key=True, nullable=False, index=True)
 
-    game = db.relationship('Game')
-    owner = db.relationship('Country')
-    buildings = db.relationship("Building", secondary="province_has_building", overlaps="provinces")
+    game = relationship('Game')
+    static_province = relationship('StaticProvince')
 
 
-class Trade(db.Model):
+class Research(Base):
+    __tablename__ = 'research'
+
+    universal_research_id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
+    owner_id = Column(Integer)
+    column_id = Column(Integer, nullable=False)
+    research_min_id = Column(Integer)
+    research_max_id = Column(Integer)
+    valid_from = Column(TIMESTAMP, nullable=False)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+
+    game = relationship('Game')
+
+
+class Team(Base):
+    __tablename__ = 'team'
+
+    universal_team_id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    team_id = Column(Integer)
+    name = Column(String(45))
+    leader_id = Column(Integer)
+    deleted = Column(Boolean)
+
+    game = relationship('Game')
+
+
+class Trade(Base):
     __tablename__ = 'trade'
 
-    trade_id = db.Column(db.BigInteger, primary_key=True, nullable=False, autoincrement=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
-    order_id = db.Column(db.String(45))
-    owner_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    amount = db.Column(db.Integer)
-    resource_type = db.Column(db.Integer)
-    limit = db.Column(db.Float)
-    buy = db.Column(db.BOOLEAN)
-    current_time = db.Column(db.TIMESTAMP)
+    trade_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    order_id = Column(Integer)
+    owner_id = Column(BigInteger, nullable=False)
+    amount = Column(Integer)
+    resource_type = Column(Integer)
+    limit = Column(Float)
+    buy = Column(Boolean)
+    valid_from = Column(TIMESTAMP)
+    valid_until = Column(TIMESTAMP)
 
-    game = db.relationship('Game')
-    owner = db.relationship('Country')
-
-
-class Newspaper(db.Model):
-    __tablename__ = 'newspaper'
-
-    article_id = db.Column(db.Integer, primary_key=True, nullable=False, autoincrement=True)
-    msg_typ = db.Column(db.Integer, nullable=False)
-    country_id = db.Column(db.ForeignKey('country.country_id'), primary_key=True, nullable=False, index=True)
-    wtyp = db.Column(db.Integer, nullable=False)
-    whtyp = db.Column(db.Integer)
-    division = db.Column(db.Integer)
-    count = db.Column(db.Integer)
-    time = db.Column(db.TIMESTAMP)
-
-    country = db.relationship('Country')
+    game = relationship('Game')
 
 
-class ProvinceHasBuilding(db.Model):
-    __tablename__ = 'province_has_building'
+class Country(Base):
+    __tablename__ = 'country'
 
-    province_id = db.Column(db.ForeignKey('province.province_id'), primary_key=True, nullable=False, index=True)
-    building_id = db.Column(db.ForeignKey('building.building_id'), primary_key=True, nullable=False, index=True)
+    universal_country_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    country_id = Column(BigInteger, nullable=False)
+    team_id = Column(ForeignKey('team.universal_team_id'), index=True)
+    capital_id = Column(Integer)
+    defeated = Column(Boolean)
+    computer = Column(Boolean)
+    valid_from = Column(TIMESTAMP, nullable=False)
+    valid_until = Column(TIMESTAMP)
+    game_id = Column(ForeignKey('game.game_id'), primary_key=True, nullable=False, index=True)
+    static_country_id = Column(ForeignKey('static_country.static_country_id'), primary_key=True, nullable=False, index=True)
 
-    province = db.relationship("Province", overlaps="buildings,provinces")
-    building = db.relationship("Building", overlaps="buildings,provinces")
+    game = relationship('Game')
+    static_country = relationship('StaticCountry')
+    team = relationship('Team')
+
+
+class WarfareUnit(Base):
+    __tablename__ = 'warfare_unit'
+
+    universal_warfare_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True)
+    warfare_id = Column(BigInteger, nullable=False)
+    universal_army_id = Column(ForeignKey('army.universal_army_id'), nullable=False, index=True)
+    warfare_type_id = Column(Integer)
+    size = Column(Integer)
+    health_point = Column(Integer)
+
+    universal_army = relationship('Army')
