@@ -1,5 +1,4 @@
 import logging
-from dotenv import load_dotenv
 from os import getenv
 
 from sqlalchemy.orm import sessionmaker
@@ -45,11 +44,7 @@ class GameListFiller:
     def update_single_game(self, data: dict):
         old_game = self.session.query(Game).filter(Game.game_id == data["game_id"]).scalar()
         if old_game:
-            if data.get("open_slots"):
-                old_game.open_slots = data["open_slots"]
-
-            if data.get("joined"):
-                old_game.joined = data["joined"]
+            old_game.open_slots = data["open_slots"]
         self.session.commit()
 
     def set_game_account_joined(self, game_id, account_id):

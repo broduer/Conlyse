@@ -111,8 +111,10 @@ class Bot:
                 except Exception as exception:
                     print(exception)
 
-                self.login_scan_queue.remove(game.game_id)
-
+                try:
+                    self.login_scan_queue.remove(game.game_id)
+                except ValueError:
+                    logging.debug(f"G: {game.game_id} couldn't remove game from login scan queue")
         self.working_on_login_scan_queue = False
 
     def handle_register_server_answer(self, packet: ServerRegisterAnswer):

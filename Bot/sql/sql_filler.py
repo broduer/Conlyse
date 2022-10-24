@@ -42,6 +42,7 @@ class Filler:
 
     def fill(self):
         logging.debug(f"Filling Game {self.game_id}")
+        t1 = time.monotonic()
         keys = list(self.data.keys())
         if "static_provinces" in keys:
             logging.log(5, "Filling static_provinces and static_scenarios")
@@ -89,7 +90,10 @@ class Filler:
             self.fill_warfare_units(self.data["warfare_units"])
             self.session.commit()
 
+        t2 = time.monotonic()
+        print(f"G: {self.game_id} Filler Time -> {t2 - t1}")
         self.session.commit()
+
     def remove_game_account(self):
         self.session.query(GamesAccount).filter_by(account_id=self.game_detail.account_id,
                                                    game_id=self.game_detail.game_id).delete()
@@ -263,18 +267,15 @@ class Filler:
 
     def fill_provinces(self, data):
         old_provinces = self.session.query(Province).filter_by(valid_until=None, game_id=self.game_id).all()
+        old_provinces_dict = {old_province.static_province_id: object_as_dict(old_province)
+                              for old_province in old_provinces}
 
         new_provinces = []
         update_provinces = []
 
         for province in data.values():
             static_province = self.get_static_province(province_location_id=province["province_location_id"])
-            try:
-                old_province = next(old_province for old_province in old_provinces
-                                    if old_province.static_province_id == static_province["static_province_id"])
-                old_province_dict = object_as_dict(old_province)
-            except StopIteration:
-                old_province_dict = None
+            old_province_dict = old_provinces_dict.get(static_province["static_province_id"])
 
             province.pop("province_location_id")
             province["static_province_id"] = static_province["static_province_id"]
@@ -303,23 +304,20 @@ class Filler:
     def fill_buildings(self, data):
         old_buildings = self.session.query(Building).filter_by(game_id=self.game_id, valid_until=None).all()
         new_province_building_province_location_ids = [building["province_location_id"] for building in data]
+        old_building_dict = {f"{old_building.static_province_id}_{old_building.upgrade_id}": old_building
+                             for old_building in old_buildings}
         new_buildings = []
         update_buildings = []
         for building in data:
             static_province = self.get_static_province(province_location_id=building["province_location_id"])
-            old_province_buildings = [old_building for old_building in old_buildings if
-                                      old_building.static_province_id == static_province["static_province_id"]]
-            old_province_building_upgrade_ids = [old_province_building.upgrade_id for old_province_building in
-                                                 old_province_buildings]
             building["static_province_id"] = static_province["static_province_id"]
-            if building["upgrade_id"] not in old_province_building_upgrade_ids:
+            existing_building = old_building_dict.get(f"{building['static_province_id']}_{building['upgrade_id']}")
+
+            if not existing_building:
                 new_buildings.append(building)
                 logging.log(5, f"INSERT Building: {json.dumps(building, cls=DateTimeEncoder, indent=2)}")
             else:
-                old_province_building = next(
-                    old_province_building for old_province_building in old_province_buildings if
-                    old_province_building.upgrade_id == building["upgrade_id"])
-                old_province_building_dict = object_as_dict(old_province_building)
+                old_province_building_dict = object_as_dict(existing_building)
 
                 changes = DeepDiff(old_province_building_dict, building,
                                    exclude_paths=[
@@ -338,15 +336,16 @@ class Filler:
                     })
                     new_buildings.append(building)
 
+        new_buildings_dict = {f"{building['province_location_id']}_{building['upgrade_id']}": True
+                              for building in data}
+
         # Check if new Building doesn't exist anymore
         for old_building in old_buildings:
             static_province = self.get_static_province(static_province_id=old_building.static_province_id)
             if static_province["province_location_id"] not in new_province_building_province_location_ids:
                 continue
-            new_province_building_upgrade_ids = [building["upgrade_id"] for building in data
-                                                 if building["province_location_id"] == static_province[
-                                                     "province_location_id"]]
-            if old_building.upgrade_id not in new_province_building_upgrade_ids:
+
+            if not new_buildings_dict.get(f"{static_province['province_location_id']}_{old_building.upgrade_id}"):
                 logging.log(5,
                             f"DELETE Building {static_province['province_location_id']} - {old_building.upgrade_id}: ")
                 old_building_dict = object_as_dict(old_building)
@@ -569,9 +568,9 @@ class Filler:
                                                         : object_as_dict(static_province)
                                                         for static_province in static_provinces}
 
-        if province_location_id is not None:
+        if province_location_id:
             return self.static_provinces["province_location"].get(province_location_id)
-        elif static_province_id is not None:
+        elif static_province_id:
             return self.static_provinces["static_province"].get(static_province_id)
 
 
