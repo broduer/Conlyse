@@ -2,8 +2,8 @@ import json
 import re
 from datetime import datetime
 
-from game_constants import FACTIONS, STARTER_UNIT_NAMES
-from helper import get_normal_timestamp, get_combined_number, DateTimeEncoder
+from .game_constants import FACTIONS, STARTER_UNIT_NAMES
+from .helper import get_normal_timestamp, get_combined_number, DateTimeEncoder
 from deepdiff import DeepDiff
 
 

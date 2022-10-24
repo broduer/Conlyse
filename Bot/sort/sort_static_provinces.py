@@ -1,12 +1,12 @@
-from helper import get_province_from_id
-
-
 def sort_static_provinces(data_1, data_2_old):
     data_1_locations = data_1["locations"][1]
     data_2_old_locations = data_2_old["result"]["states"]["3"]["map"]["locations"][1]
+
+    provinces_1 = {province["id"]: province for province in data_1_locations}
+
     provinces = dict({})
     for province_2 in data_2_old_locations:
-        province_1 = get_province_from_id(province_2["id"], data_1_locations)
+        province_1 = provinces_1.get(province_2["id"])
         if province_2["@c"] == "p":
             if province_2["pst"] > 52:
                 typ = 1

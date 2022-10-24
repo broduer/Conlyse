@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from helper import get_end_time, get_normal_timestamp
+from .helper import get_end_time, get_normal_timestamp
 
 
 def sort_game(game_id, data_2):

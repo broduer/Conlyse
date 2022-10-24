@@ -56,7 +56,7 @@ def short_scan(data_requests, auth_data, states_data, game_detail):
         logging.debug(f"Loaded short_scan data successfully. Took {round(response.elapsed.microseconds / 1000)} ms.")
 
     # If the request didn't fail sort the data
-    sorted_data = sort
+    sorted_data = sort(bot_data["game_id"], data, data_requests)
 
     if bool(int(getenv("SHORT_SCAN_SORTED_DATA_SAVE"))):
         with open(f"{time.time()}.json", "w") as f:

@@ -38,7 +38,8 @@ class Bot:
 
     def run(self):
         self.scheduler.start()
-        self.connect_to_server((getenv("COMMUNICATION_IP"), int(getenv("COMMUNICATION_PORT"))))
+        self.client = socket.socket()
+        self.connect_to_server(("127.0.0.1", int(getenv("COMMUNICATION_PORT"))))
         if self.connected:
             self.register_server()
             self.main_loop()
@@ -46,7 +47,6 @@ class Bot:
     def connect_to_server(self, server_addr):
         for i in range(int(getenv("RECONNECT_TRIES"))):
             try:
-                self.client = socket.socket()
                 self.client.connect(server_addr)
                 self.connected = True
                 logging.debug(f"Connected to Manager {server_addr[0]}")
@@ -99,15 +99,20 @@ class Bot:
                 answer_thread.start()
 
     def work_login_scan_queue(self):
+        print(self.login_scan_queue)
         if not self.working_on_login_scan_queue:
             self.working_on_login_scan_queue = True
             while len(self.login_scan_queue) > 0:
-                game = self.login_scan_queue.pop(0)
-                if not game.auth_data:
-                    try:
-                        game.long_game_scan()
-                    except Exception as exception:
-                        print(exception)
+                print(self.login_scan_queue)
+
+                game = self.get_game("game_id", self.login_scan_queue[0])
+                try:
+                    game.long_game_scan()
+                except Exception as exception:
+                    print(exception)
+
+                self.login_scan_queue.remove(game.game_id)
+
         self.working_on_login_scan_queue = False
 
     def handle_register_server_answer(self, packet: ServerRegisterAnswer):
@@ -152,7 +157,10 @@ class Bot:
                 needs_run = not isinstance(self.games_list, GameList)
                 self.games_list = GameList(schedule)
                 self.scheduler.add_job(self.games_list.game_list_run, "interval",
-                                       start_date=schedule.start_date, seconds=schedule.interval)
+                                       start_date=schedule.start_date,
+                                       seconds=schedule.interval,
+                                       name=f"GLS -> A: {schedule.game_id}")
+
                 if needs_run:
                     game_list_thread = Thread(target=self.games_list.game_list_run)
                     game_list_thread.start()
@@ -161,16 +169,26 @@ class Bot:
                 game = self.get_game("game_id", schedule.game_id)
                 if isinstance(schedule, DynamicTimeSchedule):
                     dynamic_job = self.scheduler.add_job(game.short_game_scan, "interval",
-                                                         start_date=schedule.start_date, seconds=schedule.interval)
+                                                         start_date=schedule.start_date,
+                                                         seconds=schedule.interval,
+                                                         name=f"DS -> G: {game.game_id} A: {game.game_detail.account_id}")
                     game.dynamic_job = dynamic_job
                 elif isinstance(schedule, LoginTimeSchedule):
                     login_job = self.scheduler.add_job(game.long_game_scan, "interval",
-                                                       start_date=schedule.start_date, seconds=schedule.interval)
+                                                       start_date=schedule.start_date,
+                                                       seconds=schedule.interval,
+                                                       name=f"LS -> G: {game.game_id} A: {game.game_detail.account_id}")
                     game.login_job = login_job
-                    if not game.auth_data:
-                        self.login_scan_queue.append(game)
+                    if not game.auth_data and game.game_id not in self.login_scan_queue:
+                        self.add_game_to_login_scan_queue(game.game_id, urgent=not game.game_detail.joined)
 
         self.work_login_scan_queue()
+
+    def add_game_to_login_scan_queue(self, game_id, urgent=False):
+        if urgent:
+            self.login_scan_queue.insert(0, game_id)
+        else:
+            self.login_scan_queue.append(game_id)
 
     def get_game(self, key, data):
         for game in self.games:

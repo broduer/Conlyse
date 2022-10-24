@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from helper import get_normal_timestamp, DateTimeEncoder
+from .helper import get_normal_timestamp, DateTimeEncoder
 
 
 def sort_armies(game_id, data):

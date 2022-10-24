@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
 from Bot.sort.helper import DateTimeEncoder
-from Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
+from .Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
     GameHasPlayer, Team, \
     Building, ArmyLossesGain, Research, Army, Command, WarfareUnit, GamesAccount
 from deepdiff import DeepDiff
@@ -96,11 +96,11 @@ class Filler:
         self.session.commit()
 
     def fill_game_update(self, timestamp):
-        game_sql = self.session.query(Game).filter_by(game_id=self.game_id).first()
+        game_sql = self.session.query(Game).filter_by(game_id=self.game_id).scalar()
         game_sql.current_time = timestamp
 
     def fill_game(self, data):
-        game_sql = self.session.query(Game).filter_by(game_id=data["game_id"]).first()
+        game_sql = self.session.query(Game).filter_by(game_id=data["game_id"]).scalar()
         if game_sql is None:
             new_game = Game(
                 game_id=data["game_id"],

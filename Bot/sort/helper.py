@@ -2,15 +2,6 @@ import json
 import math
 from datetime import datetime
 
-
-def get_province_from_id(province_id, data):
-    return [province for province in data if int(province["id"]) == int(province_id)][0]
-
-
-def get_province_from_name(name, data):
-    return [province for province in data if province["n"] == name][0]
-
-
 def get_combined_number(number_1, number_2):
     try:
         number_1 = int(number_1)

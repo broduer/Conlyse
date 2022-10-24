@@ -1,10 +1,7 @@
-import json
-import re
 import logging
-from time import sleep
 
 from sql.game_list_filler import GameListFiller
-from webbrowser import Webbrowser
+from Bot.webbrowser import Webbrowser
 from Networking.exceptions import GameJoinError
 from Networking.packet_types import GameDetail
 
@@ -12,15 +9,11 @@ from Networking.packet_types import GameDetail
 def long_scan(game_detail: GameDetail):
     # Retrieve Login Data
 
-    logging.debug("Starting Webbrowser")
     with Webbrowser(packet=game_detail) as browser:
         try:
             data_requests = browser.run_game()
             with GameListFiller() as glf:
-                glf.update_single_game({
-                    "game_id": game_detail.game_id,
-                    "joined": True,
-                })
+                glf.set_game_account_joined(game_detail.game_id, game_detail.account_id)
         except GameJoinError:
             # If Join wasn't possible it should remove the round -> Not possible to join
             with GameListFiller() as glf:

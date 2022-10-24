@@ -1,15 +1,17 @@
 from datetime import datetime
 
-from helper import get_province_from_id, get_normal_timestamp
+from .helper import get_normal_timestamp
 
 
 def sort_provinces(game_id, data_1, data_2, data_2_old):
     timestamp = data_2["result"]["states"]["3"]["timeStamp"]
     data_1_locations = data_1["locations"][1]
     data_2_locations = data_2["result"]["states"]["3"]["map"]["locations"][1]
+
+    provinces_1 = {province["id"]: province for province in data_1_locations}
     provinces = dict({})
     for province_2 in data_2_locations:
-        province_1 = get_province_from_id(province_2["id"], data_1_locations)
+        province_1 = provinces_1[province_2["id"]]
         if province_2["@c"] == "p":
             if "sa" not in province_2:
                 stationary_army_id = 0

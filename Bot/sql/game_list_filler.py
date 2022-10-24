@@ -3,9 +3,9 @@ from dotenv import load_dotenv
 from os import getenv
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, or_
 
-from Models import Game, GamesAccount, Scenario
+from Bot.sql.Models import Game, GamesAccount, Scenario
 
 
 class GameListFiller:
@@ -52,8 +52,18 @@ class GameListFiller:
                 old_game.joined = data["joined"]
         self.session.commit()
 
+    def set_game_account_joined(self, game_id, account_id):
+        old_game = self.session.query(GamesAccount).filter(
+            GamesAccount.account_id == account_id,
+            GamesAccount.game_id == game_id).scalar()
+        if old_game:
+            old_game.joined = True
+        self.session.commit()
+
+
     def remove_game_account(self, game_detail):
         self.session.query(GamesAccount).filter(GamesAccount.game_id == game_detail.game_id,
                                                 GamesAccount.account_id == game_detail.account_id,
-                                                GamesAccount.joined == False).delete()
+                                                or_(GamesAccount.joined == False,
+                                                    GamesAccount.joined == None)).delete()
         self.session.commit()
