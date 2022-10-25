@@ -55,9 +55,10 @@ class GamePlanner:
     def allocate_games_to_servers(self, servers):
         game_accounts = self.sql_filler.get_game_accounts()
         servers_list = list(servers.values())
-        server_uuids = list(servers)
+        new_game_to_server_allocated = False
+        server_uuids = [server["server_uuid"] for server in servers]
         if len(servers_list) == 0:
-            return []
+            return [], new_game_to_server_allocated
         for game_account in game_accounts:
             if game_account.server_uuid in server_uuids:
                 # Game is assigned to active Server
@@ -66,9 +67,10 @@ class GamePlanner:
             selected_server = servers_list[0]
             game_account.server_uuid = selected_server["server_uuid"]
             servers[selected_server["client_uuid"]]["allocated_games"] += 1
+            new_game_to_server_allocated = True
         self.sql_filler.session.flush()
         self.sql_filler.session.commit()
-        return servers
+        return servers, new_game_to_server_allocated
 
     @staticmethod
     def sort_function(server):

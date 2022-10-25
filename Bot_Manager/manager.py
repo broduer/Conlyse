@@ -61,10 +61,11 @@ class Manager:
             new_game_allocated, account_creation_needed = self.game_planner.allocate_games_to_accounts()
 
             # Allocates the games to servers and updates their allocated_games value in self.clients dictionary
-            updated_servers = self.game_planner.allocate_games_to_servers(self.get_clients_by("type", "bot"))
+            updated_servers, new_game_to_server_allocated = \
+                self.game_planner.allocate_games_to_servers(self.get_clients_by("type", "bot"))
             self.update_game_allocation_on_servers(updated_servers)
 
-            if new_game_allocated:
+            if new_game_allocated or new_game_to_server_allocated:
                 self.send_plans_to_servers()
 
             if account_creation_needed:
