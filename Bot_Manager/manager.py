@@ -154,9 +154,6 @@ class Manager:
             if type == "bot":
                 self.clients[client["client_uuid"]]["maximum_games"] = packet.maximum_games
                 self.clients[client["client_uuid"]]["allocated_games"] = 0
-                updated_servers = self.game_planner.allocate_games_to_servers(self.get_clients_by("type", "bot"))
-                self.update_game_allocation_on_servers(updated_servers)
-                self.send_plans_to_servers()
 
     def register_proxy_table(self, packet: ProxyTable):
         for new_proxy in packet.proxies:
