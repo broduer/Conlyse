@@ -121,6 +121,7 @@ class Filler:
                 game_sql.next_day_time = None
                 game_sql.next_heal_time = None
             else:
+                game_sql.start_time = data["start_time"]
                 game_sql.next_day_time = data["next_day_time"]
                 game_sql.current_time = data["current_time"]
                 game_sql.next_heal_time = data["next_heal_time"]

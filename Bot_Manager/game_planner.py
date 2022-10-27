@@ -63,7 +63,7 @@ class GamePlanner:
             if game_account.server_uuid in server_uuids:
                 # Game is assigned to active Server
                 continue
-            servers_list.sort(key=self.sort_function)
+            servers_list.sort(key=self.sort_function, reverse=True)
             selected_server = servers_list[0]
             game_account.server_uuid = selected_server["server_uuid"]
             servers[selected_server["client_uuid"]]["allocated_games"] += 1
