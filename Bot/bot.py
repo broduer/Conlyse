@@ -21,7 +21,7 @@ load_dotenv()
 class Bot:
     def __init__(self):
 
-        logger.initLogger(logging.DEBUG)
+        logger.initLogger(5)
         self.registered = False
         self.server_uuid = getenv("SERVER_UUID")
         self.client = socket.socket()
@@ -39,7 +39,7 @@ class Bot:
     def run(self):
         self.scheduler.start()
         self.client = socket.socket()
-        self.connect_to_server(("127.0.0.1", int(getenv("COMMUNICATION_PORT"))))
+        self.connect_to_server((getenv("COMMUNICATION_IP"), int(getenv("COMMUNICATION_PORT"))))
         if self.connected:
             self.register_server()
             self.main_loop()

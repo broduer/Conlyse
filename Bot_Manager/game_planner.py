@@ -56,7 +56,7 @@ class GamePlanner:
         game_accounts = self.sql_filler.get_game_accounts()
         servers_list = list(servers.values())
         new_game_to_server_allocated = False
-        server_uuids = [server["server_uuid"] for server in servers]
+        server_uuids = [server["server_uuid"] for server in servers.values()]
         if len(servers_list) == 0:
             return [], new_game_to_server_allocated
         for game_account in game_accounts:

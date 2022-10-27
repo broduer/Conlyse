@@ -8,11 +8,10 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-from Bot.sort.helper import DateTimeEncoder
+from Bot.sort.helper import DateTimeEncoder, compare
 from .Models import Scenario, Trade, Player, Province, StaticProvince, StaticCountry, Country, Game, \
     GameHasPlayer, Team, \
     Building, ArmyLossesGain, Research, Army, Command, WarfareUnit, GamesAccount
-from deepdiff import DeepDiff
 
 load_dotenv()
 
@@ -180,14 +179,13 @@ class Filler:
                 # SQLALCHEMY object to dict
                 country_sql_dict = object_as_dict(counties[countries_country_id.index(new_country["country_id"])])
                 # Compare New Country to the latest in DB with some exceptions.
-                changes = DeepDiff(country_sql_dict,
-                                   new_country,
-                                   exclude_paths=["root['universal_country_id']",
-                                                  "root['valid_from']",
-                                                  "root['valid_until']"])
+                changes = compare(country_sql_dict,
+                                  new_country,
+                                  ["universal_country_id", "valid_from", "valid_until"])
                 if changes:
-                    logging.log(5, f"UPDATE Country {new_country['country_id']}: {changes.get('type_changes')} "
-                                   f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Country {new_country['country_id']}"
+                                   f"{country_sql_dict}"
+                                   f"{new_country}")
                     update_countries.append({
                         **country_sql_dict,
                         "valid_until": data_country["valid_from"]
@@ -209,8 +207,7 @@ class Filler:
                 logging.log(5, f"INSERT Team: {json.dumps(team, cls=DateTimeEncoder, indent=2)}")
             else:
                 team_exists = object_as_dict(teams[teams_team_id.index(team["team_id"])])
-                changes = DeepDiff(team_exists, team,
-                                   exclude_paths=["root['universal_team_id']"])
+                changes = compare(team_exists, team, ["universal_team_id"])
                 if changes:
                     updated_teams.append({
                         **team_exists,
@@ -218,8 +215,9 @@ class Filler:
                         "name": team["name"],
                         "deleted": team["deleted"],
                     })
-                    logging.log(5, f"UPDATE Team {team['team_id']}: {changes.get('type_changes')} "
-                                   f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Team {team['team_id']}"
+                                   f"{team_exists}"
+                                   f"{team}")
         self.session.bulk_insert_mappings(Team, new_teams)
         self.session.bulk_update_mappings(Team, updated_teams)
 
@@ -239,14 +237,15 @@ class Filler:
                 old_trade_sql = next(
                     old_trade_sql for old_trade_sql in old_trades if old_trade_sql.order_id == trade["order_id"])
                 old_trade_dict = object_as_dict(old_trade_sql)
-                changes = DeepDiff(old_trade_dict,
-                                   trade,
-                                   exclude_paths=["root['trade_id']",
-                                                  "root['valid_from']",
-                                                  "root['valid_until']"])
+                changes = compare(old_trade_dict,
+                                  trade,
+                                  ["trade_id",
+                                   "valid_from",
+                                   "valid_until"])
                 if changes:
-                    logging.log(5, f"UPDATE Trade {trade['order_id']}: {changes.get('type_changes')} "
-                                   f"{changes.get('values_changed')}")
+                    logging.log(5, f"UPDATE Trade {trade['order_id']}"
+                                   f"{old_trade_dict}"
+                                   f"{trade}")
                     update_trades.append({
                         **old_trade_dict,
                         "valid_until": trade["valid_from"]
@@ -282,17 +281,18 @@ class Filler:
             if old_province_dict is None:
                 new_provinces.append(province)
             else:
-                changes = DeepDiff(old_province_dict,
-                                   province,
-                                   exclude_paths=[
-                                       "root['province_id']",
-                                       "root['valid_from']",
-                                       "root['valid_until']",
-                                       "root['upgrades']"])
+                changes = compare(old_province_dict,
+                                  province,
+                                  [
+                                      "province_id",
+                                      "valid_from",
+                                      "valid_until",
+                                      "upgrades"])
                 if changes:
                     logging.log(5,
-                                f"UPDATE Province {static_province['province_location_id']}: {changes.get('type_changes')} "
-                                f"{changes.get('values_changed')}")
+                                f"UPDATE Province {static_province['province_location_id']}"
+                                f"{old_province_dict}"
+                                f"{province}")
                     update_provinces.append({
                         **old_province_dict,
                         "valid_until": province["valid_from"]
@@ -319,17 +319,16 @@ class Filler:
             else:
                 old_province_building_dict = object_as_dict(existing_building)
 
-                changes = DeepDiff(old_province_building_dict, building,
-                                   exclude_paths=[
-                                       "root['building_id']",
-                                       "root['province_location_id']",
-                                       "root['valid_from']",
-                                       "root['valid_until']"])
+                changes = compare(old_province_building_dict, building, [
+                    "building_id",
+                    "province_location_id",
+                    "valid_from",
+                    "valid_until"])
                 if changes:
                     logging.log(5,
                                 f"UPDATE Building {static_province['province_location_id']} - {building['upgrade_id']}: "
-                                f"{changes.get('type_changes')} "
-                                f"{changes.get('values_changed')}")
+                                f"{old_province_building_dict} "
+                                f"{building}")
                     update_buildings.append({
                         **old_province_building_dict,
                         "valid_until": building["valid_from"]
@@ -376,17 +375,16 @@ class Filler:
             else:
                 old_army_sql = next(old_army for old_army in old_armies if old_army.army_id == army["army_id"])
                 old_army = object_as_dict(old_army_sql)
-                changes = DeepDiff(old_army, army,
-                                   exclude_paths=[
-                                       "root['universal_army_id']",
-                                       "root['static_province_id']",
-                                       "root['valid_from']",
-                                       "root['valid_until']"])
+                changes = compare(old_army, army, [
+                    "universal_army_id",
+                    "static_province_id",
+                    "valid_from",
+                    "valid_until"])
                 if changes:
                     logging.log(5,
                                 f"UPDATE Army {army['army_id']}:"
-                                f"{changes.get('type_changes')} "
-                                f"{changes.get('values_changed')}")
+                                f"{old_army} "
+                                f"{army}")
                     update_armies.append({
                         **old_army,
                         "valid_until": army["valid_from"]
@@ -413,11 +411,7 @@ class Filler:
                             f"{json.dumps(command, indent=2, cls=DateTimeEncoder)}")
                 new_commands.append(command)
             else:
-                changes = DeepDiff(old_command_dict, command,
-                                   exclude_paths=[
-                                       "root['command_id']",
-                                       "root['valid_from']",
-                                       "root['valid_until']"])
+                changes = compare(old_command_dict, command, ["command_id", "valid_from", "valid_until"])
                 if changes:
                     # If new Command is stationary set the start_time to the new arrival_time
                     if "sy" in command["command_type"]:
@@ -425,7 +419,8 @@ class Filler:
 
                     logging.log(5,
                                 f"UPDATE Command of Army {command['army_id']}:"
-                                f"{changes}")
+                                f"{old_command_dict}"
+                                f"{command}")
 
                     # If the old command is stationary set its arrival_time to the new start_time
                     if old_command_dict["command_type"] and "sy" in old_command_dict["command_type"]:
@@ -472,8 +467,7 @@ class Filler:
         new_army_gains_losses = []
 
         for army_gains_loss in data:
-            exists = any([not bool(DeepDiff(object_as_dict(old_army_gains_loss), army_gains_loss,
-                                            exclude_paths=["army_loss_gain_id"]))
+            exists = any([not bool(compare(object_as_dict(old_army_gains_loss), army_gains_loss, ["army_loss_gain_id"]))
                           for old_army_gains_loss in old_army_gains_losses])
             if not exists:
                 new_army_gains_losses.append(army_gains_loss)

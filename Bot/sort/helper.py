@@ -2,6 +2,7 @@ import json
 import math
 from datetime import datetime
 
+
 def get_combined_number(number_1, number_2):
     try:
         number_1 = int(number_1)
@@ -45,6 +46,18 @@ def is_title_case(title):
     cases = ["reports casualties", "recruits new"]
     for case in cases:
         if case in title:
+            return True
+    return False
+
+
+def compare(dict_1, dict_2, exclude_keys: list[str]) -> bool:
+    for key in dict_1.keys():
+        if key in exclude_keys:
+            continue
+        if key not in dict_2:
+            return True
+
+        if dict_1[key] != dict_2[key]:
             return True
     return False
 
