@@ -57,7 +57,6 @@ class Filler:
             self.session.commit()
             if self.data["game"]["end_time"] is not None:
                 self.remove_game_account()
-                return
 
         if "teams" in keys:
             self.fill_teams(self.data["teams"])

@@ -1,22 +1,23 @@
 import React from 'react';
 import {Grid, Typography} from "@mui/material";
-import Teamranking from "./dashboard/teamranking";
-import Countryranking from "./dashboard/countryranking";
+import TeamRanking from "./dashboard/TeamRanking";
+import CountryRanking from "./dashboard/CountryRanking";
 import {useParams} from "react-router-dom";
 import CustomDrawer from "../../CustomDrawer";
 import {getDatefromTimestamp, getDifference} from "../../../helper/time";
-import Gameinformation from "./dashboard/gameinformation";
-import Map from "./dashboard/Map/map";
-import Risingpowers from "./dashboard/risingpowers";
-import getRisingPowers from "../../../helper/dashboard/RisingPowersGetter";
-import Trades from "./dashboard/trades";
-import HighvalueCities from "./dashboard/highvalueCities";
-import {getCombined} from "../../../helper/Array_Helper";
+import GameInformation from "./dashboard/GameInformation";
+import DashboardMap from "./dashboard/DashboardMap";
+import RisingPowersCarousel from "./dashboard/RisingPowersCarousel";
+import getRisingPowers from "../../../helper/dashboard/rising_power_getters";
+import Trades from "./dashboard/Trades";
+import HighValueCities from "./dashboard/HighValueCities";
+import {get_combined} from "../../../helper/array_helper";
 import {useQueries, useQuery} from "react-query";
 import * as api from "../../../helper/api";
-import {getTeamsbyVP} from "../../../helper/staticinformation";
-import getHighValueCities from "../../../helper/dashboard/HighValueCitiesGetter";
-import getTrades from "../../../helper/dashboard/TradesGetter";
+import {get_teams_by_vp} from "../../../helper/staticinformation";
+import getHighValueCities from "../../../helper/dashboard/high_value_cities_getter";
+import getTrades from "../../../helper/dashboard/trades_getter";
+import CircularProgressWithLabel from "../../CircularProgressWithLabel";
 
 export default function Dashboard(){
     const {game_id} = useParams()
@@ -33,13 +34,12 @@ export default function Dashboard(){
 }
 
 function DashboardDiv({game}){
-    const day = getDifference(game.st, game.ct, "D")
-    let made_rising_power_queries = false
+    let from_timestamp = game["ct"] - 10 * 3600 * 24
     let results = useQueries([
         { queryKey: ['teams', game.gid], queryFn: () => api.getTeams(game.gid)},
-        { queryKey: ['countrys', game.gid, "normal", "-1", "0"], queryFn: () => api.getCountrys(game.gid, "normal", "-1", "0")},
-        { queryKey: ['countrys', game.gid, "stats", "-1", "0"], queryFn: () => api.getCountrys(game.gid, "stats", "-1", "0")},
-        { queryKey: ['countrys', game.gid, "rising_power", "0", "0"], queryFn: () => api.getCountrys(game.gid, "rising_power", "-1","0")},
+        { queryKey: ['countrys', game.gid, "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game.gid, "normal", "-1", "0", "0")},
+        { queryKey: ['countrys', game.gid, "stats", "-1", from_timestamp, game["ct"]], queryFn: () => api.getCountrys(game.gid, "stats", "-1", game["ct"], game["ct"])},
+        { queryKey: ['countrys', game.gid, "rising_power", "0", "0", "0"], queryFn: () => api.getCountrys(game.gid, "rising_power", "-1","0", "0")},
         { queryKey: ['trades', game.gid], queryFn: () => api.getTrades(game.gid)},
         { queryKey: ['provinces', game.gid, "normal", "0"], queryFn: () => api.getProvinces(game.gid, "normal", "0")},
         { queryKey: ['provinces', game.gid, "value", "0"], queryFn: () => api.getProvinces(game.gid, "value", "0")},
@@ -50,13 +50,13 @@ function DashboardDiv({game}){
     let countrys_rising_power_podium = [{"cid": 0, "pos": 1}, {"cid": 1, "pos":2}, {"cid": 2, "pos": 3}]
     if (results[3].isSuccess){
         countrys_rising_power_podium = Object.values(results[3]["data"]).sort(function(first, second) {
-            return first["pos"] - second["pos"];
+            return first["rs_pos"] - second["rs_pos"];
         })}
     let queries = []
     for (let i = 0; i < 3; i++){
         queries.push(
             { queryKey: ['countrys', game.gid, "stats", countrys_rising_power_podium[i]["cid"], "-1"],
-                queryFn: () => api.getCountrys(game.gid, "stats", countrys_rising_power_podium[i]["cid"], "-1"),
+                queryFn: () => api.getCountrys(game.gid, "stats", countrys_rising_power_podium[i]["cid"], from_timestamp, game["ct"]),
                 enabled: countrys_rising_power_podium.length !== 3
             },
          )
@@ -66,9 +66,13 @@ function DashboardDiv({game}){
     const isLoading = results.some(query => query.isLoading)
     const isError = results.some(query => query.isError)
     const isFetching = results.some(query => query.isFetching)
+    let loaded = results.reduce((current, query) => {
+        return current + +query.isSuccess
+    }, 0)
+
 
     if (isLoading){
-        return (<div>Loading</div>)
+        return (<CircularProgressWithLabel value={(loaded / 12) * 100}/>)
     }else if (isFetching){
         return (<div>Refreshing</div>)
     }
@@ -85,10 +89,18 @@ function DashboardDiv({game}){
     const static_provinces = results[7]["data"]
     const static_upgrades = results[8]["data"]
 
-    const combined_countrys = getCombined([Object.values(countrys), Object.values(countrys_stats), Object.values(countrys_rising_power)], "cid")
-    console.log(combined_countrys)
-    const combined_provinces = getCombined([Object.values(provinces), Object.values(static_provinces)], "plid")
-    const combined_provinces_value = getCombined([provinces_value, Object.values(static_provinces)], "plid")
+    const combined_countrys = get_combined(
+        [Object.values(countrys_rising_power), Object.values(countrys), Object.values(countrys_stats),
+        Object.values(results[9]["data"]), Object.values(results[10]["data"]), Object.values(results[11]["data"])],
+        "cid")
+    for (let country in combined_countrys){
+        if ("ts" in combined_countrys[country]) {
+            combined_countrys[country]["vp"] =
+                combined_countrys[country]["ts"][Object.keys(combined_countrys[country]["ts"])[Object.keys(combined_countrys[country]["ts"]).length-1]]["vp"]
+        }
+    }
+    const combined_provinces = get_combined([Object.values(provinces), Object.values(static_provinces)], "plid")
+    const combined_provinces_value = get_combined([provinces_value, Object.values(static_provinces)], "plid")
 
     return(
         <CustomDrawer game_id={game["gid"]}>
@@ -131,30 +143,30 @@ function DashboardDiv({game}){
                     <Grid item xs={12} lg={2}>
                         <Grid container columns={6} columnSpacing={1} rowSpacing={2}>
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
-                                <Gameinformation game={game}/>
+                                <GameInformation game={game}/>
                             </Grid>
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
-                                <Countryranking countrys={combined_countrys}/>
+                                <CountryRanking countrys={combined_countrys}/>
                             </Grid>
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
-                                <Teamranking teams={getTeamsbyVP(teams, combined_countrys)}/>
+                                <TeamRanking teams={get_teams_by_vp(teams, combined_countrys)}/>
                             </Grid>
                         </Grid>
                     </Grid>
                     <Grid item xs={12} lg={7}>
                         <Grid container rowSpacing={2}>
                             <Grid item width={"100%"}>
-                                <Map provinces={combined_provinces}/>
+                                <DashboardMap provinces={combined_provinces}/>
                             </Grid>
                             <Grid item width={"100%"}>
-                                <Risingpowers rising_powers_countrys={getRisingPowers(combined_countrys, game)}/>
+                                <RisingPowersCarousel rising_powers_countrys={getRisingPowers(combined_countrys, game)}/>
                             </Grid>
                         </Grid>
                     </Grid>
                     <Grid item xs={12} lg={3}>
                         <Grid container rowSpacing={2}>
                             <Grid item xs={12} minHeight={300}>
-                                <HighvalueCities cities={getHighValueCities(combined_provinces_value, countrys, static_upgrades)} />
+                                <HighValueCities cities={getHighValueCities(combined_provinces_value, countrys, static_upgrades)} />
                             </Grid>
                             <Grid item xs={12} minHeight={300}>
                                 <Trades trades={getTrades(trades, countrys, game)}/>

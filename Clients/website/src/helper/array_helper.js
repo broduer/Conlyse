@@ -1,4 +1,4 @@
-export function getCombined(arrays, key) {
+export function get_combined(arrays, key) {
     let merged = {};
     let combined = {};
     for(let i=0; i<arrays[0].length; i++) {

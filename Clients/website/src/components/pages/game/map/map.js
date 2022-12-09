@@ -4,17 +4,14 @@ import React from "react";
 import * as PIXI from "pixi.js";
 import { SmoothGraphics as Graphics } from '@pixi/graphics-smooth';
 import { LINE_SCALE_MODE } from '@pixi/graphics-smooth';
-import { FPS } from 'yy-fps'
 import {map_app, viewport} from "./map_app";
 import {getGraphics} from "./drawing";
 import {handleSelection} from "./Modes/selectionMode/selection_mode";
 import {pushDrawing} from "./Modes/drawingMode/drawing_mode";
-import {defaultTextStyle, world_width, world_height, selectionColour} from "./map_const";
-
-let _fps;
+import {defaultTextStyle, world_width, world_height, selectionColour, selectionLockedColour} from "./map_const";
 
 
-export default function Map({provinces, countrys, teams, mode, selectionLevel, drawingLevel, fillColor, outlineColor, strokeWidth, drawings, setDrawings, finalDrawing, setFinalDrawing, current_selection, setCurrentSelection}){
+export default function Map({provinces, countrys, teams, mode, selectionLevel, drawingLevel, fillColor, outlineColor, strokeWidth, drawings, setDrawings, finalDrawing, current_selection, setCurrentSelection}){
     const div_ref = React.createRef();
     // Global
     const [loaded, setLoaded] = useState(false)
@@ -32,7 +29,6 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
 
     useEffect(() => {
         if (div_ref.current && !loaded) {
-            _fps =  new FPS({ side: 'bottom-left' })
             div_ref.current.appendChild(map_app.view)
             map_app.start()
             let left = getGraphics(provinces)
@@ -183,7 +179,7 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
         for (let province in current_selection){
             province = current_selection[province]
             let polygon = new PIXI.Polygon(province["points"])
-            selection_graphic.beginFill(0x1C53D3, 1)
+            selection_graphic.beginFill(selectionLockedColour[0], selectionLockedColour[1])
             selection_graphic.drawPolygon(polygon)
             selection_graphic.endFill()
         }
@@ -324,7 +320,6 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
                     drawings_graphic.moveTo(point.x, point.y)
                     drawings_graphic.lineStyle({width: drawing["strokeWidth"], color: drawing["outlineColor"][0], alpha: drawing["outlineColor"][1]})
                     for (let key in drawing["data"]){
-                        let point = drawing["data"][key]
                         let next_point = drawing["data"][parseInt(key) + 1]
                         if (next_point){
                             drawings_graphic.lineTo(next_point.x, next_point.y)

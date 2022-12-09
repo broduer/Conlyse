@@ -1,4 +1,4 @@
-export function getTeamsbyVP(teams, countrys){
+export function get_teams_by_vp(teams, countrys){
     for (let team in teams){
         team = teams[team]
         team["vp"] = 0

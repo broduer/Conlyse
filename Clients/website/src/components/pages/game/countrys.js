@@ -8,14 +8,14 @@ import {
     Block,
     Check, Info,
 } from "@mui/icons-material";
-import {getResourceName} from "../../../helper/gameTypes";
+import {getResourceName} from "../../../helper/game_types";
 import {getDifference} from "../../../helper/time";
 import {useState} from "react";
 import {IconButton, Stack, TextField} from "@mui/material";
 import {theme} from "../../../helper/theme";
-import getRows from "../../../helper/countrys/RowsGetter";
+import get_rows from "../../../helper/countrys/countrys_rows_getter";
 import {useQueries, useQuery} from "react-query";
-import {getCombined} from "../../../helper/Array_Helper";
+import {get_combined} from "../../../helper/array_helper";
 import * as api from "../../../helper/api";
 import {isEqual} from "lodash";
 
@@ -59,7 +59,7 @@ export default function Countrys() {
                 )
             }}]
     )
-    let defined = data ? data[game_id] : undefined;
+    let defined = data ? data[game_id] : undefined
     let game = {};
 
     if(!!defined){
@@ -69,10 +69,11 @@ export default function Countrys() {
             setLoaded(true)
         }
     }
+    let timstamp = game["st"] + day*24*3600
     let results = useQueries([
         { queryKey: ['teams', game["gid"]], queryFn: () => api.getTeams(game["gid"]), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "-1"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "-1"), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "stats", "-1", day], queryFn: () => api.getCountrys(game["gid"], "stats", "-1", day), keepPreviousData : true, enabled: !!defined && loaded, refetchOnMount: false},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), keepPreviousData : true, enabled: !!defined && loaded},
+        { queryKey: ['countrys', game["gid"], "stats", "-1", timstamp, timstamp], queryFn: () => api.getCountrys(game["gid"], "stats", "-1", timstamp, timstamp), keepPreviousData : true, enabled: !!defined && loaded, refetchOnMount: false},
     ])
 
     const isSuccess = !results.some(query => !query.isSuccess)
@@ -80,7 +81,7 @@ export default function Countrys() {
 
     if(isSuccess && !rows_loaded) {
         setRows_loaded(true)
-        setRows(getRows(Object.values(results[0]["data"]), getCombined([Object.values(results[1]["data"]), Object.values(results[2]["data"])], "cid")))
+        setRows(get_rows(Object.values(results[0]["data"]), get_combined([Object.values(results[1]["data"]), Object.values(results[2]["data"])], "cid")))
     }
     const handleDayChange = (day) => {
         setRows_loaded(false)
@@ -153,7 +154,7 @@ export default function Countrys() {
                                 height: 36,
                                 width: 36,
                             }}
-                                        onClick={(event) => {
+                                        onClick={() => {
                                             if(day < getDifference(game["st"], game["ct"], "D")){
                                                 handleDayChange(Number(day) + 1)
                                             }

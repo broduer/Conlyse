@@ -1,11 +1,11 @@
 import {Card, CardContent, CardHeader, Grid, List, ListItem} from "@mui/material";
 import * as React from "react";
 import EconomyGraph from "./EconomyGraph";
-import getTotalEconomy, {getGraphData} from "../../../../helper/country/EconomyGetter";
+import getTotalEconomy, {getGraphData} from "../../../../helper/country/economy_getter";
 import {getDifference} from "../../../../helper/time";
-import {getResourceName} from "../../../../helper/gameTypes";
+import {getResourceName} from "../../../../helper/game_types";
 
-export default function Economy_stats({country, game}){
+export default function EconomyStats({country, game}){
     if (typeof country === "undefined") return (
         <div>
             <Card>

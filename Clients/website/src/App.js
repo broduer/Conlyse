@@ -1,4 +1,3 @@
-import Header from "./components/Header";
 import {BrowserRouter as Router, Routes, Route} from "react-router-dom";
 import Game from "./components/pages/game/game";
 import Startpage from "./components/pages/Startpage";
@@ -10,10 +9,8 @@ import {theme} from "./helper/theme";
 import {CssBaseline, ThemeProvider} from "@mui/material";
 
 import {QueryClientProvider, QueryClient} from "react-query";
-import { ReactQueryDevtools } from 'react-query/devtools'
 import Provinces from "./components/pages/game/provinces";
-import Map from "./components/pages/game/Map/map";
-import Mappage from "./components/pages/game/Map/Mappage";
+import MapPage from "./components/pages/game/map/MapPage";
 const queryClient = new QueryClient({
     defaultOptions: {
         queries:{
@@ -30,7 +27,6 @@ const App = () => {
             <CssBaseline/>
             <Router>
                 <div className="App">
-                    <Header/>
                     <QueryClientProvider client={queryClient}>
                         <Routes>
                             <Route path={"/game/:game_id"} element={<Game/>} exact/>
@@ -38,7 +34,7 @@ const App = () => {
                             <Route path={"/game/:game_id/countrys"} element={<Countrys/>}/>
                             <Route path={"/game/:game_id/country/:country_id"} element={<Country/>}/>
                             <Route path={"/game/:game_id/provinces"} element={<Provinces/>}/>
-                            <Route path={"/game/:game_id/map"} element={<Mappage/>}/>
+                            <Route path={"/game/:game_id/map"} element={<MapPage/>}/>
                             <Route path={"/"} element={<Startpage/>} exact/>
                         </Routes>
                     </QueryClientProvider>

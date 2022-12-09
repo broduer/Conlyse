@@ -3,7 +3,7 @@ import {Grid, Typography} from "@mui/material";
 import {getDatefromTimestamp, getDifference} from "../../../../helper/time";
 
 
-export default function HeaderDashboard({game}){
+export default function GameDashboardHeader({game}){
     return (
         <Grid container columns={{xs:10,md:16, lg: 24}} border={2}>
             <Grid item xs={2}>

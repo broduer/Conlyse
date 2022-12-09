@@ -2,7 +2,7 @@ import {Card, CardContent, CardHeader, List, ListItem} from "@mui/material";
 import {Block, Check} from "@mui/icons-material";
 import * as React from "react";
 
-export default function Basicinformation({country}){
+export default function BasicInformation({country}){
     return (
         <div>
             <Card>

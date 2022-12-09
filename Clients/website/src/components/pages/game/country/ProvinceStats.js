@@ -1,7 +1,7 @@
 import {Card, CardContent, CardHeader, List, ListItem} from "@mui/material";
 import * as React from "react";
 
-export default function Province_stats({country}){
+export default function ProvinceStats({country}){
     if(typeof country === "undefined"){
         country = {
             "ml": 0,

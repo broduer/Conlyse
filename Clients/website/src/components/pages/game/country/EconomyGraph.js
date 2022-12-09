@@ -12,7 +12,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import {theme} from "../../../../helper/theme";
-import {getResourceColour, getResourceName} from "../../../../helper/gameTypes";
+import {getResourceColour, getResourceName} from "../../../../helper/game_types";
 
 ChartJS.register(
     CategoryScale,

@@ -1,6 +1,6 @@
 import {DataGrid} from "@mui/x-data-grid";
 import * as React from 'react';
-import {getResourceName} from "../../../../helper/gameTypes";
+import {getResourceName} from "../../../../helper/game_types";
 
 
 export default function Trades({trades}){

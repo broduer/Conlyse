@@ -1,9 +1,8 @@
 import {useParams} from "react-router-dom";
 import {useQueries, useQuery} from "react-query";
-import {getDifference} from "../../../../helper/time";
 import * as api from "../../../../helper/api";
 import Map from "./map";
-import {getCombinedStaticProvince} from "../../../../helper/provinces/RowsGetter";
+import {get_combined_province} from "../../../../helper/provinces/provinces_getter";
 import CustomDrawer from "../../../CustomDrawer";
 import React, {useState} from "react";
 import EditorMenu from "./editor_menu";
@@ -13,7 +12,7 @@ import {pushDrawing} from "./Modes/drawingMode/drawing_mode";
 import {defaultFillColour, defaultOutlineColour, defaultStrokeWidth} from "./map_const";
 import DrawingsEditor from "./Modes/drawingMode/drawings_editor";
 
-export default function Mappage(){
+export default function MapPage(){
     const {game_id} = useParams()
     const {data} = useQuery(["game", game_id], () => api.getGame(game_id), {keepPreviousData : true});
 
@@ -56,8 +55,8 @@ export default function Mappage(){
     }
     let results = useQueries([
         { queryKey: ['static', "province", game["mid"]], queryFn: () => api.getStaticProvinces(game["mid"]), keepPreviousData : true, enabled: !!defined},
-        { queryKey: ['provinces', game["gid"], "list", getDifference(game["st"], game["ct"], "D")], queryFn: () => api.getProvinces(game["gid"], "list", getDifference(game["st"], game["ct"], "D")),  enabled: !!defined},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "-1"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "-1"), enabled: !!defined},
+        { queryKey: ['provinces', game["gid"], "list", game["ct"]], queryFn: () => api.getProvinces(game["gid"], "list", game["ct"]),  enabled: !!defined},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
         { queryKey: ['teams', game.gid], queryFn: () => api.getTeams(game.gid), enabled: !!defined},
     ])
 
@@ -67,7 +66,7 @@ export default function Mappage(){
 
     return(
         <CustomDrawer game_id={game_id}>
-            <Map provinces={getCombinedStaticProvince(results[1]["data"], results[0]["data"])}
+            <Map provinces={get_combined_province(results[1]["data"], results[0]["data"])}
                  countrys={results[2]["data"]}
                  teams={results[3]["data"]}
 

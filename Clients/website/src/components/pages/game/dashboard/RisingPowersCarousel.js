@@ -1,8 +1,8 @@
 import {Box} from "@mui/material";
 import Carousel from "react-material-ui-carousel";
-import Risingpower from "./risingpower";
+import RisingPower from "./RisingPower";
 
-export default function Risingpowers({rising_powers_countrys}){
+export default function RisingPowersCarousel({rising_powers_countrys}){
     return (
         <Box sx={{
             bgcolor: "divider",
@@ -12,7 +12,7 @@ export default function Risingpowers({rising_powers_countrys}){
         }}>
             <Carousel interval={10000}>
                 {Object.values(rising_powers_countrys).slice(0,3).map((rising_power_country => (
-                    <Risingpower key={rising_power_country["cid"]} country={rising_power_country} number={rising_power_country["rs_pos"]+1}/>
+                    <RisingPower key={rising_power_country["cid"]} country={rising_power_country} number={rising_power_country["rs_pos"]+1}/>
                 )))}
             </Carousel>
         </Box>

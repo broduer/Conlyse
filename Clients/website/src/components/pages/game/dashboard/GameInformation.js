@@ -2,7 +2,7 @@ import React from 'react';
 import {Box, List, ListItem, Typography} from "@mui/material";
 import {getDatefromTimestamp, getRealtime} from "../../../../helper/time";
 
-export default function Gameinformation({game}){
+export default function GameInformation({game}){
     return(
         <Box sx={{
             bgcolor: "divider",

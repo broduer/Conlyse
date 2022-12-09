@@ -1,6 +1,6 @@
-import {getInterestingBuilding} from "./BuildingsGetter";
+import {getInterestingBuilding} from "./buildings_getter";
 
-export function getCombinedStaticProvince(provinces, static_provinces){
+export function get_combined_province(provinces, static_provinces){
     for (let province in provinces){
         province = provinces[province]
         province = Object.assign(province, static_provinces[province["plid"]])

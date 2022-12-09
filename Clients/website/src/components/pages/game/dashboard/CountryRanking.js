@@ -1,7 +1,7 @@
 import React from 'react';
 import {Box, List, ListItem, Typography} from "@mui/material";
 
-export default function Countryranking({countrys}){
+export default function CountryRanking({countrys}){
     let sorted_countrys = Object.values(countrys)
     sorted_countrys = sorted_countrys.sort((a, b) =>{
         a["vp"] = "vp" in a ? a["vp"] : 0

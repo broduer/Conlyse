@@ -1,27 +1,27 @@
 
 export function getDatefromTimestamp(timestamp, format) {
-    var ts_ms = timestamp * 1000;
+    let ts_ms = timestamp * 1000;
 
     // initialize new Date object
-    var date_ob = new Date(ts_ms);
+    let date_ob = new Date(ts_ms);
 
     // year as 4 digits (YYYY)
-    var year = date_ob.getFullYear();
+    let year = date_ob.getFullYear();
 
     // month as 2 digits (MM)
-    var month = ("0" + (date_ob.getMonth() + 1)).slice(-2);
+    let month = ("0" + (date_ob.getMonth() + 1)).slice(-2);
 
     // date as 2 digits (DD)
-    var date = ("0" + date_ob.getDate()).slice(-2);
+    let date = ("0" + date_ob.getDate()).slice(-2);
 
     // hours as 2 digits (hh)
-    var hours = ("0" + date_ob.getHours()).slice(-2);
+    let hours = ("0" + date_ob.getHours()).slice(-2);
 
     // minutes as 2 digits (mm)
-    var minutes = ("0" + date_ob.getMinutes()).slice(-2);
+    let minutes = ("0" + date_ob.getMinutes()).slice(-2);
 
     // seconds as 2 digits (ss)
-    var seconds = ("0" + date_ob.getSeconds()).slice(-2);
+    let seconds = ("0" + date_ob.getSeconds()).slice(-2);
 
 
     switch (format) {
@@ -39,7 +39,7 @@ export function getDifference(timestamp_start, timestamp_end, format){
     let days = difference / (3600*24)
     switch (format){
         case "D": return Math.floor(days)
-        case "D_c": return days.toFixed(2)
+        case "D_c": return Math.round(days * 100) / 100
         default: return difference
     }
 }
@@ -51,10 +51,10 @@ export function getClosestTime(timestamp_array, timestamp){
 }
 
 export function getRealtime(timestamp_start, timestamp_current, speed){
-    var date_start = new Date(timestamp_start);
-    var date_end = new Date(timestamp_current);
+    let date_start = new Date(timestamp_start);
+    let date_end = new Date(timestamp_current);
 
-    var difference = date_end.getTime() - date_start.getTime()
+    let difference = date_end.getTime() - date_start.getTime()
 
     let realtime_difference = difference / speed
 

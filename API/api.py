@@ -70,7 +70,9 @@ def game(game_id):
     if game_id != -1:
         query = query.filter(Game.game_id == game_id)
     else:
-        query = query.filter(Game.next_day_time != None)
+        query = query.filter(or_(
+            Game.next_day_time != None,
+            Game.end_time != None))
 
     for game in query.all():
         output[game.game_id] = {
@@ -164,10 +166,9 @@ def provinces(game_id, mode, timestamp):
             .filter(Province.game_id == game.game_id)
         query = add_timestamp_filter_building(date_timestamp, query)
     else:
-        query = db.session.query(Province).filter(Game.game_id == game_id)
+        query = db.session.query(Province).filter(Province.game_id == game_id)
 
     query = add_timestamp_filter_province(date_timestamp, query)
-
 
     if "value" == mode:
         province_buildings = {}
@@ -234,21 +235,24 @@ def provinces(game_id, mode, timestamp):
     return jsonify(output)
 
 
-@app.route('/api/v2/countrys/<int:game_id>/<mode>/<country_id>/<timestamp>')
-def countrys(game_id, mode, country_id, timestamp):
+@app.route('/api/v2/countrys/<int:game_id>/<mode>/<country_id>/<from_timestamp>/<until_timestamp>')
+def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
     if game_id is None:
         return "game_id is needed"
     country_id = int(country_id)
-    timestamp = int(timestamp)
+    from_timestamp = int(from_timestamp)
+    until_timestamp = int(until_timestamp)
     game = getGame(game_id)
+    date_timestamp = None
 
     # Timestamp needs to be converted from unix format to datetime
-    if timestamp > 0:
-        date_timestamp = datetime.fromtimestamp(timestamp)
-    # Timestamp == 0 -> Timestamp should be newest
-    elif timestamp == 0:
+    if (from_timestamp == until_timestamp) and until_timestamp > 0:
+        date_timestamp = datetime.fromtimestamp(until_timestamp)
+    elif from_timestamp == 0:
         date_timestamp = game.current_time
-    # Timestamp is not supplied -> All Times should be calculated
+    elif (from_timestamp > 0) and (until_timestamp > 0):
+        from_timestamp = datetime.fromtimestamp(from_timestamp) 
+        until_timestamp = datetime.fromtimestamp(until_timestamp) 
     else:
         date_timestamp = None
 
@@ -261,9 +265,12 @@ def countrys(game_id, mode, country_id, timestamp):
                 Province.owner_id.label("owner_id")) \
                 .filter(Province.game_id == game_id)
         else:
-            timestamps = select([distinct(Province.valid_from).label("valid_from"),
+            timestamps = select([distinct(func.date_add(func.date(Province.valid_from), text(
+                'interval round(hour(province.valid_from)/ 24)*24 HOUR'))).label("valid_from"),
                                  Province.owner_id.label("owner_id")]) \
-                .filter(Province.game_id == game_id)
+                .filter(Province.game_id == game_id) \
+                .filter(Province.valid_from>from_timestamp).filter(Province.valid_from<until_timestamp)
+            print("TEST", timestamps)
 
         if country_id != -1:
             timestamps = timestamps.filter(Province.owner_id == country_id)
@@ -368,21 +375,21 @@ def countrys(game_id, mode, country_id, timestamp):
                    StaticCountry.name.label("country_name"), StaticCountry.native_computer,
                    Player.player_id, Player.site_user_id, Player.name.label("player_name")) \
             .join(GameHasPlayer, and_(
-                Country.country_id == GameHasPlayer.country_id,
-                or_(
-                    and_(Country.valid_from <= date_timestamp,
-                         Country.valid_until > date_timestamp),
+            Country.country_id == GameHasPlayer.country_id,
+            or_(
+                and_(Country.valid_from <= date_timestamp,
+                     Country.valid_until > date_timestamp),
 
-                    (Country.valid_from == date_timestamp),
+                (Country.valid_from == date_timestamp),
 
-                    and_(Country.valid_until == None,
-                         Country.valid_from < date_timestamp),
+                and_(Country.valid_until == None,
+                     Country.valid_from < date_timestamp),
 
-                    and_(Country.valid_until == None,
-                         date_timestamp == None)
+                and_(Country.valid_until == None,
+                     date_timestamp == None)
 
-                )
-            )) \
+            )
+        )) \
             .join(Player) \
             .join(StaticCountry) \
             .filter(GameHasPlayer.game_id == game_id)
@@ -479,7 +486,7 @@ def trade(game_id):
             "lm": trade.limit,
             "odid": trade.order_id,
             "oid": trade.owner_id,
-            "rsrt": trade.resource_type,
+            "rsrt": trade.resource_type + 1,
         }
     return jsonify(output)
 
@@ -541,8 +548,8 @@ def static_scenario():
 
 
 def getGame(game_id):
-    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Scenario.speed, Scenario.map_id,
-                            Game.scenario_id).join(Scenario).filter(
+    game = db.session.query(Game.game_id, Game.start_time, Game.current_time, Game.end_time,
+                            Scenario.scenario_id, Scenario.speed).join(Scenario).filter(
         Game.game_id == game_id).first()
     return game
 
@@ -555,7 +562,7 @@ def getScenarios():
 def add_timestamp_filter_building(date_timestamp, query):
     if date_timestamp:
         return query.filter(or_(Building.valid_from == date_timestamp,
-                                Building.valid_from < date_timestamp < Building.valid_until,
+                                and_(Building.valid_from < date_timestamp, date_timestamp < Building.valid_until),
                                 and_(Building.valid_until == None,
                                      Building.valid_from < date_timestamp)))
     else:
@@ -565,7 +572,8 @@ def add_timestamp_filter_building(date_timestamp, query):
 def add_timestamp_filter_province(date_timestamp, query):
     if date_timestamp:
         return query.filter(or_(Province.valid_from == date_timestamp,
-                                Province.valid_from < date_timestamp < Province.valid_until,
+                                and_(Province.valid_from < date_timestamp,
+                                    date_timestamp < Province.valid_until),
                                 and_(Province.valid_until == None,
                                      Province.valid_from < date_timestamp)))
     else:

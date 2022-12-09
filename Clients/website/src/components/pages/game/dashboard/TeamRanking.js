@@ -1,7 +1,7 @@
 import React from 'react';
 import {List, ListItem, Typography, Box} from "@mui/material";
 
-export default function Teamranking({teams}){
+export default function TeamRanking({teams}){
     return (
         <Box sx={{
             bgcolor: "divider",

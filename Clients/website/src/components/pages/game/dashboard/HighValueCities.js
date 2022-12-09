@@ -1,7 +1,7 @@
 import {DataGrid} from "@mui/x-data-grid";
 import * as React from "react";
 
-export default function HighvalueCities({cities}){
+export default function HighValueCities({cities}){
 
     const [sortModel, setSortModel] = React.useState([
         {

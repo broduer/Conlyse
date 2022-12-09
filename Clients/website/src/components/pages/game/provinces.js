@@ -8,15 +8,15 @@ import {
 
 
 } from "@mui/icons-material";
-import {getResourceName} from "../../../helper/gameTypes";
+import {getResourceName} from "../../../helper/game_types";
 import {getDifference} from "../../../helper/time";
 import {useState} from "react";
 import {IconButton, LinearProgress, Stack, TextField} from "@mui/material";
 import {theme} from "../../../helper/theme";
-import getRows, {getCombinedStaticProvince} from "../../../helper/provinces/RowsGetter";
+import getRows, {get_combined_province} from "../../../helper/provinces/provinces_getter";
 import {useQueries, useQuery} from "react-query";
 import * as api from "../../../helper/api";
-import {getInterestingBuildingName} from "../../../helper/provinces/BuildingsGetter";
+import {getInterestingBuildingName} from "../../../helper/provinces/buildings_getter";
 import {isEqual} from "lodash";
 
 
@@ -59,10 +59,11 @@ export default function Provinces() {
             setLoaded(true)
         }
     }
+    let timestamp = game["st"] + day*3600*24
     let results = useQueries([
         { queryKey: ['static', "province", game["mid"]], queryFn: () => api.getStaticProvinces(game["mid"]), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['provinces', game["gid"], "list", day], queryFn: () => api.getProvinces(game["gid"], "list", day),  enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "-1"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "-1"), enabled: !!defined},
+        { queryKey: ['provinces', game["gid"], "list", timestamp], queryFn: () => api.getProvinces(game["gid"], "list", timestamp),  enabled: !!defined && loaded},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
         { queryKey: ['static_upgrades'], queryFn: api.getStaticUpgrades},
     ])
 
@@ -72,7 +73,7 @@ export default function Provinces() {
 
     if(isSuccess && !rows_loaded) {
         setRows_loaded(true)
-        setRows(getRows(Object.values(results[2]["data"]), getCombinedStaticProvince(results[1]["data"], results[0]["data"]), results[3]["data"]))
+        setRows(getRows(Object.values(results[2]["data"]), get_combined_province(results[1]["data"], results[0]["data"]), results[3]["data"]))
     }
     const handleDayChange = (day) => {
         setRows_loaded(false)
@@ -144,7 +145,7 @@ export default function Provinces() {
                                 height: 36,
                                 width: 36,
                             }}
-                                        onClick={(event) => {
+                                        onClick={() => {
                                             if(day < getDifference(game["st"], game["ct"], "D")){
                                                 handleDayChange(Number(day) + 1)
                                             }

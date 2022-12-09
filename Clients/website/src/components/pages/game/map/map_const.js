@@ -9,10 +9,11 @@ export const defaultTextStyle = {fontFamily : 'Arial', fontSize: 24, fill : 0x00
 
 // Selection Mode
 export const selectionColour = ["0x290681", 0.5]
+export const selectionLockedColour = ["0x1C53D3", 1]
 
 // Drawing Mode
-export const defaultFillColour = ["0x60E640", 0.6]
-export const defaultOutlineColour = ["0x307320", 1]
+export const defaultFillColour = ["0x220293", 0.6]
+export const defaultOutlineColour = ["0x00fcf4", 1]
 export const defaultStrokeWidth = 10
 export const minStrokeWidth = 1
 export const maxStrokeWidth = 20

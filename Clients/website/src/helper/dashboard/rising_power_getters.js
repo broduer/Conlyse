@@ -43,6 +43,5 @@ export default function getRisingPowers(countrys, game){
     countrys_rs = Object.values(countrys_rs).sort((a, b) =>{
         return a["rs_pos"] - b["rs_pos"]
     })
-    console.log(countrys_rs[0])
     return countrys_rs
 }

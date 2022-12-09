@@ -1,6 +1,6 @@
 import React from 'react';
 import {Container, Grid} from "@mui/material";
-import GameCard from "../gameCard";
+import GameCard from "../GameCard";
 import {useQuery} from "react-query";
 import * as api from "../../helper/api";
 

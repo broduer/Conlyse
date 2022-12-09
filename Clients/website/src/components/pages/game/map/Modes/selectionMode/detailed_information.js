@@ -1,7 +1,7 @@
 import {Card, CardContent, CardHeader, IconButton, Typography} from "@mui/material";
-import React, {useEffect, useState} from "react";
+import React from "react";
 import {Close} from "@mui/icons-material";
-import {getResourceName} from "../../../../../../helper/gameTypes";
+import {getResourceName} from "../../../../../../helper/game_types";
 
 export default function DetailedInformation({current_province, setCurrentProvince}){
 
@@ -10,7 +10,7 @@ export default function DetailedInformation({current_province, setCurrentProvinc
 
 
     if (current_province.length === 0) return null;
-    console.time("total")
+    // console.time("total")
     let current_province_total = Object.values(current_province).reduce((acc, obj) =>
     {
         delete obj["bd"]
@@ -23,7 +23,7 @@ export default function DetailedInformation({current_province, setCurrentProvinc
 
         return acc;
     }, {});
-    console.timeEnd("total")
+    //console.timeEnd("total")
     return (
         <Card sx={{
             position: "absolute",

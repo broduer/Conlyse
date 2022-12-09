@@ -1,8 +1,8 @@
 import {Box} from "@mui/material";
 import {useEffect, useState,} from "react";
 import React from "react";
-import {decodeBorder} from "../../../../../helper/map";
-import {color_schema} from "../../../../../helper/color";
+import {decodeBorder} from "../../../../helper/map";
+import {color_schema} from "../../../../helper/color";
 import * as PIXI from "pixi.js";
 import { Viewport } from 'pixi-viewport'
 
@@ -58,7 +58,7 @@ export function getGraphics(provinces){
 
 
 
-export default function Map({provinces}){
+export default function DashboardMap({provinces}){
     const div_ref = React.createRef();
     const [loaded, setLoaded] = useState(false)
     useEffect(() => {
