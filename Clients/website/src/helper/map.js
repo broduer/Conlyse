@@ -71,3 +71,4 @@ export function decodeBorder(a){
         }
     } else b = a.map(lzr.engine.geom.Point.toPoint);return b
 }
+

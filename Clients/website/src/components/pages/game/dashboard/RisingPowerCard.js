@@ -2,7 +2,6 @@ import {Box, Typography, List, ListItem} from "@mui/material";
 import {getActionColor} from "../../../../helper/color";
 
 export default function RisingPowerCard({type, data}){
-    data = data["data"]
     let days = [1, 5, 10]
     return (
         <Box sx={{
@@ -19,8 +18,8 @@ export default function RisingPowerCard({type, data}){
                         {type}
                     </Typography>
                     {days.map((day) => {
-                        let percentage = (100 * ((data[10]/data[10-day])- 1)).toFixed(1)
-                        let diff = data[10] - data[10 - day]
+                        let percentage = (100 * ((data[0]/data[day])-1)).toFixed(1)
+                        let diff = data[0] - data[day]
 
                         return (
                             <ListItem key={day}>

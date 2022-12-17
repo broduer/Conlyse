@@ -5,7 +5,7 @@ import getTotalEconomy, {getGraphData} from "../../../../helper/country/economy_
 import {getDifference} from "../../../../helper/time";
 import {getResourceName} from "../../../../helper/game_types";
 
-export default function EconomyStats({country, game}){
+export default function EconomyStats({country, game, last_ts}){
     if (typeof country === "undefined") return (
         <div>
             <Card>
@@ -17,17 +17,16 @@ export default function EconomyStats({country, game}){
         </div>
     )
     let current_country = {
+        "1": 0,
         "2": 0,
         "3": 0,
+        "4": 0,
         "5": 0,
         "6": 0,
-        "7": 0,
-        "21": 0,
+        "20": 0,
         "trp": 0,
     };
-    if (Object.keys(country["ts"]).includes(game["ct"].toString())){
-        current_country = country["ts"][game["ct"]]
-    }
+    current_country = country["ts"][last_ts]
     let total_country = getTotalEconomy(country, game)
     country = getGraphData(country, game)
     let days = getDifference(game["st"], game["ct"], "D") + 1

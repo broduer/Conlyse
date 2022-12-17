@@ -22,7 +22,7 @@ import {isEqual} from "lodash";
 
 export default function Countrys() {
     const {game_id} = useParams()
-    const {data} = useQuery(["game", game_id], () => api.getGame(game_id), {keepPreviousData : true});
+    const {data} = useQuery(["game", game_id], () => api.get_game(game_id), {keepPreviousData : true});
     const [day, setDay] = useState(0)
     const [rows, setRows] = useState([])
     const [rows_loaded, setRows_loaded] = useState(false)
@@ -35,12 +35,12 @@ export default function Countrys() {
         { field: "vp", headerName: "Victory Points", flex: 0.15},
         { field: "ml", headerName: "Morale", flex: 0.15},
         { field: "trp", headerName: "Total Economy", flex: 0.15},
+        { field: "1", headerName: getResourceName("1"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
         { field: "2", headerName: getResourceName("2"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
-        { field: "3", headerName: getResourceName("3"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "4", headerName: getResourceName("4"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
         { field: "5", headerName: getResourceName("5"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
         { field: "6", headerName: getResourceName("6"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
-        { field: "7", headerName: getResourceName("7"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
-        { field: "21", headerName: getResourceName("21"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "20", headerName: getResourceName("20"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
         { field: "t_ac", headerName: "Annexed Cities"},
         { field: "t_c", headerName: "Cities", width: 70},
         { field: "t_mlc", headerName: "Mainland Cities"},
@@ -71,9 +71,9 @@ export default function Countrys() {
     }
     let timstamp = game["st"] + day*24*3600
     let results = useQueries([
-        { queryKey: ['teams', game["gid"]], queryFn: () => api.getTeams(game["gid"]), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "stats", "-1", timstamp, timstamp], queryFn: () => api.getCountrys(game["gid"], "stats", "-1", timstamp, timstamp), keepPreviousData : true, enabled: !!defined && loaded, refetchOnMount: false},
+        { queryKey: ['teams', game["gid"]], queryFn: () => api.get_teams(game["gid"]), keepPreviousData : true, enabled: !!defined && loaded},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.get_countrys(game["gid"], "normal", "-1", "0", "0"), keepPreviousData : true, enabled: !!defined && loaded},
+        { queryKey: ['countrys', game["gid"], "stats", "-1", timstamp, timstamp], queryFn: () => api.get_countrys(game["gid"], "stats", "-1", timstamp, timstamp), keepPreviousData : true, enabled: !!defined && loaded, refetchOnMount: false},
     ])
 
     const isSuccess = !results.some(query => !query.isSuccess)

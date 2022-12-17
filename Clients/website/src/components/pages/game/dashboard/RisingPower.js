@@ -2,8 +2,9 @@ import {Grid, Typography} from "@mui/material";
 import VictoryGraph from "../country/VictoryGraph";
 import React from "react";
 import RisingPowerCard from "./RisingPowerCard";
+import CountryLink from "../../../CountryLink";
 
-export default function RisingPower({country, number}){
+export default function RisingPower({country, number, game}){
     return (
         <Grid container direction={"row"} columns={2}>
             <Grid item xs={2} lg={1}>
@@ -25,7 +26,10 @@ export default function RisingPower({country, number}){
             </Grid>
             <Grid item xs={2} lg={1}>
                 <Typography fontSize={"larger"}>
-                    {number}. {country.name}
+                    {number}.
+                    <CountryLink game_id={game["gid"]} country_id={country["cid"]}>
+                        {country.name}
+                    </CountryLink>
                 </Typography>
                 <Grid container columns={2} columnSpacing={1} mt={0.5}>
                     <Grid item xs={2} sm={2}>

@@ -88,7 +88,7 @@ export default function CustomDrawer({children, game_id}) {
                     >
                         <MenuIcon />
                     </IconButton>
-                    <img width={100} src={require("../images/logo.png")} alt={"Conlyse"}/>
+                    <img width={100} src={"/logo.png"} alt={"Conlyse"}/>
                 </Toolbar>
             </AppBar>
             <div>

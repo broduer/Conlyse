@@ -45,10 +45,8 @@ export function getGraphics(provinces){
     g.interactive = true
     g.lineStyle(2, 0x000000)
     for (let province in provinces){
-        province = provinces[province]
-        let polygon = new PIXI.Polygon(getPoints(province["bt"]))
-        province["points"] = polygon.points
-        g.beginFill(color_schema[province["oid"] % 150])
+        let polygon = new PIXI.Polygon(getPoints(provinces[province]["bt"]))
+        g.beginFill(color_schema[provinces[province]["oid"] % 150])
         g.drawPolygon(polygon)
         g.endFill()
     }
@@ -66,8 +64,8 @@ export default function DashboardMap({provinces}){
             map_app.start()
             div_ref.current.appendChild(map_app.view)
             let left = getGraphics(provinces)
-            let middle = getGraphics(provinces)
-            let right = getGraphics(provinces)
+            let middle = new PIXI.Graphics(left.geometry)
+            let right = new PIXI.Graphics(left.geometry)
             middle.x = world_width
             right.x = world_width * 2
             viewport.addChild(left, middle, right)

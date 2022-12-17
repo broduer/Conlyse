@@ -22,7 +22,7 @@ import {isEqual} from "lodash";
 
 export default function Provinces() {
     const {game_id} = useParams()
-    const {data} = useQuery(["game", game_id], () => api.getGame(game_id), {keepPreviousData : true});
+    const {data} = useQuery(["game", game_id], () => api.get_game(game_id), {keepPreviousData : true});
     const [day, setDay] = useState(0)
     const [rows, setRows] = useState([])
     const [rows_loaded, setRows_loaded] = useState(false)
@@ -34,12 +34,12 @@ export default function Provinces() {
         { field: "vp", headerName: "Victory Points", hide: false, flex: 0.15},
         { field: "ml", headerName: "Morale", hide: false, flex: 0.15},
         { field: "tc", headerName: "Total Cost", hide: false, flex: 0.15},
-        { field: "2", headerName: getResourceName("2"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true, },
-        { field: "3", headerName: getResourceName("3"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true, },
-        { field: "5", headerName: getResourceName("5"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true},
-        { field: "6", headerName: getResourceName("6"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true},
-        { field: "7", headerName: getResourceName("7"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true},
-        { field: "21", headerName: getResourceName("21"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide: true},
+        { field: "1", headerName: getResourceName("1"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "2", headerName: getResourceName("2"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "4", headerName: getResourceName("4"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "5", headerName: getResourceName("5"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "6", headerName: getResourceName("6"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
+        { field: "20", headerName: getResourceName("20"),renderHeader: (params => {return getResourceName(params.field)}), flex: 0.08, hide:true},
         { field: "b0", headerName: getInterestingBuildingName(0), hide: false},
         { field: "b1", headerName: getInterestingBuildingName(1), hide: false},
         { field: "b2", headerName: getInterestingBuildingName(2), hide: false},
@@ -61,10 +61,10 @@ export default function Provinces() {
     }
     let timestamp = game["st"] + day*3600*24
     let results = useQueries([
-        { queryKey: ['static', "province", game["mid"]], queryFn: () => api.getStaticProvinces(game["mid"]), keepPreviousData : true, enabled: !!defined && loaded},
-        { queryKey: ['provinces', game["gid"], "list", timestamp], queryFn: () => api.getProvinces(game["gid"], "list", timestamp),  enabled: !!defined && loaded},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
-        { queryKey: ['static_upgrades'], queryFn: api.getStaticUpgrades},
+        { queryKey: ['static', "province", game["mid"]], queryFn: () => api.get_static_provinces(game["mid"]), keepPreviousData : true, enabled: !!defined && loaded},
+        { queryKey: ['provinces', game["gid"], "list", timestamp], queryFn: () => api.get_provinces(game["gid"], "list", timestamp),  enabled: !!defined && loaded},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.get_countrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
+        { queryKey: ['static_upgrades'], queryFn: api.get_static_upgrades},
     ])
 
     const isSuccess = !results.some(query => !query.isSuccess)

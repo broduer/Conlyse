@@ -8,7 +8,7 @@ import Paper from '@mui/material/Paper';
 import Popper from '@mui/material/Popper';
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
-import {ControlCamera, Edit, NearMe, PanTool} from "@mui/icons-material";
+import {ControlCamera, Edit, NearMe} from "@mui/icons-material";
 import {IconButton} from "@mui/material";
 
 const options = [<NearMe />,<ControlCamera/>, <Edit/>];

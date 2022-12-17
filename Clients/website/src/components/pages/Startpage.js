@@ -6,7 +6,7 @@ import * as api from "../../helper/api";
 
 export default function Startpage(){
 
-    const {data: games, status} = useQuery("games", api.getGames);
+    const {data: games, status} = useQuery("games", api.get_games);
     if (status === "loading"){
         return (<div>Loading ...</div>)
     }

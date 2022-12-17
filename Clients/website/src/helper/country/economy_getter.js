@@ -19,7 +19,7 @@ export default function getTotalEconomy(country, game){
 
 export function getGraphData(country, game){
     country["economy"] = {}
-    country["economy"]["labels"] = Object.keys(country["ts"]).map((ts) => getDifference(game["st"], ts, "D"))
+    country["economy"]["labels"] = Object.keys(country["ts"]).map((ts) => getDifference(game["st"], ts, "D_c"))
     for (let key in Object.keys(Object.values(country["ts"])[0])){
         let type = (Object.keys(Object.values(country["ts"])[0])[key])
         country["economy"][type] = Object.values(country["ts"]).map((item) => item[type])

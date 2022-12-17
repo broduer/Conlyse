@@ -3,7 +3,7 @@ import {
     IconButton, List, ListItem,
     Typography
 } from "@mui/material";
-import {Delete, ExpandMore} from "@mui/icons-material";
+import {Delete} from "@mui/icons-material";
 import {getDrawingLevelName} from "../../utils";
 import ColorsSelectorEditor from "./drawing_editor/colors_selector_editor";
 import RadiusChanger from "./drawing_editor/radius_changer";

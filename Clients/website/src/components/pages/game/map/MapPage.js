@@ -14,7 +14,7 @@ import DrawingsEditor from "./Modes/drawingMode/drawings_editor";
 
 export default function MapPage(){
     const {game_id} = useParams()
-    const {data} = useQuery(["game", game_id], () => api.getGame(game_id), {keepPreviousData : true});
+    const {data} = useQuery(["game", game_id], () => api.get_game(game_id), {keepPreviousData : true});
 
     // Global
     const [mode, setMode] = useState(2)
@@ -36,6 +36,8 @@ export default function MapPage(){
         let polygons = Object.values(current_selection).map(cs => new PIXI.Polygon(cs["points"]))
         if(current_selection.length !== 0){
             setDrawings(pushDrawing(drawings, -1, fillColor, outlineColor, strokeWidth, polygons))
+            // after Push set selection to nothing
+            setCurrentSelection([])
         }
     }
 
@@ -54,19 +56,20 @@ export default function MapPage(){
         game = data[game_id]
     }
     let results = useQueries([
-        { queryKey: ['static', "province", game["mid"]], queryFn: () => api.getStaticProvinces(game["mid"]), keepPreviousData : true, enabled: !!defined},
-        { queryKey: ['provinces', game["gid"], "list", game["ct"]], queryFn: () => api.getProvinces(game["gid"], "list", game["ct"]),  enabled: !!defined},
-        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
-        { queryKey: ['teams', game.gid], queryFn: () => api.getTeams(game.gid), enabled: !!defined},
+        { queryKey: ['static', "province", game["mid"]], queryFn: () => api.get_static_provinces(game["mid"]), keepPreviousData : true, enabled: !!defined},
+        { queryKey: ['provinces', game["gid"], "list", game["ct"]], queryFn: () => api.get_provinces(game["gid"], "list", game["ct"]),  enabled: !!defined},
+        { queryKey: ['countrys', game["gid"], "normal", "-1", "0", "0"], queryFn: () => api.get_countrys(game["gid"], "normal", "-1", "0", "0"), enabled: !!defined},
+        { queryKey: ['teams', game.gid], queryFn: () => api.get_teams(game.gid), enabled: !!defined},
     ])
-
+    let provinces = get_combined_province(results[1]["data"], results[0]["data"])
     const isSuccess = !results.some((result) => !result.isSuccess)
+    console.log(provinces)
 
     if (!isSuccess) return <div>Loading</div>
 
     return(
         <CustomDrawer game_id={game_id}>
-            <Map provinces={get_combined_province(results[1]["data"], results[0]["data"])}
+            <Map provinces={provinces}
                  countrys={results[2]["data"]}
                  teams={results[3]["data"]}
 
@@ -92,7 +95,7 @@ export default function MapPage(){
                         finalDrawing={finalDrawing} pushFinalDrawing={pushFinalDrawing}
                         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
             />
-            {mode === 0 ? <DetailedInformation current_province={current_selection} setCurrentProvince={setCurrentSelection}/> : undefined}
+            {mode === 0 ? <DetailedInformation countrys={results[2]["data"]} current_province={current_selection} setCurrentProvince={setCurrentSelection}/> : undefined}
             {mode === 2 ? <DrawingsEditor drawings={drawings} setDrawings={setDrawings} /> : undefined}
         </CustomDrawer>
     )

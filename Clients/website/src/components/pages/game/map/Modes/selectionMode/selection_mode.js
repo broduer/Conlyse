@@ -5,6 +5,7 @@ import {world_width} from "../../map_const";
 export function handleSelection(provinces, countrys, teams, points, current_selection, selectionLevel, add){
     let cs_copy = [... current_selection]
     let [selected_provinces] = getSelected_Provinces(provinces, points);
+    console.log(provinces)
     let level_provinces = getLevel_Provinces(provinces, countrys, selected_provinces, selectionLevel)
 
     if (add){
@@ -29,6 +30,7 @@ function getSelected_Provinces(provinces, points){
     if (points.length === 1){
         // Check which Province contains point
         selected_provinces = Object.values(provinces).filter(pro => new PIXI.Polygon(pro["points"]).contains(getPoint(points[0]).x, getPoint(points[0]).y))
+        console.log(provinces)
     }else {
         // Make Rectangle given from two points with a positive width and height
         let rect = new PIXI.Rectangle(

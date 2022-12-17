@@ -17,11 +17,12 @@ import * as api from "../../../helper/api";
 import {get_teams_by_vp} from "../../../helper/staticinformation";
 import getHighValueCities from "../../../helper/dashboard/high_value_cities_getter";
 import getTrades from "../../../helper/dashboard/trades_getter";
-import CircularProgressWithLabel from "../../CircularProgressWithLabel";
+import LoadingPage from "../LoadingPage";
+import {get_combined_province} from "../../../helper/provinces/provinces_getter";
 
 export default function Dashboard(){
     const {game_id} = useParams()
-    const {data: game, status} = useQuery(["game", game_id], () => api.getGame(game_id));
+    const {data: game, status} = useQuery(["game", game_id], () => api.get_game(game_id));
     if (status === "loading") {return (<div>Loading</div>)}
     else if (status === "error") {return (<div>Error</div>)}
     else {
@@ -34,17 +35,18 @@ export default function Dashboard(){
 }
 
 function DashboardDiv({game}){
+
     let from_timestamp = game["ct"] - 10 * 3600 * 24
     let results = useQueries([
-        { queryKey: ['teams', game.gid], queryFn: () => api.getTeams(game.gid)},
-        { queryKey: ['countrys', game.gid, "normal", "-1", "0", "0"], queryFn: () => api.getCountrys(game.gid, "normal", "-1", "0", "0")},
-        { queryKey: ['countrys', game.gid, "stats", "-1", from_timestamp, game["ct"]], queryFn: () => api.getCountrys(game.gid, "stats", "-1", game["ct"], game["ct"])},
-        { queryKey: ['countrys', game.gid, "rising_power", "0", "0", "0"], queryFn: () => api.getCountrys(game.gid, "rising_power", "-1","0", "0")},
-        { queryKey: ['trades', game.gid], queryFn: () => api.getTrades(game.gid)},
-        { queryKey: ['provinces', game.gid, "normal", "0"], queryFn: () => api.getProvinces(game.gid, "normal", "0")},
-        { queryKey: ['provinces', game.gid, "value", "0"], queryFn: () => api.getProvinces(game.gid, "value", "0")},
-        { queryKey: ['static_provinces', game.mid], queryFn: () => api.getStaticProvinces(game.mid)},
-        { queryKey: ['static_upgrades'], queryFn: api.getStaticUpgrades},
+        { queryKey: ['teams', game.gid], queryFn: () => api.get_teams(game.gid)},
+        { queryKey: ['countrys', game.gid, "normal", "-1", "0", "0"], queryFn: () => api.get_countrys(game.gid, "normal", "-1", "0", "0")},
+        { queryKey: ['countrys', game.gid, "stats", "-1", from_timestamp, game["ct"]], queryFn: () => api.get_countrys(game.gid, "stats", "-1", game["ct"], game["ct"])},
+        { queryKey: ['countrys', game.gid, "rising_power", "0", "0", "0"], queryFn: () => api.get_countrys(game.gid, "rising_power", "-1","0", "0")},
+        { queryKey: ['trades', game.gid], queryFn: () => api.get_trades(game.gid)},
+        { queryKey: ['provinces', game.gid, "normal", "0"], queryFn: () => api.get_provinces(game.gid, "normal", "0")},
+        { queryKey: ['provinces', game.gid, "value", "0"], queryFn: () => api.get_provinces(game.gid, "value", "0")},
+        { queryKey: ['static_provinces', game.mid], queryFn: () => api.get_static_provinces(game.mid)},
+        { queryKey: ['static_upgrades'], queryFn: api.get_static_upgrades},
     ])
     // Does the queries for the podium of rising power countries
     let countrys_rising_power_podium = [{"cid": 0, "pos": 1}, {"cid": 1, "pos":2}, {"cid": 2, "pos": 3}]
@@ -56,7 +58,7 @@ function DashboardDiv({game}){
     for (let i = 0; i < 3; i++){
         queries.push(
             { queryKey: ['countrys', game.gid, "stats", countrys_rising_power_podium[i]["cid"], "-1"],
-                queryFn: () => api.getCountrys(game.gid, "stats", countrys_rising_power_podium[i]["cid"], from_timestamp, game["ct"]),
+                queryFn: () => api.get_countrys(game.gid, "stats", countrys_rising_power_podium[i]["cid"], from_timestamp, game["ct"]),
                 enabled: countrys_rising_power_podium.length !== 3
             },
          )
@@ -72,7 +74,7 @@ function DashboardDiv({game}){
 
 
     if (isLoading){
-        return (<CircularProgressWithLabel value={(loaded / 12) * 100}/>)
+        return <LoadingPage game_id={game["gid"]} percentage={(loaded / 12) * 100}/>
     }else if (isFetching){
         return (<div>Refreshing</div>)
     }
@@ -99,9 +101,8 @@ function DashboardDiv({game}){
                 combined_countrys[country]["ts"][Object.keys(combined_countrys[country]["ts"])[Object.keys(combined_countrys[country]["ts"]).length-1]]["vp"]
         }
     }
-    const combined_provinces = get_combined([Object.values(provinces), Object.values(static_provinces)], "plid")
+    const combined_provinces = get_combined_province(provinces, static_provinces)
     const combined_provinces_value = get_combined([provinces_value, Object.values(static_provinces)], "plid")
-
     return(
         <CustomDrawer game_id={game["gid"]}>
             <div style={{margin: 20}}>
@@ -146,7 +147,7 @@ function DashboardDiv({game}){
                                 <GameInformation game={game}/>
                             </Grid>
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
-                                <CountryRanking countrys={combined_countrys}/>
+                                <CountryRanking countrys={combined_countrys} game={game}/>
                             </Grid>
                             <Grid item xs={6} sm={2} lg={6} width={"100%"}>
                                 <TeamRanking teams={get_teams_by_vp(teams, combined_countrys)}/>
@@ -159,7 +160,7 @@ function DashboardDiv({game}){
                                 <DashboardMap provinces={combined_provinces}/>
                             </Grid>
                             <Grid item width={"100%"}>
-                                <RisingPowersCarousel rising_powers_countrys={getRisingPowers(combined_countrys, game)}/>
+                                <RisingPowersCarousel game={game} rising_powers_countrys={getRisingPowers(combined_countrys, game)}/>
                             </Grid>
                         </Grid>
                     </Grid>

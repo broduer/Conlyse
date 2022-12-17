@@ -17,7 +17,7 @@ export default function Trades({trades}){
         { field: 'rsrt', headerName: 'Type', flex: 0.2,
             renderCell: (cell) => {
             return (
-                <img src={require(`../../../../images/resources/${cell.row["rsrt"]}.png`)} alt={getResourceName(cell.row["rsrt"])} height={"100%"}/>
+                <img src={`/resources/${cell.row["rsrt"]}.png`} alt={getResourceName(cell.row["rsrt"])} height={"100%"}/>
             )
             }},
         { field: 'am', headerName: 'Amount', flex: 0.4},

@@ -46,7 +46,7 @@ export function getDifference(timestamp_start, timestamp_end, format){
 
 export function getClosestTime(timestamp_array, timestamp){
     return timestamp_array.reduce((a, b) => {
-        return Math.abs(b - timestamp) < Math.abs(a - timestamp) ? b : a;
+        return Math.abs(parseInt(b) - timestamp) < Math.abs(parseInt(a) - timestamp) ? b : a;
     })
 }
 

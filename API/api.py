@@ -16,10 +16,9 @@ from helpers.province_buidings import get_province_buildings, province_sort_by_b
 from dotenv import load_dotenv
 from os import getenv
 
-from helpers.production import get_production
 from models import Province, StaticProvince, Game, \
-    GamesAccount, ArmyLossesGain, Country, StaticCountry, \
-    Team, Trade, Scenario, Building, GameHasPlayer, Player
+    Country, StaticCountry, \
+    Team, Trade, Scenario, Building, GameHasPlayer, Player, Research
 
 # create the object of Flask
 
@@ -48,6 +47,9 @@ with open("static_informations/upgrades.json") as file:
 
 with open("static_informations/researches.json") as file:
     data_researches = json.loads(file.read())
+
+with open("static_informations/warfare_types.json") as file:
+    data_warfare_types = json.loads(file.read())
 
 '''
 @app.route('/load')
@@ -201,12 +203,12 @@ def provinces(game_id, mode, timestamp):
                     "psid": province.province_state_id,
                     "vp": province.victory_points,
                     "oid": province.owner_id,
-                    "2": province.r2,
-                    "3": province.r3,
-                    "5": province.r5,
-                    "6": province.r6,
-                    "7": province.r7,
-                    "21": province.tax_production,
+                    "1": province.r2,
+                    "2": province.r3,
+                    "4": province.r5,
+                    "5": province.r6,
+                    "6": province.r7,
+                    "20": province.tax_production,
                     "upg": {},
                 }
             province_buildings[province.static_province_id]["upg"][province.upgrade_id] = {
@@ -251,8 +253,8 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
     elif from_timestamp == 0:
         date_timestamp = game.current_time
     elif (from_timestamp > 0) and (until_timestamp > 0):
-        from_timestamp = datetime.fromtimestamp(from_timestamp) 
-        until_timestamp = datetime.fromtimestamp(until_timestamp) 
+        from_timestamp = datetime.fromtimestamp(from_timestamp)
+        until_timestamp = datetime.fromtimestamp(until_timestamp)
     else:
         date_timestamp = None
 
@@ -266,11 +268,10 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
                 .filter(Province.game_id == game_id)
         else:
             timestamps = select([distinct(func.date_add(func.date(Province.valid_from), text(
-                'interval round(hour(province.valid_from)/ 24)*24 HOUR'))).label("valid_from"),
+                'interval ceil(hour(province.valid_from)/ 24)*24 HOUR'))).label("valid_from"),
                                  Province.owner_id.label("owner_id")]) \
                 .filter(Province.game_id == game_id) \
-                .filter(Province.valid_from>from_timestamp).filter(Province.valid_from<until_timestamp)
-            print("TEST", timestamps)
+                .filter(Province.valid_from > from_timestamp).filter(Province.valid_from < until_timestamp)
 
         if country_id != -1:
             timestamps = timestamps.filter(Province.owner_id == country_id)
@@ -367,6 +368,10 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
             .filter(Province.game_id == game.game_id) \
             .order_by(desc("day_5")) \
             .group_by(Province.owner_id)
+    elif mode == "research":
+        query = db.session.query(Research).filter(Research.game_id == game_id)
+        if country_id != -1:
+            query = query.filter(Research.owner_id == country_id)
     else:
         if not date_timestamp:
             return
@@ -395,7 +400,7 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
             .filter(GameHasPlayer.game_id == game_id)
 
         if country_id != -1:
-            query.filter(Country.country_id == country_id)
+            query = query.filter(Country.country_id == country_id)
     # Execute different Queries
 
     if mode == "stats":
@@ -419,12 +424,12 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
                 "t_ac": int(country.total_annexed_cities),
                 "t_mlc": int(country.total_mainland_cities),
                 "t_pc": int(country.total_provinces_cities),
-                "2": int(country.r2),
-                "3": int(country.r3),
-                "5": int(country.r5),
-                "6": int(country.r6),
-                "7": int(country.r7),
-                "21": int(country.tax_production),
+                "1": int(country.r2),
+                "2": int(country.r3),
+                "4": int(country.r5),
+                "5": int(country.r6),
+                "6": int(country.r7),
+                "20": int(country.tax_production),
                 "trp": int(country.total_resource_production),
             }
         return jsonify(output)
@@ -440,22 +445,22 @@ def countrys(game_id, mode, country_id, from_timestamp, until_timestamp):
             }
         return jsonify(output)
 
-    elif mode == "production":
+    elif mode == "research":
         output = {}
         for country in query.all():
-            if country.country_id not in output:
-                output[country.country_id] = {
-                    "cid": country.country_id,
-                    "wp": {}
+            if country.owner_id not in output:
+                output[country.owner_id] = {
+                    "cid": country.owner_id,
+                    "rs": {}
                 }
-            output[country.country_id]["wp"][country.wtyp] = {
-                "wtyp": int(country.wtyp),
-                "ntw": int(country.noticed_weapons),
-                "lsw": int(country.lost_weapons),
+            output[country.owner_id]["rs"][country.universal_research_id] = {
+                "usrid": country.universal_research_id,
+                "rscid": country.column_id,
+                "rsmin_id": country.research_min_id,
+                "rsmax_id": country.research_max_id,
+                "vf": round(country.valid_from.timestamp()),
+                "vu": round(country.valid_until.timestamp()),
             }
-        for country in output:
-            country = output[country]
-            country.update(get_production(country))
         return jsonify(output)
 
     else:
@@ -486,7 +491,7 @@ def trade(game_id):
             "lm": trade.limit,
             "odid": trade.order_id,
             "oid": trade.owner_id,
-            "rsrt": trade.resource_type + 1,
+            "rsrt": trade.resource_type,
         }
     return jsonify(output)
 
@@ -522,8 +527,13 @@ def static_research():
     return jsonify(data_researches)
 
 
+@app.route('/api/v2/static/warfare_types')
+def static_warfare_types():
+    return jsonify(data_warfare_types)
+
+
 @app.route('/api/v2/static/upgrade')
-def staic_upgrade():
+def static_upgrade():
     return jsonify(data_upgrades)
 
 
@@ -573,7 +583,7 @@ def add_timestamp_filter_province(date_timestamp, query):
     if date_timestamp:
         return query.filter(or_(Province.valid_from == date_timestamp,
                                 and_(Province.valid_from < date_timestamp,
-                                    date_timestamp < Province.valid_until),
+                                     date_timestamp < Province.valid_until),
                                 and_(Province.valid_until == None,
                                      Province.valid_from < date_timestamp)))
     else:

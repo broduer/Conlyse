@@ -32,8 +32,8 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
             div_ref.current.appendChild(map_app.view)
             map_app.start()
             let left = getGraphics(provinces)
-            let middle = getGraphics(provinces)
-            let right = getGraphics(provinces)
+            let middle = new PIXI.Graphics(left.geometry)
+            let right = new PIXI.Graphics(left.geometry)
             middle.x = world_width
             right.x = world_width * 2
             const selectRect = new Graphics()
@@ -304,6 +304,7 @@ export default function Map({provinces, countrys, teams, mode, selectionLevel, d
         let drawings_graphic = new PIXI.Graphics()
         for (let drawing in drawings){
             drawing = drawings[drawing]
+            console.log(drawing)
             drawings_graphic.lineStyle({width: drawing["strokeWidth"], color: drawing["outlineColor"][0], alpha: drawing["outlineColor"][1]})
             switch (drawing["drawingLevel"]){
                 case -1:

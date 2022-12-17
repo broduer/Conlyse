@@ -1,7 +1,9 @@
 import React from 'react';
 import {Box, List, ListItem, Typography} from "@mui/material";
+import {Link, NavLink} from "react-router-dom";
+import CountryLink from "../../../CountryLink";
 
-export default function CountryRanking({countrys}){
+export default function CountryRanking({countrys, game}){
     let sorted_countrys = Object.values(countrys)
     sorted_countrys = sorted_countrys.sort((a, b) =>{
         a["vp"] = "vp" in a ? a["vp"] : 0
@@ -26,7 +28,9 @@ export default function CountryRanking({countrys}){
                 </Typography>
                 {sorted_countrys.slice(0,10).map((country => (
                     <ListItem key={country["cid"]} sx={{m:0}}>
-                        {sorted_countrys.indexOf(country)+1}. {country["cn"]}: {country["vp"]}
+                        {sorted_countrys.indexOf(country)+1}.
+                        <CountryLink game_id={game["gid"]} country_id={country["cid"]}>
+                            {country["cn"]}</CountryLink>: {country["vp"]}
                     </ListItem>
                 )))}
             </List>
