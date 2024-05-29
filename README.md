@@ -2,7 +2,6 @@
 ![Dashboard](https://user-images.githubusercontent.com/67592327/158029755-7a860bdb-1d46-4385-a958-a0d8ebdaa061.png)
 
 Conlyse is a project which is all about analysing the browser game "[Conflict of Nations](https://conflictnations.com "Conflict of Nations")".
-The project is currently in a state of [PoC](https://en.wikipedia.org/wiki/Proof_of_concept "PoC") because it contains many bugs and has a great potential to improve. I am making that project public because it is growing over my head and I think it is a good idea to show how much potential "Conflict of Nations" has.
 
 ## Features
 - Every day new reports on economy
