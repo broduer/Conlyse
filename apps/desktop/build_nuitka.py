@@ -40,10 +40,14 @@ def main() -> None:
         f"--enable-plugin={ui_plugin}",
         "--follow-imports",
         f"--output-dir={output_dir}",
-        "--msvc=latest",
         "--assume-yes-for-downloads",
         str(entrypoint),
     ]
+
+    if sys.platform == "win32":
+        command.insert(-1, "--msvc=latest")
+    elif sys.platform == "darwin":
+        command.insert(-1, "--clang")
 
     if assets_dir.exists():
         command.append(f"--include-data-dir={assets_dir}=assets")
