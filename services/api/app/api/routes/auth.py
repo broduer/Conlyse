@@ -6,7 +6,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
-    DeviceResponse,
     EmailTwoFAVerifyRequest,
     EmailVerifyRequest,
     LoginRequest,
@@ -72,9 +71,7 @@ async def two_fa_verify(
 ) -> TokenResponse:
     """Complete 2FA login by providing the code after password authentication."""
     try:
-        tokens = await auth_service.complete_2fa_login(
-            db, data.two_fa_pending_token, data.code, data.device_name, data.device_info
-        )
+        tokens = await auth_service.complete_2fa_login(db, data.two_fa_pending_token, data.code)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
     return tokens
@@ -164,31 +161,3 @@ async def email_2fa_verify(
         await auth_service.email_2fa_verify(db, user, data.code)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-
-# ── Device management ─────────────────────────────────────────────────────────
-
-
-@router.get("/devices", response_model=list[DeviceResponse])
-async def list_devices(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> list[DeviceResponse]:
-    """List all active devices for the current user."""
-    devices = await auth_service.list_devices(db, user)
-    return [DeviceResponse.model_validate(d) for d in devices]
-
-
-@router.delete(
-    "/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
-)
-async def revoke_device(
-    device_id: int,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> None:
-    """Revoke (force-logout) a specific device session."""
-    try:
-        await auth_service.revoke_device(db, user, device_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

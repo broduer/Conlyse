@@ -64,15 +64,11 @@ class RefreshRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
-    device_name: str = ""
-    device_info: str | None = None
 
 
 class TwoFALoginRequest(BaseModel):
     two_fa_pending_token: str
     code: str
-    device_name: str = ""
-    device_info: str | None = None
 
 
 class TOTPEnrollResponse(BaseModel):
@@ -91,12 +87,3 @@ class EmailVerifyRequest(BaseModel):
     email: EmailStr
     code: str
 
-
-class DeviceResponse(BaseModel):
-    model_config = {"from_attributes": True}
-
-    id: int
-    device_name: str
-    device_info: str | None
-    last_active: datetime
-    created_at: datetime

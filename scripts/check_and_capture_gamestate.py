@@ -110,11 +110,8 @@ def main() -> int:
     github_token = os.getenv("CONFLICT_DATA_TOKEN")
 
     username, password, _email, proxy_url = _load_credentials()
-    proxy = {
-        "http": proxy_url,
-        "https": proxy_url} if proxy_url else None
 
-    hub = HubInterface(proxy=proxy)
+    hub = HubInterface()
     hub.login(username, password)
 
     game_id = _pick_game_id(hub)

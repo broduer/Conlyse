@@ -349,9 +349,7 @@ class SettingsPage(Page):
             self.account_status_label.setText("Username and password are required.")
             return
 
-        # Device name can be a simple identifier for now.
-        device_name = "Conlyse Desktop"
-        result: LoginResult = self.app.auth_manager.login(username, password, device_name=device_name)
+        result: LoginResult = self.app.auth_manager.login(username, password)
 
         if result.error_message:
             self.account_status_label.setText(result.error_message)
@@ -372,8 +370,7 @@ class SettingsPage(Page):
             self.account_status_label.setText("Please enter a 2FA code.")
             return
 
-        device_name = "Conlyse Desktop"
-        result: TwoFAVerifyResult = self.app.auth_manager.complete_two_fa(code, device_name=device_name)
+        result: TwoFAVerifyResult = self.app.auth_manager.complete_two_fa(code)
 
         if result.error_message:
             self.account_status_label.setText(result.error_message)

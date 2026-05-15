@@ -126,24 +126,6 @@ async def reset_password(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
-@router.delete(
-    "/users/{user_id}/devices/{device_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-)
-async def revoke_device(
-    user_id: int,
-    device_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: object = Depends(_require_admin),
-) -> None:
-    """Force-logout a specific device for any user. Admin only."""
-    try:
-        await admin_service.revoke_user_device(db, user_id, device_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-
-
 @router.post("/binaries/upload", response_model=BinaryResponse, status_code=status.HTTP_201_CREATED)
 async def upload_binary(
     platform: str = Form(...),
