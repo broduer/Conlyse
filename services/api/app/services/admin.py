@@ -4,7 +4,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.device import Device
 from app.models.user import User, UserRole
 
 
@@ -53,15 +52,4 @@ async def ban_user(db: AsyncSession, user_id: int) -> User:
 async def reset_user_password(db: AsyncSession, user_id: int, new_password: str) -> None:
     user = await get_user(db, user_id)
     user.hashed_password = hash_password(new_password)
-    await db.commit()
-
-
-async def revoke_user_device(db: AsyncSession, user_id: int, device_id: int) -> None:
-    result = await db.execute(
-        select(Device).where(Device.id == device_id, Device.user_id == user_id)
-    )
-    device: Device | None = result.scalars().first()
-    if not device:
-        raise LookupError(f"Device {device_id} not found for user {user_id}")
-    await db.delete(device)
     await db.commit()

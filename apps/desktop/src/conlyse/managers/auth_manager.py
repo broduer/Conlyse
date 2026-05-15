@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from conlyse.api import ApiClient, ApiError, AuthError, NetworkError, PermissionError
 from conlyse.logger import get_logger
@@ -139,13 +139,11 @@ class AuthManager:
 
     # -------------------------------------------------------------- Public API
 
-    def login(self, username: str, password: str, device_name: str = "", device_info: Optional[str] = None) -> LoginResult:
+    def login(self, username: str, password: str) -> LoginResult:
         """Perform password login. Returns either success or a 2FA pending token."""
         payload: Dict[str, Any] = {
             "username": username,
             "password": password,
-            "device_name": device_name,
-            "device_info": device_info,
         }
         try:
             data: Dict[str, Any] = self._api.post("/auth/login", json=payload)
@@ -179,7 +177,7 @@ class AuthManager:
         self.refresh_subscription_status()
         return LoginResult(success=True)
 
-    def complete_two_fa(self, code: str, device_name: str = "", device_info: Optional[str] = None) -> TwoFAVerifyResult:
+    def complete_two_fa(self, code: str) -> TwoFAVerifyResult:
         """Complete a 2FA login using the pending token and verification code."""
         if not self._pending_two_fa_token:
             return TwoFAVerifyResult(success=False, error_message="No 2FA login is pending.")
@@ -187,8 +185,6 @@ class AuthManager:
         payload: Dict[str, Any] = {
             "two_fa_pending_token": self._pending_two_fa_token,
             "code": code,
-            "device_name": device_name,
-            "device_info": device_info,
         }
         try:
             data: Dict[str, Any] = self._api.post("/auth/2fa/verify", json=payload)
@@ -244,27 +240,8 @@ class AuthManager:
                 # Ignore body; API responds with 204.
                 self._api.post("/auth/logout", json=payload, expects_body=False, requires_auth=False)
             except (NetworkError, ApiError) as exc:
-                # On logout failures, we still clear local state – server-side session
+                # On logout failures, we still clear local state - server-side session
                 # might be stale or already revoked.
                 logger.warning(f"Logout request failed: {exc}")
         self._clear_state()
-
-    # ------------------------------------------------------ Device management
-
-    def list_devices(self) -> List[Dict[str, Any]]:
-        """Return a list of active devices for the current user."""
-        try:
-            return self._api.get("/auth/devices", requires_auth=True)
-        except (NetworkError, ApiError, AuthError, PermissionError) as exc:
-            logger.error(f"Failed to list devices: {exc}")
-            raise
-
-    def revoke_device(self, device_id: int) -> None:
-        """Revoke a specific device session."""
-        path = f"/auth/devices/{device_id}"
-        try:
-            self._api.delete(path, requires_auth=True, expects_body=False)
-        except (NetworkError, ApiError, AuthError, PermissionError) as exc:
-            logger.error(f"Failed to revoke device {device_id}: {exc}")
-            raise
 

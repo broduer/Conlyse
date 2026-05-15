@@ -1,6 +1,6 @@
 # Conlyse API
 
-FastAPI-based service providing authentication, 2FA, device management, RBAC, and download endpoints for the Conlyse ecosystem.
+FastAPI-based service providing authentication, 2FA, RBAC, and download endpoints for the Conlyse ecosystem.
 
 ## Overview
 
@@ -35,13 +35,6 @@ that are already part of the ConflictInterface Docker Compose stack.
 | `POST` | `/auth/2fa/email/send` | Send verification code to user's email |
 | `POST` | `/auth/2fa/email/verify` | Verify email 2FA code |
 
-#### Device Management
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/auth/devices` | List all active devices for the current user |
-| `DELETE` | `/auth/devices/{device_id}` | Revoke a specific device session |
-
 ### Downloads (`/api/v1/downloads`)
 
 | Method | Path | Roles | Description |
@@ -60,7 +53,6 @@ that are already part of the ConflictInterface Docker Compose stack.
 | `PATCH` | `/admin/users/{user_id}/role` | Assign or change a user's role |
 | `POST` | `/admin/users/{user_id}/ban` | Disable (ban) a user account |
 | `POST` | `/admin/users/{user_id}/reset-password` | Reset a user's password |
-| `DELETE` | `/admin/users/{user_id}/devices/{device_id}` | Force-logout a user's device |
 
 ### Health
 
@@ -92,7 +84,6 @@ OpenAPI interactive docs are available at **`/docs`** (Swagger UI) and **`/redoc
 | `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
-| `MAX_DEVICES_PER_USER` | `2` | Maximum concurrent devices per account |
 | `SMTP_HOST` | `localhost` | SMTP server host |
 | `SMTP_PORT` | `587` | SMTP server port |
 | `SMTP_USER` | `` | SMTP username |
@@ -147,16 +138,5 @@ Roles can be changed via `PATCH /admin/users/{user_id}/role` (admin only).
 
 ### Email 2FA
 
-1. `POST /auth/2fa/email/send` — receive a 6-digit code by email (valid for 5 minutes)
-2. `POST /auth/2fa/email/verify` with `{"code": "123456"}` — activate email 2FA
-
-## Device / Session Limits
-
-Each login creates a device record. The maximum number of concurrent devices is controlled by `MAX_DEVICES_PER_USER` (default: 2). When the limit is reached, the oldest device is automatically removed.
-
-Users can view and revoke their own devices via:
-- `GET /auth/devices`
-- `DELETE /auth/devices/{device_id}`
-
-Admins can force-logout any user's device via:
-- `DELETE /admin/users/{user_id}/devices/{device_id}`
+1. `POST /auth/2fa/email/send` - receive a 6-digit code by email (valid for 5 minutes)
+2. `POST /auth/2fa/email/verify` with `{"code": "123456"}` - activate email 2FA

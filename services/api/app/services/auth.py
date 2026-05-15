@@ -15,12 +15,9 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    generate_device_token,
-    hash_device_token,
     hash_password,
     verify_password,
 )
-from app.models.device import Device
 from app.models.session import Session
 from app.models.user import User, UserRole
 from app.schemas.auth import (
@@ -95,15 +92,13 @@ async def authenticate_user(
         pending = create_2fa_pending_token(str(user.id))
         return TwoFAPendingResponse(two_fa_pending_token=pending)
 
-    return await _issue_tokens_and_device(db, user, data.device_name, data.device_info)
+    return await _issue_tokens(db, user)
 
 
 async def complete_2fa_login(
     db: AsyncSession,
     pending_token: str,
     code: str,
-    device_name: str = "",
-    device_info: str | None = None,
 ) -> TokenResponse:
     """Verify 2FA code from a pending token and issue the final JWT pair."""
     try:
@@ -141,39 +136,15 @@ async def complete_2fa_login(
         raise ValueError("No 2FA method configured")
 
     await db.commit()
-    return await _issue_tokens_and_device(db, user, device_name, device_info)
+    return await _issue_tokens(db, user)
 
 
-async def _issue_tokens_and_device(
+async def _issue_tokens(
     db: AsyncSession,
     user: User,
-    device_name: str = "",
-    device_info: str | None = None,
 ) -> TokenResponse:
-    """Create/replace a device record and issue JWT pair."""
-    # Enforce max concurrent devices – remove oldest if limit exceeded
-    existing_q = await db.execute(
-        select(Device).where(Device.user_id == user.id).order_by(Device.created_at.asc())
-    )
-    existing_devices = list(existing_q.scalars().all())
-    while len(existing_devices) >= settings.MAX_DEVICES_PER_USER:
-        oldest = existing_devices.pop(0)
-        await db.delete(oldest)
-
-    raw_token = generate_device_token()
-    token_hash = hash_device_token(raw_token)
-
-    device = Device(
-        user_id=user.id,
-        device_name=device_name or "unknown",
-        device_info=device_info,
-        token_hash=token_hash,
-        last_active=datetime.now(UTC),
-    )
-    db.add(device)
-    await db.flush()  # get device.id
-
-    access = create_access_token(str(user.id), device_id=device.id)
+    """Issue an access/refresh JWT pair and persist the refresh session."""
+    access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
 
     session = Session(
@@ -316,27 +287,6 @@ async def email_2fa_verify(db: AsyncSession, user: User, code: str) -> None:
         raise ValueError("Invalid or expired email 2FA code")
     user.email_2fa_code = None
     user.email_2fa_code_expires_at = None
-    await db.commit()
-
-
-# ── Device management ─────────────────────────────────────────────────────────
-
-
-async def list_devices(db: AsyncSession, user: User) -> list[Device]:
-    result = await db.execute(
-        select(Device).where(Device.user_id == user.id).order_by(Device.created_at.desc())
-    )
-    return list(result.scalars().all())
-
-
-async def revoke_device(db: AsyncSession, user: User, device_id: int) -> None:
-    result = await db.execute(
-        select(Device).where(Device.id == device_id, Device.user_id == user.id)
-    )
-    device: Device | None = result.scalars().first()
-    if not device:
-        raise LookupError("Device not found")
-    await db.delete(device)
     await db.commit()
 
 

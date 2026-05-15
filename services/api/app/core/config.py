@@ -43,9 +43,6 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Device / session limits
-    MAX_DEVICES_PER_USER: int = 2
-
     # SMTP (email 2FA)
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 587
