@@ -496,7 +496,7 @@ class Army(GameObject):
                 tuples.append((type_ids[i], 0))
 
         result = self.split_army(
-            self.game.get_provinces_by_name(target_province_name).center_coordinate,
+            self.game.get_province_by_name(target_province_name).center_coordinate,
             tuples
         )
         return result
