@@ -10,14 +10,14 @@ It consists of an end-to-end replay pipeline (Observer -> Converter -> storage -
 
 If you're deploying the full stack, follow the **Deployment** guide first:
 
-- [User Guide: Deployment](./user-guide/deployment)
+- [User Guide: Deployment](./deployment)
 
 If you want the operational details for the services that make up the pipeline, see:
 
-- [User Guide: Server Observer](./user-guide/services/server-observer)
-- [User Guide: Server Converter](./user-guide/services/server-converter)
+- [User Guide: Server Observer](./server-observer)
+- [User Guide: Server Converter](./server-converter)
 
 If you're working on the replay and parsing internals, start with:
 
-- [Developer Guide: Replay System](./developer-guide/libraries/conflict-interface/replay-system)
-- [Developer Guide: Data Types](./developer-guide/libraries/conflict-interface/data-types)
+- [Developer Guide: Replay System](./conflict-interface/replay-system)
+- [Developer Guide: Data Types](./conflict-interface/data-types)
