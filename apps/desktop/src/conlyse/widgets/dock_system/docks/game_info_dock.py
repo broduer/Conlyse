@@ -71,9 +71,9 @@ class GameInfoDock(Dock):
         self._value_labels["scenario_id"].setText(str(state.scenario_id))
         self._value_labels["day_of_game"].setText(str(self.ritf.game_day()))
         self._value_labels["speed_modifier"].setText(f"{self.ritf.speed_modifier:.1f}x")
-        self._value_labels["players"].setText(
-            f"{state.number_of_logins}/{state.number_of_players}"
-        )
+        human_players = len(self.ritf.get_human_players())
+        total_players = state.number_of_players or 0
+        self._value_labels["players"].setText(f"{human_players}/{total_players}")
         self._value_labels["status"].setText("Ended" if state.game_ended else "Running")
 
     def process_events(self, events: dict[ReplayHookTag, list[ReplayHookEvent]]) -> None:

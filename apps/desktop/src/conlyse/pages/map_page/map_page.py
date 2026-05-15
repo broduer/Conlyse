@@ -21,7 +21,6 @@ from conlyse.pages.map_page.map import Map
 from conlyse.pages.replay_page import ReplayPage
 from conlyse.utils.enums import DockType
 from conlyse.widgets.dock_system.docks.city_list_dock import CityListDock
-from conlyse.widgets.dock_system.docks.events_dock import EventsDock
 from conlyse.widgets.dock_system.docks.game_info_dock import GameInfoDock
 from conlyse.widgets.dock_system.docks.province_info_dock import ProvinceInfoDock
 
@@ -37,7 +36,7 @@ class MapPage(ReplayPage):
     """
     use_dock_system = True
     available_docks = {DockType.GAME_INFO, DockType.PROVINCE_INFO,
-                       DockType.EVENTS, DockType.CITY_LIST,
+                       DockType.CITY_LIST,
                        DockType.TIMELINE}
 
     def __init__(self, app: App, parent=None):
@@ -93,8 +92,6 @@ class MapPage(ReplayPage):
                 return GameInfoDock(self.ritf)
             case DockType.PROVINCE_INFO:
                 return ProvinceInfoDock(self.ritf)
-            case DockType.EVENTS:
-                return EventsDock()
             case DockType.CITY_LIST:
                 return CityListDock(self.ritf)
             case DockType.TIMELINE:

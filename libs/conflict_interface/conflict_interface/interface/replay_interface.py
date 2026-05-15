@@ -34,7 +34,8 @@ logger = get_logger()
 LONG_PATCH_THRESHOLD = 10
 
 class ReplayInterface(GameInterface):
-    def __init__(self, file_path: Path | str, static_map_data: dict[str, Path] | None = None, player_id: int | None = None, game_id: int | None = None):
+    def __init__(self, file_path: Path | str, static_map_data: dict[str, Path] | None = None,
+                 player_id: int | None = None):
         """
         Initialize a replay-only game interface backed by a recorded replay file.
 
@@ -47,14 +48,12 @@ class ReplayInterface(GameInterface):
                 static map data file. The files are eagerly read and cached.
             player_id: Optional player identifier to associate with this replay. If not
                 provided, it may be inferred from the replay metadata when opening.
-            game_id: Optional game identifier for the replay; used for metadata and
-                hook system initialization.
         """
         super().__init__()
         self.current_time: datetime | None = None
         self.current_timestamp_index: int = 0
         self.player_id: int | None = player_id
-        self.game_id: int | None = game_id
+        self.game_id: int | None = None
 
         self._file_path: Path = Path(file_path)
         self._replay: ReplayTimeline | None = None
@@ -129,7 +128,7 @@ class ReplayInterface(GameInterface):
         self._current_segment = first_segment
         self.game_state = first_segment.game_state
 
-        # Step 5: final metadata
+        self._update_game_id()
         self._update_player_id()
         self.current_time = first_segment.current_time
 
@@ -149,6 +148,11 @@ class ReplayInterface(GameInterface):
 
         self._replay.close()
         self._is_open = False
+
+    def _update_game_id(self):
+        meta = self._replay.get_timeline_metadata()
+        if meta and meta.game_id:
+            self.game_id = meta.game_id
 
     def _update_player_id(self):
         valid_states = {"ACTIVE", "UNKNOWN", "INACTIVE", "ABANDONED"}

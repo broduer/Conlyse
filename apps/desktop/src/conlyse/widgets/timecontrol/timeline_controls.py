@@ -29,7 +29,9 @@ class TimelineControls(Dock):
         self.start_time = replay_interface.start_time
         self.last_time = replay_interface.last_time
         self.total_seconds = max((self.last_time - self.start_time).total_seconds(), MIN_TIMELINE_DURATION_SECONDS)
-        self.total_days = int(self.total_seconds // (24 * 60 * 60))
+        start_of_game = replay_interface.start_of_game
+        self._game_day_offset_seconds = max(0.0, (self.start_time - start_of_game).total_seconds())
+        self.total_days = int((self._game_day_offset_seconds + self.total_seconds) // (24 * 60 * 60)) + 1
         self.current_time = (replay_interface.client_time() - self.start_time).total_seconds()
         self.current_time = max(0.0, min(self.total_seconds, self.current_time))
         self.is_playing = False
@@ -169,7 +171,8 @@ class TimelineControls(Dock):
         overview_layout = QHBoxLayout(overview_frame)
         overview_layout.setContentsMargins(12, 4, 12, 12)
 
-        start_label = QLabel("Day 0", parent=self)
+        start_day = int(self._game_day_offset_seconds // (24 * 60 * 60)) + 1
+        start_label = QLabel(f"Day {start_day}", parent=self)
 
         self.overview_bar = OverviewBar(parent=self)
         self.overview_bar.position_clicked.connect(self.overview_clicked)
@@ -206,10 +209,11 @@ class TimelineControls(Dock):
         pass
 
     def format_time(self, seconds):
-        days = int(seconds // (24 * 60 * 60))
-        hours = int((seconds % (24 * 60 * 60)) // 3600)
-        mins = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
+        absolute_seconds = self._game_day_offset_seconds + seconds
+        days = int(absolute_seconds // (24 * 60 * 60)) + 1
+        hours = int((absolute_seconds % (24 * 60 * 60)) // 3600)
+        mins = int((absolute_seconds % 3600) // 60)
+        secs = int(absolute_seconds % 60)
         return f"Day {days} {hours:02d}:{mins:02d}:{secs:02d}"
 
     def format_date(self, seconds):

@@ -24,7 +24,6 @@ class DockType(Enum):
     PROVINCE_INFO = auto()
 
     # Right sidebar panels
-    EVENTS = auto()
     CITY_LIST = auto()
 
     # Bottom panel options
