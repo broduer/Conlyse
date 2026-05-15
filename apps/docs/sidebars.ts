@@ -12,6 +12,9 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'ConflictInterface',
       items: [
+        'conflict-interface/getting-started',
+        'conflict-interface/live-games',
+        'conflict-interface/replay-analysis',
         {
           type: 'category',
           label: 'Developer Guide',

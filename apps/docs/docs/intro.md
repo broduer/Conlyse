@@ -17,7 +17,13 @@ If you want the operational details for the services that make up the pipeline, 
 - [User Guide: Server Observer](./server-observer)
 - [User Guide: Server Converter](./server-converter)
 
-If you're working on the replay and parsing internals, start with:
+If you want to use the `ConflictInterface` library to interact with live games or analyze replays, start here:
+
+- [ConflictInterface: Getting Started](./conflict-interface/getting-started)
+- [ConflictInterface: Live Games](./conflict-interface/live-games)
+- [ConflictInterface: Replay Analysis](./conflict-interface/replay-analysis)
+
+If you're working on the replay and parsing internals, see:
 
 - [Developer Guide: Replay System](./conflict-interface/replay-system)
 - [Developer Guide: Data Types](./conflict-interface/data-types)
