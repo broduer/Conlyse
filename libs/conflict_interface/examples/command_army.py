@@ -15,7 +15,7 @@ if __name__ == "__main__":
     interface.login(username, password)
     game_id = 9758559
     game = interface.join_game(game_id)
-    city = game.get_provinces_by_name("Johannesburg")
+    city = game.get_province_by_name("Johannesburg")
     army = game.get_my_army_by_number(14)
     unit_type = game.get_unit_type_by_name_and_tier("Motorized Infantry", 1)
 

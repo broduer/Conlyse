@@ -154,7 +154,7 @@ class GameInterface:
                 res[province.id] = province
         return res
 
-    def get_provinces_by_name(self, name) -> Optional[ProvinceType]:
+    def get_province_by_name(self, name) -> Optional[ProvinceType]:
         province = self.get_provinces(name=name)
         if province:
             return next(iter(province.values()))

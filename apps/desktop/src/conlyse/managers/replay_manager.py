@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC
@@ -11,11 +10,10 @@ from typing import TYPE_CHECKING
 from conflict_interface.api.game_api import GameApi
 from conflict_interface.interface.replay_interface import ReplayInterface
 from conflict_interface.replay.replay_timeline import ReplayTimeline
-
 from conlyse.logger import get_logger
+from conlyse.managers.config_manager.config_file import CONFIG_DIR
 from conlyse.managers.events.replay_load_complete_event import ReplayOpenCompleteEvent
 from conlyse.managers.events.replay_load_failed_event import ReplayOpenFailedEvent
-from conlyse.managers.config_manager.config_file import CONFIG_DIR
 from conlyse.utils.downloads import download_to_file
 
 if TYPE_CHECKING:
@@ -41,14 +39,13 @@ class ReplayManager:
         if file_path in self.replays:
             return True
         try:
-            game_id, player_id = self._infer_ids_from_filename(file_path)
-            ritf = ReplayInterface(file_path, static_map_data=None, player_id=player_id, game_id=game_id)
+            ritf = ReplayInterface(file_path, static_map_data=None)
 
             # Step 1: open in metadata-only mode to inspect replay without heavy loading.
             ritf.open("read_metadata")
 
             # Step 2: gather summary metadata for replay list and details views.
-            list_metadata = self._build_list_metadata(ritf, file_path, game_id)
+            list_metadata = self._build_list_metadata(ritf, file_path)
 
             # Step 3: ensure all required static map data files exist under app_data.
             static_map_paths = self._ensure_static_map_data(ritf)
@@ -75,31 +72,10 @@ class ReplayManager:
     def is_active_replay(self, file_path: str) -> bool:
         return self.active_replay_path == file_path
 
-    def _infer_ids_from_filename(self, file_path: str) -> tuple[int | None, int | None]:
-        """
-        Best-effort extraction of (game_id, player_id) from a replay filename.
-
-        Expected pattern for API-downloaded replays: replay_<game_id>_<player_id>.<ext>
-        Returns (None, None) when the pattern does not match.
-        """
-        path = Path(file_path)
-        name = path.stem
-        parts = name.split("_")
-        if len(parts) < 3 or parts[0].lower() != "replay":
-            return None, None
-
-        try:
-            game_id = int(parts[1])
-            player_id = int(parts[2])
-        except ValueError:
-            return None, None
-        return game_id, player_id
-
     def _build_list_metadata(
         self,
         ritf: ReplayInterface,
         file_path: str,
-        game_id: int | None,
     ) -> dict:
         """
         Construct a summary dict with the fields expected by the replay list UI.
@@ -129,9 +105,7 @@ class ReplayManager:
         speed = timeline_meta.speed
         scenario_id = timeline_meta.scenario_id
         segment_count = timeline_meta.segment_count
-        # Prefer metadata game_id when present.
-        meta_game_id: int | str = timeline_meta.game_id if timeline_meta.game_id != 0 else (game_id if game_id is not None else "Unknown")
-    
+        game_id = timeline_meta.game_id or "Unknown"
 
         # Map IDs and patch count for potential detailed views.
         required_map_ids = sorted(ritf.get_required_map_ids())
@@ -144,7 +118,7 @@ class ReplayManager:
             file_size = -1
 
         metadata: dict = {
-            "game_id": meta_game_id,
+            "game_id": game_id,
             "status": status,
             "game_mode": "Unknown",
             "length": length_str,

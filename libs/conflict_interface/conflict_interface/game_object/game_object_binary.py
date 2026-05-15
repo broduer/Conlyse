@@ -4,6 +4,7 @@ from enum import Enum
 from logging import getLogger
 from typing import Any
 import hashlib
+import re
 
 import msgspec
 
@@ -23,7 +24,8 @@ class SerializationCategory(Enum):
     STATIC_MAP_DATA = 9
 
 def stable_type_id(cls):
-    s = f"{cls.__module__}.{cls.__qualname__}".encode()
+    normalized = re.sub(r'\.(newest|v\d+)\.', '.', cls.__module__)
+    s = f"{normalized}.{cls.__qualname__}".encode()
     return int.from_bytes(hashlib.sha256(s).digest()[:4], "little")
 
 

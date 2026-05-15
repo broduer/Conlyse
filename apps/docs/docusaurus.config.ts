@@ -88,11 +88,11 @@ const config: Config = {
           items: [
             {
               label: 'Replay System',
-              to: '/docs/developer-guide/libraries/conflict-interface/replay-system',
+              to: '/docs/conflict-interface/replay-system',
             },
             {
               label: 'Deployment Guide',
-              to: '/docs/user-guide/deployment',
+              to: '/docs/deployment',
             },
           ],
         },

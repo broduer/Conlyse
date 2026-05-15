@@ -94,10 +94,10 @@ class DockSystem:
             label = self._get_dock_label(dock_type)
 
 
-            if dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO, DockType.ARMY_INFO]:
+            if dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO]:
                 # Left sidebar docks
                 self.left_sidebar.add_dock(dock_type, label, dock_widget)
-            elif dock_type in [DockType.EVENTS, DockType.CITY_LIST, DockType.ARMY_LIST]:
+            elif dock_type in [DockType.CITY_LIST]:
                 # Right sidebar docks
                 self.right_sidebar.add_dock(dock_type, label, dock_widget)
 
@@ -138,10 +138,7 @@ class DockSystem:
         labels = {
             DockType.GAME_INFO: "Game",
             DockType.PROVINCE_INFO: "Province",
-            DockType.ARMY_INFO: "Army",
-            DockType.EVENTS: "Events",
             DockType.CITY_LIST: "Cities",
-            DockType.ARMY_LIST: "Armies",
             DockType.TIMELINE: "Timeline"
         }
         return labels.get(dock_type, "Unknown")
@@ -186,9 +183,9 @@ class DockSystem:
         # Determine which container and open it
         if dock_type == DockType.TIMELINE:
             self.bottom_dock_container.open_dock(dock_type)
-        elif dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO, DockType.ARMY_INFO]:
+        elif dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO]:
             self.left_sidebar.open_dock(dock_type)
-        elif dock_type in [DockType.EVENTS, DockType.CITY_LIST, DockType.ARMY_LIST]:
+        elif dock_type in [DockType.CITY_LIST]:
             self.right_sidebar.open_dock(dock_type)
 
     def close_dock(self, dock_type: DockType):
@@ -200,10 +197,10 @@ class DockSystem:
         if dock_type == DockType.TIMELINE:
             if self.bottom_dock_container.get_active_dock() == dock_type:
                 self.bottom_dock_container.close_dock()
-        elif dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO, DockType.ARMY_INFO]:
+        elif dock_type in [DockType.GAME_INFO, DockType.PROVINCE_INFO]:
             if self.left_sidebar.get_active_dock() == dock_type:
                 self.left_sidebar.close_dock()
-        elif dock_type in [DockType.EVENTS, DockType.CITY_LIST, DockType.ARMY_LIST]:
+        elif dock_type in [DockType.CITY_LIST]:
             if self.right_sidebar.get_active_dock() == dock_type:
                 self.right_sidebar.close_dock()
 

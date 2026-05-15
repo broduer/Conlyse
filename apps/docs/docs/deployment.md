@@ -55,8 +55,8 @@ JWT_SECRET_KEY=<strong-random-secret-here>
 
 For full per-service configuration details, see:
 
-- [Server Observer (detailed configuration reference)](./services/server-observer)
-- [Server Converter (detailed configuration reference)](./services/server-converter)
+- [Server Observer (detailed configuration reference)](./server-observer)
+- [Server Converter (detailed configuration reference)](./server-converter)
 
 #### Server Observer Configuration
 

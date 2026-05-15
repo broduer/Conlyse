@@ -20,10 +20,7 @@ from conlyse.pages.map_page.input_controller import InputController
 from conlyse.pages.map_page.map import Map
 from conlyse.pages.replay_page import ReplayPage
 from conlyse.utils.enums import DockType
-from conlyse.widgets.dock_system.docks.army_info_dock import ArmyInfoDock
-from conlyse.widgets.dock_system.docks.army_list_dock import ArmyListDock
 from conlyse.widgets.dock_system.docks.city_list_dock import CityListDock
-from conlyse.widgets.dock_system.docks.events_dock import EventsDock
 from conlyse.widgets.dock_system.docks.game_info_dock import GameInfoDock
 from conlyse.widgets.dock_system.docks.province_info_dock import ProvinceInfoDock
 
@@ -38,8 +35,8 @@ class MapPage(ReplayPage):
     Page for displaying and interacting with the game map.
     """
     use_dock_system = True
-    available_docks = {DockType.GAME_INFO, DockType.ARMY_INFO, DockType.PROVINCE_INFO,
-                       DockType.EVENTS, DockType.CITY_LIST, DockType.ARMY_LIST,
+    available_docks = {DockType.GAME_INFO, DockType.PROVINCE_INFO,
+                       DockType.CITY_LIST,
                        DockType.TIMELINE}
 
     def __init__(self, app: App, parent=None):
@@ -95,14 +92,8 @@ class MapPage(ReplayPage):
                 return GameInfoDock(self.ritf)
             case DockType.PROVINCE_INFO:
                 return ProvinceInfoDock(self.ritf)
-            case DockType.ARMY_INFO:
-                return ArmyInfoDock()
-            case DockType.EVENTS:
-                return EventsDock()
             case DockType.CITY_LIST:
                 return CityListDock(self.ritf)
-            case DockType.ARMY_LIST:
-                return ArmyListDock()
             case DockType.TIMELINE:
                 return self.timeline_controls
             case _:
@@ -112,6 +103,7 @@ class MapPage(ReplayPage):
         """Initialize the UI layout and OpenGL context."""
         super().setup(context)
         self.ritf.register_province_trigger(["owner_id", "resource_production", "morale"])
+        self.ritf.register_game_info_trigger()
         
         # Setup map container in the content_container
         container_layout = QVBoxLayout(self.content_container)
@@ -212,6 +204,7 @@ class MapPage(ReplayPage):
         self.map_widget.deleteLater()
         self.app.main_window.header.set_actions([])
         self.ritf.unregister_province_trigger()
+        self.ritf.unregister_game_info_trigger()
 
 
     def _on_replay_jump(self, events: dict[ReplayHookTag, list[ReplayHookEvent]] = None) -> None:

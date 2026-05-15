@@ -30,40 +30,34 @@ cd libs/conflict_interface
 pip install -e .
 ```
 
-### Optional Dependencies
-
-Install additional features with extras:
-
-```bash
-# Documentation generation
-pip install -e "libs/conflict_interface[docs]"
-
-# Development helpers (includes pybind11 for building C++ extensions)
-pip install -e "libs/conflict_interface[dev]"
-
-# Long-patch test utilities
-pip install -e "libs/conflict_interface[test-long-patches]"
-```
-
 ## Quick Start
 
 ### Basic Game Interaction
 
 ```python
-from conflict_interface.interface.game_interface import GameInterface
+from conflict_interface.interface.hub_interface import HubInterface
 
-# Initialize and connect to a game
-interface = GameInterface(username="your_username", password="your_password")
-interface.login()
-interface.join_game(game_id=12345)
+# Login and join a game
+hub = HubInterface()
+hub.login("your_username", "your_password")
+game = hub.join_game(game_id=12345)  # returns OnlineInterface
 
 # Access game state
-game_state = interface.game_state
-print(f"Current game day: {game_state.game_info.in_game_day}")
+game_info = game.get_game_info_state()
+print(f"Current game day: {game_info.day_of_game}")
 
-# Perform actions
-interface.build_upgrade(city_name="Berlin", building_name="Arms Industry", tier=1)
-interface.mobilize_unit(city_name="Berlin", unit_name="Infantry", tier=1)
+# Build an upgrade in a city
+city = game.get_province_by_name("Berlin")
+arms_industry = game.get_upgrade_type_by_name_and_tier("Arms Industry", 1)
+modable_upgrade = city.get_possible_upgrade(id=arms_industry.id)
+if city.is_upgrade_buildable(modable_upgrade):
+    city.build_upgrade(modable_upgrade)
+
+# Mobilize a unit in a city
+infantry = game.get_unit_type_by_name_and_tier("Motorized Infantry", 1)
+city.mobilize_unit_by_id(infantry.id)
+
+game.update()
 ```
 
 ### Working with Replays
@@ -71,10 +65,12 @@ interface.mobilize_unit(city_name="Berlin", unit_name="Infantry", tier=1)
 ```python
 from conflict_interface.interface.replay_interface import ReplayInterface
 from pathlib import Path
-from datetime import datetime, timezone
 
-# Load a replay file
-replay = ReplayInterface(Path("my_game.conrp"))
+# Load a replay file (static_map_data maps map_id to the .bin file path)
+replay = ReplayInterface(
+    Path("my_game.conrp"),
+    static_map_data={"5652_28": Path("5652_28.bin")},
+)
 replay.open()
 
 # Navigate through time
@@ -83,7 +79,7 @@ replay.jump_to(timestamps[50])
 
 # Access game state at any point in time
 armies = replay.get_armies()
-provinces = replay.game_state.states.map_state.provinces
+provinces = replay.game_state.states.map_state.map.provinces
 
 replay.close()
 ```
@@ -118,20 +114,20 @@ conflict_interface/
 The library provides comprehensive type-safe data structures for all game state:
 
 ```python
-from conflict_interface.interface.game_interface import GameInterface
+from conflict_interface.interface.hub_interface import HubInterface
 
-interface = GameInterface(username="user", password="pass")
-interface.login()
-interface.join_game(game_id=12345)
+hub = HubInterface()
+hub.login("your_username", "your_password")
+game = hub.join_game(game_id=12345)
 
 # Access typed game state
-game_state = interface.game_state
+game_state = game.game_state
 map_state = game_state.states.map_state
 player_state = game_state.states.player_state
 
 # Type-safe access to provinces, players, armies, etc.
-province = map_state.provinces[0]
-player = player_state.players[0]
+province = next(iter(map_state.map.provinces.values()))
+player = next(iter(player_state.players.values()))
 ```
 
 ### Replay System
@@ -142,16 +138,22 @@ Efficient bidirectional replay system with patch-based storage:
 from conflict_interface.interface.replay_interface import ReplayInterface
 from pathlib import Path
 
-replay = ReplayInterface(Path("replay.conrp"))
+replay = ReplayInterface(
+    Path("replay.conrp"),
+    static_map_data={"5652_28": Path("5652_28.bin")},
+)
 replay.open()
 
+timestamps = replay.get_timestamps()
+
 # Navigate through time
-replay.jump_to_next_patch()  # Forward
-replay.jump_to_previous_patch()  # Backward
-replay.jump_to(timestamp)  # Specific time
+replay.jump_to_next_patch()      # Forward one step
+replay.jump_to_previous_patch()  # Backward one step
+replay.jump_to(timestamps[0])    # Jump to specific time
 
 # Access state at any point
 current_state = replay.game_state
+replay.close()
 ```
 
 ### API Wrappers
@@ -159,16 +161,17 @@ current_state = replay.game_state
 Pythonic wrappers for Conflict of Nations APIs:
 
 ```python
-from conflict_interface.api.game_api import GameAPI
+from conflict_interface.interface.hub_interface import HubInterface
 
-api = GameAPI()
-response = api.make_game_server_request(
-    action="updateProvinceConstruction",
-    game_id=12345,
-    player_id=67890,
-    province_id=100,
-    upgrade_id=5
-)
+hub = HubInterface()
+hub.login("your_username", "your_password")
+
+# Browse available games
+global_games = hub.get_global_games()
+my_games = hub.get_my_games()
+
+# Join as guest (read-only, no country selection required)
+game = hub.join_game(game_id=12345, guest=True)
 ```
 
 ## Examples
@@ -176,10 +179,10 @@ response = api.make_game_server_request(
 See the `examples/` directory for comprehensive usage examples:
 
 - `game_join.py` - Join a game session
-- `start_of_game.py` - Initialize a new game
-- `record_replay.py` - Record game sessions
-- `replay_roundtrip.py` - Replay system demonstration
-- `build_upgrade.py` - Build structures
+- `start_of_game.py` - Inspect a fresh game's state
+- `read_replay.py` - Load and navigate a replay file
+- `replay_roundtrip.py` - Replay conversion verification tool
+- `build_upgrade.py` - Build structures in a province
 - `mobilize_unit.py` - Create military units
 - `command_army.py` - Issue army commands
 - `research.py` - Research technologies
@@ -206,13 +209,6 @@ cd libs/conflict_interface
 python tests/run_tests.py
 ```
 
-### Building Documentation
-
-```bash
-pip install -e ".[docs]"
-cd docs
-make html
-```
 
 ## Dependencies
 
@@ -226,9 +222,6 @@ Core dependencies:
 
 See `pyproject.toml` for the complete list.
 
-## License
-
-Proprietary License - All Rights Reserved
 
 ## Authors
 

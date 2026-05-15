@@ -5,19 +5,23 @@ sidebar_position: 0
 # Conlyse Documentation
 
 Conlyse is an unofficial full-stack system for recording, storing, and analyzing Conflict of Nations games.
-It consists of an end-to-end replay pipeline (Observer -> Converter -> storage -> API) plus the `ConflictInterface` library that powers time-travel replay playback.
+It consists of an end-to-end replay pipeline (Observer → Converter → storage → API) plus the `ConflictInterface` library that powers time-travel replay playback.
 
+## Where to start
+:::tip Using the ConflictInterface library
+Install the library and load your first replay or connect to a live game — start with **[Getting Started](./conflict-interface/getting-started)**.
+:::
 
-If you're deploying the full stack, follow the **Deployment** guide first:
+:::tip Deploying the full stack
+Run Observer, Converter, API, and storage in one command with Docker Compose — start with the **[Deployment](./deployment)** guide.
+:::
 
-- [User Guide: Deployment](./user-guide/deployment)
+:::tip Learning how a service works
+- [Server Observer](./server-observer) — captures live game state and publishes it to Redis
+- [Server Converter](./server-converter) — processes responses into `.conrp` replay files
+:::
 
-If you want the operational details for the services that make up the pipeline, see:
-
-- [User Guide: Server Observer](./user-guide/services/server-observer)
-- [User Guide: Server Converter](./user-guide/services/server-converter)
-
-If you're working on the replay and parsing internals, start with:
-
-- [Developer Guide: Replay System](./developer-guide/libraries/conflict-interface/replay-system)
-- [Developer Guide: Data Types](./developer-guide/libraries/conflict-interface/data-types)
+:::tip Digging into internals
+- [Replay System](./conflict-interface/replay-system) — patch-based format, bidirectional time-travel playback
+- [Data Types](./conflict-interface/data-types) — type-safe game state objects
+:::
