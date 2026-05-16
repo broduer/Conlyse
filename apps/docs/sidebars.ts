@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
     'deployment',
     'server-observer',
     'server-converter',
+    'desktop',
     {
       type: 'category',
       label: 'ConflictInterface',

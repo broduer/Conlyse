@@ -16,6 +16,10 @@ Install the library and load your first replay or connect to a live game — sta
 Run Observer, Converter, API, and storage in one command with Docker Compose — start with the **[Deployment](./deployment)** guide.
 :::
 
+:::tip Using the Desktop Client
+Analyze replay files interactively with the map viewer, timeline, and dock panels — start with the **[Desktop Client](./desktop)** guide.
+:::
+
 :::tip Learning how a service works
 - [Server Observer](./server-observer) — captures live game state and publishes it to Redis
 - [Server Converter](./server-converter) — processes responses into `.conrp` replay files

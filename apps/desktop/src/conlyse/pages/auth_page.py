@@ -45,7 +45,7 @@ class AuthPage(Page):
         title.setStyleSheet("font-size: 24px; font-weight: bold;")
         layout.addWidget(title)
 
-        subtitle = QLabel("Sign in to sync downloads and Pro features, or continue offline.")
+        subtitle = QLabel("Sign in to sync downloads and start new recordings, or continue offline.")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
@@ -72,6 +72,7 @@ class AuthPage(Page):
         self.two_fa_label = QLabel("2FA Code")
         self.two_fa_input = QLineEdit()
         self.two_fa_input.setPlaceholderText("Enter 2FA code")
+        self.two_fa_input.returnPressed.connect(self._on_two_fa_clicked)
         form.addWidget(self.two_fa_label)
         form.addWidget(self.two_fa_input)
 
@@ -91,15 +92,11 @@ class AuthPage(Page):
         self.login_button.clicked.connect(self._on_login_clicked)
         buttons.addWidget(self.login_button)
 
-        self.two_fa_button = QPushButton("Verify 2FA")
-        self.two_fa_button.clicked.connect(self._on_two_fa_clicked)
-        buttons.addWidget(self.two_fa_button)
-
         self.register_button = QPushButton("Register")
         self.register_button.clicked.connect(self._on_register_clicked)
         buttons.addWidget(self.register_button)
 
-        self.skip_button = QPushButton("Skip (Offline Mode)")
+        self.skip_button = QPushButton("Offline Mode")
         self.skip_button.clicked.connect(self._on_skip_clicked)
         buttons.addWidget(self.skip_button)
 
@@ -131,7 +128,6 @@ class AuthPage(Page):
 
         self.two_fa_label.setVisible(is_pending_2fa)
         self.two_fa_input.setVisible(is_pending_2fa)
-        self.two_fa_button.setEnabled(is_pending_2fa)
 
     def _on_login_clicked(self):
         from conlyse.managers.auth_manager import LoginResult

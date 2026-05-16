@@ -84,15 +84,57 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Getting Started',
           items: [
+            {
+              label: 'Introduction',
+              to: '/docs/intro',
+            },
+            {
+              label: 'Deployment',
+              to: '/docs/deployment',
+            },
+            {
+              label: 'Desktop Client',
+              to: '/docs/desktop',
+            },
+          ],
+        },
+        {
+          title: 'Services',
+          items: [
+            {
+              label: 'Server Observer',
+              to: '/docs/server-observer',
+            },
+            {
+              label: 'Server Converter',
+              to: '/docs/server-converter',
+            },
+          ],
+        },
+        {
+          title: 'ConflictInterface',
+          items: [
+            {
+              label: 'Getting Started',
+              to: '/docs/conflict-interface/getting-started',
+            },
+            {
+              label: 'Live Games',
+              to: '/docs/conflict-interface/live-games',
+            },
+            {
+              label: 'Replay Analysis',
+              to: '/docs/conflict-interface/replay-analysis',
+            },
             {
               label: 'Replay System',
               to: '/docs/conflict-interface/replay-system',
             },
             {
-              label: 'Deployment Guide',
-              to: '/docs/deployment',
+              label: 'Data Types',
+              to: '/docs/conflict-interface/data-types',
             },
           ],
         },
