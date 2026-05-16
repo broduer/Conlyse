@@ -13,7 +13,7 @@ sidebar_position: 1
 
 ## Prerequisites
 
-- Python ≥ 3.12
+- Python == 3.12
 - For **live games**: a Conflict of Nations account
 - For **replays**: a `.conrp` replay file and the matching `.bin` static map data file for that game's map
 
