@@ -35,7 +35,7 @@ This installs the `conlyse` package and all dependencies, including `conflict-in
 
 Download the sample replay from the [GitHub Releases page](https://github.com/zdox/Conlyse/releases/latest):
 
-**`replay_10731064_0.conrp`** — game 10731064, player 0
+**`replay_10635767.conrp`** — game 10731064, player 0
 
 Place it anywhere on your machine — you will point the file picker to it when loading.
 For the steps below it is assumed you place it in `app_data/replays/` inside your working directory:
@@ -44,7 +44,7 @@ For the steps below it is assumed you place it in `app_data/replays/` inside you
 <working-dir>/
 └── app_data/
     └── replays/
-        └── replay_10731064_0.conrp
+        └── replay_10635767.conrp
 ```
 
 ### Static map file
@@ -62,7 +62,7 @@ Place it in `app_data/static_maps/` inside the same working directory as the rep
 <working-dir>/
 └── app_data/
     ├── replays/
-    │   └── replay_10731064_0.conrp
+    │   └── replay_10635767.conrp
     └── static_maps/
         └── 5652_28.bin
 ```
@@ -83,7 +83,7 @@ python -m conlyse
 2. Click the **Local Games** tab.
 3. Click the folder icon in the top-right corner (or use the keybinding shown in Settings)
    to open the file picker.
-4. Navigate to `app_data/replays/` and select `replay_10731064_0.conrp`.
+4. Navigate to `app_data/replays/` and select `replay_10635767.conrp`.
 5. The replay appears in the list on the left. Select it, then click **Analyze**.
 
 A spinner is shown while the replay loads. Once complete, the interactive map view opens.
