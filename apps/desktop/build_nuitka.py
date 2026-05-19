@@ -32,6 +32,8 @@ def main() -> None:
             f"{', '.join(sorted(SUPPORTED_UI_PLUGINS))}."
         )
 
+    jobs = os.environ.get("NUITKA_JOBS") or os.cpu_count() or 1
+
     command = [
         sys.executable,
         "-m",
@@ -41,6 +43,7 @@ def main() -> None:
         "--follow-imports",
         f"--output-dir={output_dir}",
         "--assume-yes-for-downloads",
+        f"--jobs={jobs}",
         str(entrypoint),
     ]
 

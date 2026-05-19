@@ -59,6 +59,17 @@ jobs:
           pip install nuitka ordered-set zstandard
           pip install -e .
 
+      - name: Cache Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/Nuitka
+            ~/Library/Caches/Nuitka
+            ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ matrix.os }}-${{ hashFiles('apps/desktop/pyproject.toml', 'libs/conflict_interface/pyproject.toml') }}
+          restore-keys: |
+            nuitka-${{ matrix.os }}-
+
       - name: Build with Nuitka
         run: python build_nuitka.py
 
