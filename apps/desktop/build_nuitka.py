@@ -9,18 +9,19 @@ SUPPORTED_UI_PLUGINS = ("pyside6",)
 DEFAULT_UI_PLUGIN = SUPPORTED_UI_PLUGINS[0]
 DEFAULT_OUTPUT_DIR = "build"
 
-# Packages that are never needed at runtime — skipping them avoids compiling large
-# subtrees that Nuitka would otherwise follow via transitive imports.
+# Nuitka has first-class --noinclude-*-mode flags for setuptools, pytest,
+# unittest, and pydoc (see NOINCLUDE_FLAGS below) — only list packages here
+# that lack a dedicated flag.
 NOFOLLOW_IMPORTS = (
-    "setuptools",
-    "pkg_resources",
-    "distutils",
     "doctest",
-    "unittest",
-    "pydoc",
-    "numpy.testing",
-    "numpy.f2py",
-    "numpy.distutils",
+)
+
+# Use Nuitka's dedicated exclusion modes instead of --nofollow-import-to for
+# these well-known dev-only packages; they handle transitive aliases too.
+NOINCLUDE_FLAGS = (
+    "--noinclude-setuptools-mode=nofollow",
+    "--noinclude-pytest-mode=nofollow",
+    "--noinclude-unittest-mode=nofollow",
 )
 
 
@@ -48,7 +49,17 @@ def main() -> None:
 
     jobs = os.environ.get("NUITKA_JOBS") or os.cpu_count() or 1
 
-    nofollow_flags = [f"--nofollow-import-to={m}" for m in NOFOLLOW_IMPORTS]
+    platform_flags = ["--msvc=latest"] if sys.platform == "win32" else ["--clang"]
+    if sys.platform == "win32":
+        platform_flags.append("--windows-console-mode=disable")
+
+    data_flags = []
+    if assets_dir.exists():
+        data_flags.append(f"--include-data-dir={assets_dir}=assets")
+    if shader_dir.exists():
+        data_flags.append(
+            f"--include-data-dir={shader_dir}=conlyse/pages/map_page/renderers/shaders"
+        )
 
     command = [
         sys.executable,
@@ -58,22 +69,17 @@ def main() -> None:
         f"--enable-plugin={ui_plugin}",
         "--lto=no",
         "--python-flag=no_site",
+        "--python-flag=no_docstrings",
+        "--python-flag=no_warnings",
         f"--output-dir={output_dir}",
         "--assume-yes-for-downloads",
         f"--jobs={jobs}",
-        *nofollow_flags,
+        *[f"--nofollow-import-to={m}" for m in NOFOLLOW_IMPORTS],
+        *NOINCLUDE_FLAGS,
+        *platform_flags,
+        *data_flags,
         str(entrypoint),
     ]
-
-    if sys.platform == "win32":
-        command.insert(-1, "--msvc=latest")
-    else:
-        command.insert(-1, "--clang")
-
-    if assets_dir.exists():
-        command.append(f"--include-data-dir={assets_dir}=assets")
-    if shader_dir.exists():
-        command.append(f"--include-data-dir={shader_dir}=conlyse/pages/map_page/renderers/shaders")
 
     try:
         subprocess.run(command, check=True)
