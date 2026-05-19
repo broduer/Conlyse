@@ -9,6 +9,20 @@ SUPPORTED_UI_PLUGINS = ("pyside6",)
 DEFAULT_UI_PLUGIN = SUPPORTED_UI_PLUGINS[0]
 DEFAULT_OUTPUT_DIR = "build"
 
+# Packages that are never needed at runtime — skipping them avoids compiling large
+# subtrees that Nuitka would otherwise follow via transitive imports.
+NOFOLLOW_IMPORTS = (
+    "setuptools",
+    "pkg_resources",
+    "distutils",
+    "doctest",
+    "unittest",
+    "pydoc",
+    "numpy.testing",
+    "numpy.f2py",
+    "numpy.distutils",
+)
+
 
 def main() -> None:
     repo_root = Path(__file__).resolve().parent
@@ -34,22 +48,26 @@ def main() -> None:
 
     jobs = os.environ.get("NUITKA_JOBS") or os.cpu_count() or 1
 
+    nofollow_flags = [f"--nofollow-import-to={m}" for m in NOFOLLOW_IMPORTS]
+
     command = [
         sys.executable,
         "-m",
         "nuitka",
         "--standalone",
         f"--enable-plugin={ui_plugin}",
-        "--follow-imports",
+        "--lto=no",
+        "--python-flag=no_site",
         f"--output-dir={output_dir}",
         "--assume-yes-for-downloads",
         f"--jobs={jobs}",
+        *nofollow_flags,
         str(entrypoint),
     ]
 
     if sys.platform == "win32":
         command.insert(-1, "--msvc=latest")
-    elif sys.platform == "darwin":
+    else:
         command.insert(-1, "--clang")
 
     if assets_dir.exists():
