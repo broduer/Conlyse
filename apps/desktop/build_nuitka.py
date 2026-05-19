@@ -32,7 +32,7 @@ def main() -> None:
             f"{', '.join(sorted(SUPPORTED_UI_PLUGINS))}."
         )
 
-    jobs = os.environ.get("NUITKA_JOBS", "auto")
+    jobs = os.environ.get("NUITKA_JOBS") or os.cpu_count() or 1
 
     command = [
         sys.executable,
