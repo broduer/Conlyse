@@ -56,52 +56,59 @@ class ReplayTimeline:
 
         dctx = self.decompressor
 
-        with open(self.file_path, "rb") as raw:
-            with dctx.stream_reader(source=raw) as reader:
+        try:
+            with open(self.file_path, "rb") as raw:
+                with dctx.stream_reader(source=raw) as reader:
 
-                def read_exact(n: int) -> bytes:
-                    data = reader.read(n)
-                    if len(data) != n:
-                        raise EOFError("Unexpected end of file while reading replay")
-                    return data
+                    def read_exact(n: int) -> bytes:
+                        data = reader.read(n)
+                        if len(data) != n:
+                            raise EOFError("Unexpected end of file while reading replay")
+                        return data
 
-                def read_or_none(n: int) -> bytes | None:
-                    data = reader.read(n)
-                    if not data:
-                        return None
-                    if len(data) != n:
-                        raise EOFError("Unexpected end of file while reading replay")
-                    return data
+                    def read_or_none(n: int) -> bytes | None:
+                        data = reader.read(n)
+                        if not data:
+                            return None
+                        if len(data) != n:
+                            raise EOFError("Unexpected end of file while reading replay")
+                        return data
 
-                # ---- file header ----
-                magic = read_exact(len(_MAGIC))
-                if magic != _MAGIC:
-                    raise ValueError("Not a replay zstd file (bad magic)")
+                    # ---- file header ----
+                    magic = read_exact(len(_MAGIC))
+                    if magic != _MAGIC:
+                        raise ValueError("Not a replay file (bad magic bytes)")
 
-                (version,) = struct.unpack("<I", read_exact(4))
-                if version != _VERSION:
-                    raise ValueError(f"Unsupported file version: {version}")
+                    (version,) = struct.unpack("<I", read_exact(4))
+                    if version != _VERSION:
+                        raise ValueError(f"Unsupported replay format version: {version} (expected {_VERSION})")
 
-                # Per-timeline metadata header
-                meta_bytes = read_exact(TimelineMetadata.size)
-                self.timeline_metadata = TimelineMetadata.deserialize(meta_bytes)
+                    # Per-timeline metadata header
+                    meta_bytes = read_exact(TimelineMetadata.size)
+                    self.timeline_metadata = TimelineMetadata.deserialize(meta_bytes)
 
-                # ---- segments ----
-                header_size = struct.calcsize("<qqiQ")
-                while True:
-                    header = read_or_none(header_size)
-                    if header is None:
-                        break
+                    # ---- segments ----
+                    header_size = struct.calcsize("<qqiQ")
+                    while True:
+                        header = read_or_none(header_size)
+                        if header is None:
+                            break
 
-                    start_ns, end_ns, seg_version, size = struct.unpack("<qqiQ", header)
+                        start_ns, end_ns, seg_version, size = struct.unpack("<qqiQ", header)
 
-                    payload = bytearray(read_exact(size))
+                        payload = bytearray(read_exact(size))
 
-                    start_dt = ns_to_dt(start_ns)
-                    end_dt = ns_to_dt(end_ns)
+                        start_dt = ns_to_dt(start_ns)
+                        end_dt = ns_to_dt(end_ns)
 
-                    key = (start_dt, end_dt)
-                    result[key] = ReplaySegment(payload, seg_version, game_id=self.game_id, player_id=self.player_id)
+                        key = (start_dt, end_dt)
+                        result[key] = ReplaySegment(payload, seg_version, game_id=self.game_id, player_id=self.player_id)
+        except (FileNotFoundError, PermissionError):
+            raise
+        except (ValueError, EOFError, struct.error) as e:
+            raise type(e)(f"'{self.file_path}': {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Failed to read replay file '{self.file_path}': {e}") from e
 
         self.segments = result
 
@@ -163,7 +170,11 @@ class ReplayTimeline:
     def open(self):
         if self._open:
             return
-        if self.file_path.exists():
+        if not self.file_path.exists():
+            if self._mode in ('r', 'read_metadata'):
+                raise FileNotFoundError(f"Replay file not found: '{self.file_path}'")
+            # 'a' mode: file is created on first write, absence is normal
+        else:
             self.read_from_disk()
         if self._mode == "a":
             last_segment = self.find_last_segment()

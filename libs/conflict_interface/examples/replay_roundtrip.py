@@ -17,18 +17,19 @@ from typing import List, Optional
 from deepdiff import DeepDiff
 from tqdm import tqdm
 
-from conflict_interface.data_types.game_object_json import dump_any
-from conflict_interface.data_types.game_object_json import parse_any
-from conflict_interface.data_types.game_state.game_state import GameState
+from conflict_interface.data_types.newest.to_json import dump_any
+from conflict_interface.data_types.newest.game_state.game_state import GameState
+from conflict_interface.game_object.game_object_parse_json import JsonParser
 from conflict_interface.interface.game_interface import GameInterface
 from conflict_interface.interface.replay_interface import ReplayInterface
 from conflict_interface.logger_config import setup_library_logger
 from conflict_interface.replay.constants import ADD_OPERATION, REMOVE_OPERATION, REPLACE_OPERATION
 from conflict_interface.utils.helper import unix_ms_to_datetime
+from conflict_interface.versions import LATEST_VERSION
 from paths import TEST_DATA
-from tools.recording_converter.converter import RecordingConverter
-from tools.recording_converter.enums import OperatingMode
-from tools.recording_converter.recording_reader import RecordingReader
+from recording_converter.converter import RecordingConverter
+from recording_converter.enums import OperatingMode
+from recording_converter.recording_reader import RecordingReader
 
 logger = logging.getLogger("rp_rdtp")
 
@@ -74,6 +75,8 @@ class ReplayRoundtrip:
         # Timing trackers for error analysis
         self.current_time = None
         self.last_time = None
+
+        self._parser = JsonParser(LATEST_VERSION)
 
         if not preconverted:
             self._convert_recording_to_replay()
@@ -218,7 +221,7 @@ class ReplayRoundtrip:
         mock_game = GameInterface()
         _, json_response = json_responses[initial_idx]
 
-        recorder_state: GameState = parse_any(
+        recorder_state: GameState = self._parser.parse_any(
             GameState, json_response["result"], mock_game
         )
 

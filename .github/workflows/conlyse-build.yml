@@ -40,6 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            clang \
             libgl1-mesa-dev \
             libglu1-mesa-dev \
             libxkbcommon-x11-0 \
@@ -66,7 +67,7 @@ jobs:
             ~/.cache/Nuitka
             ~/Library/Caches/Nuitka
             ~\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-${{ matrix.os }}-${{ hashFiles('apps/desktop/pyproject.toml', 'libs/conflict_interface/pyproject.toml') }}
+          key: nuitka-${{ matrix.os }}-${{ hashFiles('apps/desktop/pyproject.toml', 'libs/conflict_interface/pyproject.toml', 'apps/desktop/build_nuitka.py') }}
           restore-keys: |
             nuitka-${{ matrix.os }}-
 

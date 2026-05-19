@@ -90,7 +90,10 @@ class ReplayStorage:
             """Helper to read length-prefixed compressed data."""
             l = r.read_int32()
             c = r.read_bytes(l)
-            return self.decompressor(c)
+            try:
+                return self.decompressor(c)
+            except Exception as e:
+                raise RuntimeError(f"Segment data is corrupt (lz4 decompression failed): {e}") from e
 
         # Load entire file into memory
         data = self._data_b
@@ -352,8 +355,10 @@ class ReplayStorage:
         """Deserializes the last recorded game state."""
         if self._last_game_state_b is None:
             raise ValueError("Last game state is not recorded in the replay.")
-
-        self.last_game_state = pickle.loads(self._last_game_state_b)
+        try:
+            self.last_game_state = pickle.loads(self._last_game_state_b)
+        except Exception as e:
+            raise RuntimeError(f"Failed to deserialize last game state: {e}") from e
         return self.last_game_state
 
     def load_path_tree(self) -> PathTree:

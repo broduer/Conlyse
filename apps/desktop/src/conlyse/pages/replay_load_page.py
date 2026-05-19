@@ -114,8 +114,7 @@ class ReplayLoadPage(Page):
         logger.error(f"Failed to load replay: {event.trace_info}")
         self.app.page_manager.switch_to(PageType.ReplayListPage)
 
-        # summon message box to inform user
-        msg_box = QMessageBox()
+        msg_box = QMessageBox(self.window())
         msg_box.setIcon(QMessageBox.Icon.Critical)
         msg_box.setWindowTitle("Replay Load Failed")
         msg_box.setText(f"Failed to load replay:\n{event.error_message}")
