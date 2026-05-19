@@ -177,7 +177,14 @@ class GameObjectSerializer:
     def _from_raw_registered(self, data):
         """Handle deserialization of registered types."""
         type_id = data[1]
-        cls = self._class_from_id[type_id]
+        cls = self._class_from_id.get(type_id)
+        if cls is None:
+            registered = sorted(self._class_from_id.keys())
+            raise KeyError(
+                f"Unknown type_id {type_id} ({type_id:#010x}) for serializer version {self.version}. "
+                f"The replay was likely recorded with a different schema version. "
+                f"Registered IDs ({len(registered)}): {registered[:10]}{'...' if len(registered) > 10 else ''}"
+            )
         cat = self._category[cls]
         from_raw = self._from_raw
 
@@ -217,3 +224,40 @@ class GameObjectSerializer:
             'list_wrappers': sum(1 for c in self._category.values() if c == SerializationCategory.LIST),
             'dict_wrappers': sum(1 for c in self._category.values() if c == SerializationCategory.DICT)
         }
+
+
+# Hardcoded expected IDs for a cross-section of types (GAME_STATE, DATACLASS, ENUM).
+# These are derived from normalized module paths so they are version-alias-independent.
+# If this check fails at startup it means Nuitka (or something else) has rewritten
+# __module__ or __qualname__, which would silently corrupt binary serialization.
+_EXPECTED_IDS: dict[str, int] = {
+    "conflict_interface.data_types.game_state.game_state.GameState":          3249973404,
+    "conflict_interface.data_types.game_state.game_state.States":              975817546,
+    "conflict_interface.data_types.player_state.player_state.PlayerState":     692747530,
+    "conflict_interface.data_types.army_state.army_state.ArmyState":          3439915012,
+    "conflict_interface.data_types.common.enums.region_type.RegionType":      3841545510,
+}
+
+
+def assert_stable_type_id_consistency() -> None:
+    from conflict_interface.data_types.newest.game_state.game_state import GameState, States
+    from conflict_interface.data_types.newest.player_state.player_state import PlayerState
+    from conflict_interface.data_types.newest.army_state.army_state import ArmyState
+    from conflict_interface.data_types.newest.common.enums.region_type import RegionType
+
+    probes = [
+        (GameState,   3249973404),
+        (States,       975817546),
+        (PlayerState,  692747530),
+        (ArmyState,   3439915012),
+        (RegionType,  3841545510),
+    ]
+    for cls, expected in probes:
+        got = stable_type_id(cls)
+        if got != expected:
+            raise RuntimeError(
+                f"stable_type_id mismatch for {cls.__qualname__}: "
+                f"expected {expected:#010x}, got {got:#010x} "
+                f"(__module__={cls.__module__!r}, __qualname__={cls.__qualname__!r}). "
+                "Nuitka may have rewritten module paths — binary serialization is unsafe."
+            )

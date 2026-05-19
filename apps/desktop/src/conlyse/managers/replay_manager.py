@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC
@@ -38,6 +39,7 @@ class ReplayManager:
     def add_replay(self, file_path: str) -> bool:
         if file_path in self.replays:
             return True
+        ritf = None
         try:
             ritf = ReplayInterface(file_path, static_map_data=None)
 
@@ -53,15 +55,22 @@ class ReplayManager:
             # Attach computed data to the interface for later use.
             ritf.list_metadata = list_metadata
             ritf._static_map_paths = static_map_paths
+        except FileNotFoundError:
+            logger.error(f"Replay file not found: '{file_path}'")
+            return False
+        except PermissionError:
+            logger.error(f"Permission denied reading replay file: '{file_path}'")
+            return False
         except Exception as e:
-            logger.error(f"Failed to add replay '{file_path}': {e}")
+            logger.error(f"Failed to add replay '{file_path}': {e}", exc_info=True)
             return False
         finally:
             # Close metadata-only replay; it will be reopened in full mode when needed.
-            try:
-                ritf.close()
-            except Exception:
-                pass
+            if ritf is not None:
+                try:
+                    ritf.close()
+                except Exception:
+                    pass
 
         self.replays.update({file_path: ritf})
         return True
@@ -156,6 +165,7 @@ class ReplayManager:
         for map_id in required_map_ids:
             target_path = static_maps_dir / f"{map_id}.bin"
             if not target_path.exists():
+                tmp_path = target_path.with_suffix(".bin.tmp")
                 try:
                     response = self.app.api_client.get(
                         f"/downloads/static-map-data/{map_id}",
@@ -166,8 +176,10 @@ class ReplayManager:
                         raise RuntimeError(
                             f"API response for static map '{map_id}' did not contain a 'url' field."
                         )
-                    download_to_file(url, str(target_path))
+                    download_to_file(url, str(tmp_path))
+                    tmp_path.replace(target_path)
                 except Exception as exc:
+                    tmp_path.unlink(missing_ok=True)
                     logger.warning(
                         "Could not get static map '%s' via Conlyse API (%s), falling back to ConflictInterface Game API",
                         map_id,
@@ -176,9 +188,11 @@ class ReplayManager:
                     try:
                         json_data = GameApi.get_static_map_data(map_id)
                         ReplayTimeline.write_static_map_data_compressed(
-                            target_path, json_data
+                            tmp_path, json_data
                         )
+                        tmp_path.replace(target_path)
                     except Exception as fallback_exc:
+                        tmp_path.unlink(missing_ok=True)
                         raise RuntimeError(
                             f"Failed to obtain static map '{map_id}' via API and fallback: {fallback_exc}"
                         ) from fallback_exc
@@ -219,14 +233,17 @@ class ReplayManager:
         def on_done(fut: Future):
             self.is_opening_replay = False
             try:
-                replay = fut.result()  # raises if _open_replay failed
+                fut.result()  # raises if _open_replay failed
                 self.active_replay_path = file_path
                 self.app.event_handler.publish(ReplayOpenCompleteEvent(file_path))
             except Exception as e:
-                logger.error(f"Failed to open replay: {e}")
-                failed_event = ReplayOpenFailedEvent(file_path,
-                                                     f"Failed to open replay file: {e}",
-                                                     str(e))
+                tb = traceback.format_exc()
+                logger.error(f"Failed to open replay '{file_path}': {e}\n{tb}")
+                failed_event = ReplayOpenFailedEvent(
+                    file_path,
+                    f"Failed to open replay file: {e}",
+                    tb,
+                )
                 self.app.event_handler.publish(failed_event)
         future.add_done_callback(on_done)
 

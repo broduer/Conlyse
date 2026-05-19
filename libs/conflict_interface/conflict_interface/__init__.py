@@ -10,3 +10,6 @@ from . import hook_system
 from . import interface
 from . import replay
 from . import versions
+
+from .game_object.game_object_binary import assert_stable_type_id_consistency
+assert_stable_type_id_consistency()
