@@ -346,7 +346,10 @@ class ReplayInterface(GameInterface):
 
         correct_segment = self._replay.find_segment(next_timestamp)
         if correct_segment != self._current_segment:
-            #self.jump_to(next_timestamp, False)
+            if correct_segment is not None:
+                self.jump_to(next_timestamp, False)
+            else:
+                self.current_timestamp_index += 1
             return True
 
         patches = [self._current_segment.storage.patch_graph.patches[(int(self.current_time.timestamp()), int(next_timestamp.timestamp()))]]

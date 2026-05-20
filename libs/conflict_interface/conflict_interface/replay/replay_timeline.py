@@ -448,16 +448,14 @@ class ReplayTimeline:
     def get_timestamp_cache(self):
         if self._time_stamp_cache:
             return self._time_stamp_cache
+        seen: set[int] = set()
         cache = []
-        for key, segment in self.segments.items():
-            cache.extend(
-                [
-                    datetime.fromtimestamp(x, tz=UTC)
-                    for x in segment.storage.patch_graph.time_stamps_cache
-                ]
-            )
+        for segment in self.segments.values():
+            for x in segment.storage.patch_graph.time_stamps_cache:
+                if x not in seen:
+                    seen.add(x)
+                    cache.append(datetime.fromtimestamp(x, tz=UTC))
         cache.sort()
-
         self._time_stamp_cache = cache
         return self._time_stamp_cache
 
