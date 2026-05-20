@@ -1,14 +1,16 @@
 """
 Extracts per-game statistics from a single .conrp replay file.
 
-Opens the replay once, iterates all timestamps to track province ownership
-changes and player territory counts, then collects the final game state.
+Opens the replay once, registers province hooks for owner_id and morale, then
+iterates timestamps. Only changed provinces fire events — no full province scan
+per tick. Player territory counts are maintained incrementally on ownership events.
 """
 import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
+from conflict_interface.hook_system.replay_hook_tag import ReplayHookTag
 from conflict_interface.interface.replay_interface import ReplayInterface
 
 from .base import BaseExtractor
@@ -91,7 +93,6 @@ class ReplayExtractor(BaseExtractor):
         map_obj = gs.states.map_state.map
         map_id: str = getattr(map_obj, "map_id", "unknown")
 
-        # Collect all land provinces at start
         initial_land = {
             pid: p
             for pid, p in map_obj.provinces.items()
@@ -115,84 +116,96 @@ class ReplayExtractor(BaseExtractor):
 
         initial_owners: dict[int, int] = {pid: p.owner_id for pid, p in initial_land.items()}
 
-        # Running trackers
-        prev_owners: dict[int, int] = dict(initial_owners)
+        # Incrementally maintained ownership and player counts
+        current_owners: dict[int, int] = dict(initial_owners)
+        current_player_counts: dict[int, int] = defaultdict(int)
+        for oid in initial_owners.values():
+            if oid > _UNOWNED:
+                current_player_counts[oid] += 1
+
         ownership_changes: dict[int, int] = defaultdict(int)
 
-        prov_morale_sum: dict[int, float] = defaultdict(float)
-        prov_morale_n: dict[int, int] = defaultdict(int)
+        # Morale accumulators — seeded with the initial snapshot
+        prov_morale_sum: dict[int, float] = {pid: float(p.morale) for pid, p in initial_land.items()}
+        prov_morale_n: dict[int, int] = {pid: 1 for pid in initial_land}
         prov_morale_min: dict[int, float] = {pid: float(p.morale) for pid, p in initial_land.items()}
         prov_morale_max: dict[int, float] = {pid: float(p.morale) for pid, p in initial_land.items()}
 
+        # Player territory accumulators — seeded with the initial snapshot
         player_prov_sum: dict[int, float] = defaultdict(float)
         player_prov_n: dict[int, int] = defaultdict(int)
         player_prov_max: dict[int, int] = defaultdict(int)
-        player_prov_min: dict[int, int] = defaultdict(lambda: 10_000)
+        player_prov_min: dict[int, int] = {}
+        for player_id, cnt in current_player_counts.items():
+            if cnt > 0:
+                player_prov_sum[player_id] = float(cnt)
+                player_prov_n[player_id] = 1
+                player_prov_max[player_id] = cnt
+                player_prov_min[player_id] = cnt
 
-        def _record_state(land_provinces: dict):
-            counts: dict[int, int] = defaultdict(int)
-            for pid, p in land_provinces.items():
-                morale = float(p.morale)
-                prov_morale_sum[pid] += morale
-                prov_morale_n[pid] += 1
-                if pid in prov_morale_min:
-                    prov_morale_min[pid] = min(prov_morale_min[pid], morale)
-                    prov_morale_max[pid] = max(prov_morale_max[pid], morale)
-                else:
-                    prov_morale_min[pid] = morale
-                    prov_morale_max[pid] = morale
-                owner = p.owner_id
-                if owner > _UNOWNED:
-                    counts[owner] += 1
-
-            for player_id, cnt in counts.items():
-                player_prov_sum[player_id] += cnt
-                player_prov_n[player_id] += 1
-                player_prov_max[player_id] = max(player_prov_max[player_id], cnt)
-                if player_id not in player_prov_min or cnt < player_prov_min[player_id]:
-                    player_prov_min[player_id] = cnt
-
-        # Record initial snapshot
-        _record_state(initial_land)
+        # ---- Register hooks — only changed provinces fire events ----
+        replay.register_province_trigger(["owner_id", "morale"])
 
         # ---- Iterate all timestamps ----
         while replay.jump_to_next_patch():
-            gs = replay.game_state
-            if gs is None:
-                continue
-            land = {
-                pid: p
-                for pid, p in gs.states.map_state.map.provinces.items()
-                if _is_land_province(p)
-            }
-            for pid, p in land.items():
-                if p.owner_id != prev_owners.get(pid, -999):
-                    ownership_changes[pid] += 1
-                    prev_owners[pid] = p.owner_id
-            _record_state(land)
+            events = replay.poll_events()
+            for event in events.get(ReplayHookTag.ProvinceChanged, []):
+                province = event.reference
+                pid = province.id
+                attrs = event.attributes
 
-        # ---- Final state (current after loop) ----
+                if "owner_id" in attrs:
+                    old_owner, new_owner = attrs["owner_id"]
+                    ownership_changes[pid] += 1
+                    current_owners[pid] = new_owner if new_owner is not None else _UNOWNED
+                    if old_owner is not None and old_owner > _UNOWNED:
+                        current_player_counts[old_owner] = max(0, current_player_counts[old_owner] - 1)
+                    if new_owner is not None and new_owner > _UNOWNED:
+                        current_player_counts[new_owner] += 1
+
+                if "morale" in attrs:
+                    _, new_morale = attrs["morale"]
+                    if new_morale is not None:
+                        morale = float(new_morale)
+                        prov_morale_sum[pid] = prov_morale_sum.get(pid, 0.0) + morale
+                        prov_morale_n[pid] = prov_morale_n.get(pid, 0) + 1
+                        if pid in prov_morale_min:
+                            prov_morale_min[pid] = min(prov_morale_min[pid], morale)
+                            prov_morale_max[pid] = max(prov_morale_max[pid], morale)
+                        else:
+                            prov_morale_min[pid] = morale
+                            prov_morale_max[pid] = morale
+
+            # Snapshot player territory counts — O(players), not O(provinces)
+            for player_id, cnt in current_player_counts.items():
+                if cnt <= 0:
+                    continue
+                player_prov_sum[player_id] += cnt
+                player_prov_n[player_id] += 1
+                player_prov_max[player_id] = max(player_prov_max[player_id], cnt)
+                if player_id in player_prov_min:
+                    player_prov_min[player_id] = min(player_prov_min[player_id], cnt)
+                else:
+                    player_prov_min[player_id] = cnt
+
+        # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
         if gs is None:
             raise ValueError("game_state is None at end of replay")
 
-        final_map = gs.states.map_state.map
         final_land = {
-            pid: p for pid, p in final_map.provinces.items() if _is_land_province(p)
+            pid: p
+            for pid, p in gs.states.map_state.map.provinces.items()
+            if _is_land_province(p)
         }
 
         # ---- Players ----
         players_map = gs.states.player_state.players
 
         initial_player_counts: dict[int, int] = defaultdict(int)
-        for p in initial_land.values():
-            if p.owner_id > _UNOWNED:
-                initial_player_counts[p.owner_id] += 1
-
-        final_player_counts: dict[int, int] = defaultdict(int)
-        for p in final_land.values():
-            if p.owner_id > _UNOWNED:
-                final_player_counts[p.owner_id] += 1
+        for oid in initial_owners.values():
+            if oid > _UNOWNED:
+                initial_player_counts[oid] += 1
 
         players: list[PlayerData] = []
         for player_id, profile in players_map.items():
@@ -210,7 +223,7 @@ class ReplayExtractor(BaseExtractor):
                 is_playing=bool(profile.playing),
                 final_vp=int(profile.victory_points),
                 initial_province_count=initial_player_counts.get(player_id, 0),
-                final_province_count=final_player_counts.get(player_id, 0),
+                final_province_count=current_player_counts.get(player_id, 0),
                 max_province_count=player_prov_max.get(player_id, 0),
                 min_province_count=player_prov_min.get(player_id, 0),
                 avg_province_count=player_prov_sum.get(player_id, 0) / n,
@@ -221,23 +234,23 @@ class ReplayExtractor(BaseExtractor):
 
         # ---- Provinces ----
         provinces: list[ProvinceData] = []
-        for pid, meta in province_meta.items():
+        for pid, pmeta in province_meta.items():
             final_p = final_land.get(pid)
             n = prov_morale_n.get(pid, 1)
             provinces.append(ProvinceData(
                 province_id=pid,
-                province_name=meta["name"],
-                terrain_type=meta["terrain_type"],
-                is_coastal=meta["is_coastal"],
+                province_name=pmeta["name"],
+                terrain_type=pmeta["terrain_type"],
+                is_coastal=pmeta["is_coastal"],
                 initial_owner_id=initial_owners.get(pid, -1),
-                final_owner_id=final_p.owner_id if final_p else -1,
+                final_owner_id=current_owners.get(pid, -1),
                 ownership_changes=ownership_changes.get(pid, 0),
-                resource_production_type=meta["resource_production_type"],
+                resource_production_type=pmeta["resource_production_type"],
                 resource_production=int(final_p.resource_production or 0) if final_p else 0,
                 money_production=int(final_p.money_production) if final_p else 0,
-                avg_morale=prov_morale_sum.get(pid, 0) / n,
-                min_morale=prov_morale_min.get(pid, 0),
-                max_morale=prov_morale_max.get(pid, 0),
+                avg_morale=prov_morale_sum.get(pid, 0.0) / n,
+                min_morale=prov_morale_min.get(pid, 0.0),
+                max_morale=prov_morale_max.get(pid, 0.0),
             ))
 
         return GameData(
