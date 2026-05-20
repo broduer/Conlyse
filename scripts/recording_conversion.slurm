@@ -39,8 +39,7 @@ recording-converter \
   --mode rur \
   --bulk \
   --processes $SLURM_CPUS_PER_TASK \
-  --overwrite \
-  -q
+  --overwrite
 
 
 echo "[$(date)] Loading modules for compression..."

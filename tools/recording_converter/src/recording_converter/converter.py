@@ -1,13 +1,14 @@
 """
 Converter for transforming recorder data to replay format.
 """
+import sys
 from multiprocessing import Pool
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from tqdm import tqdm
 
-from conflict_interface.logger_config import get_logger
+from .recorder_logger import get_logger
 from .enums import OperatingMode
 from .from_game_state_using_make_bipatch_to_replay import FromGameStateUsingMakeBiPatchToReplay
 from .from_json_responses_using_update_to_replay import FromJsonResponsesUsingUpdateToReplay
@@ -244,6 +245,7 @@ def convert_recordings_root(
                 total=len(jobs),
                 desc="Recordings",
                 unit="rec",
+                file=sys.stdout,
             )
         for recording_dir, success in iterator:
             if not success:
@@ -259,6 +261,7 @@ def convert_recordings_root(
                     total=len(jobs),
                     desc="Recordings",
                     unit="rec",
+                    file=sys.stdout,
                 )
             for recording_dir, success in iterator:
                 if not success:
