@@ -23,7 +23,6 @@ export default function CountryWinRateChart({ data, topN = 20 }: Props) {
     .map((c) => ({
       name: c.nation_name,
       win_rate: parseFloat((c.win_rate * 100).toFixed(1)),
-      games: c.games_played,
     }));
 
   return (
@@ -36,7 +35,7 @@ export default function CountryWinRateChart({ data, topN = 20 }: Props) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--ifm-color-emphasis-300)" horizontal={false} />
         <XAxis
           type="number"
-          domain={[0, 100]}
+          domain={[0, (dataMax: number) => Math.ceil(dataMax / 5) * 5]}
           tickFormatter={(v) => `${v}%`}
           tick={{ fontSize: 11, fill: 'var(--ifm-font-color-base)' }}
         />
@@ -53,10 +52,7 @@ export default function CountryWinRateChart({ data, topN = 20 }: Props) {
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number, _: string, props) => [
-            `${value}% (${props.payload.games} games)`,
-            'Win rate',
-          ]}
+          formatter={(value: number) => [`${value}%`, 'Win rate']}
         />
         <Bar dataKey="win_rate" radius={[0, 3, 3, 0]}>
           {chartData.map((entry, index) => (
