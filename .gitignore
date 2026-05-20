@@ -80,3 +80,5 @@ infra/prod/account_pool.json
 infra/prod/server-converter-config.json
 infra/prod/server-observer-config.toml
 infra/prod/server-observer-config.toml
+/tools/game_stats_extractor/src/game_stats_extractor.egg-info/
+/replays_out/

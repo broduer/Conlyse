@@ -1,0 +1,56 @@
+"""
+Intermediate per-game data structures (not serialized — used only as pipeline input to aggregators).
+"""
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional
+
+
+@dataclass
+class PlayerData:
+    player_id: int
+    nation_name: str
+    player_name: str
+    team_id: int
+    is_ai: bool
+    is_defeated: bool
+    is_playing: bool
+    final_vp: int
+    initial_province_count: int
+    final_province_count: int
+    max_province_count: int
+    min_province_count: int
+    avg_province_count: float
+
+
+@dataclass
+class ProvinceData:
+    province_id: int
+    province_name: str
+    terrain_type: str
+    is_coastal: bool
+    initial_owner_id: int
+    final_owner_id: int
+    ownership_changes: int
+    resource_production_type: Optional[str]
+    resource_production: int
+    money_production: int
+    avg_morale: float
+    min_morale: float
+    max_morale: float
+
+
+@dataclass
+class GameData:
+    game_id: int
+    map_id: str
+    file_path: str
+    start_time: datetime
+    end_time: datetime
+    game_days: int
+    total_updates: int
+    winner_ids: list[int]
+    victory_type: str  # "solo", "coalition", "unknown"
+    game_ended: bool
+    players: list[PlayerData] = field(default_factory=list)
+    provinces: list[ProvinceData] = field(default_factory=list)

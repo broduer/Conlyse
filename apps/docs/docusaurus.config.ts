@@ -74,6 +74,11 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          to: '/statistics',
+          label: 'Statistics',
+          position: 'left',
+        },
+        {
           href: 'https://github.com/zdox/Conlyse',
           label: 'GitHub',
           position: 'right',
@@ -135,6 +140,15 @@ const config: Config = {
             {
               label: 'Data Types',
               to: '/docs/conflict-interface/data-types',
+            },
+          ],
+        },
+        {
+          title: 'Statistics',
+          items: [
+            {
+              label: 'Game Statistics',
+              to: '/statistics',
             },
           ],
         },
