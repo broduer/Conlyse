@@ -285,7 +285,7 @@ class ReplayTimeline:
             segment = self._create_segment(
                 current_game_state,
                 version,
-                self.last_time,
+                to_time_stamp,
                 map_id=map_id,
             )
 

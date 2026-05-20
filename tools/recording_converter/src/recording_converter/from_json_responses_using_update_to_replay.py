@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -15,9 +16,10 @@ class FromJsonResponsesUsingUpdateToReplay:
     Converts game recordings from JSON responses to replay format using ReplayBuilder.
     """
 
-    def __init__(self, recording_reader: RecordingReader, use_tqdm: bool = True):
+    def __init__(self, recording_reader: RecordingReader, use_tqdm: bool = True, bulk_mode: bool = False):
         self.reader = recording_reader
         self._use_tqdm = use_tqdm
+        self._log_level = logging.DEBUG if bulk_mode else logging.INFO
 
     def convert(
             self,
@@ -38,14 +40,14 @@ class FromJsonResponsesUsingUpdateToReplay:
             logger.error(str(e))
             return False
 
-        logger.info(f"Successfully converted recording to replay: {output_file}")
+        logger.log(self._log_level, f"Successfully converted recording to replay: {output_file}")
         return True
 
     def _prepare_output_file(self, output_file: Path, overwrite: bool) -> bool:
         output_path = Path(output_file)
         if output_path.exists():
             if overwrite:
-                logger.info(f"Overwriting existing output file: {output_file}")
+                logger.log(self._log_level, f"Overwriting existing output file: {output_file}")
                 output_path.unlink()
             else:
                 logger.error(f"Output file already exists (use overwrite=True): {output_file}")

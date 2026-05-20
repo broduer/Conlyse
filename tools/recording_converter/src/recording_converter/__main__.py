@@ -260,6 +260,7 @@ Patch creation modes:
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as e:
+        logging.getLogger("rec_conv").error("Unhandled exception: %s", e, exc_info=True)
         sys.exit(1)
 
 

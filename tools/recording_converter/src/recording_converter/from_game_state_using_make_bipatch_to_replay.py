@@ -1,4 +1,5 @@
 
+import logging
 from pathlib import Path
 
 from tqdm import tqdm
@@ -11,10 +12,11 @@ from .recording_reader import RecordingReader
 
 logger = get_logger()
 class FromGameStateUsingMakeBiPatchToReplay:
-    def __init__(self, recording_reader: RecordingReader, use_tqdm: bool = True):
+    def __init__(self, recording_reader: RecordingReader, use_tqdm: bool = True, bulk_mode: bool = False):
         self.reader = recording_reader
         self.game_states_file = self.reader.game_states_file
         self._use_tqdm = use_tqdm
+        self._log_level = logging.DEBUG if bulk_mode else logging.INFO
 
     def convert(self,
                 output_file: Path,
@@ -51,19 +53,19 @@ class FromGameStateUsingMakeBiPatchToReplay:
             logger.error("Could not determine player_id from recording")
             return False
 
-        logger.info(f"Converting recording to replay using state-based mode: game_id={game_id}, player_id={player_id}")
-        logger.info(f"Total game states: {len_game_states}")
+        logger.log(self._log_level, f"Converting recording to replay using state-based mode: game_id={game_id}, player_id={player_id}")
+        logger.log(self._log_level, f"Total game states: {len_game_states}")
         output_path = Path(output_file)
         if output_path.exists() and overwrite:
             # delete existing file
-            logger.info(f"Overwriting existing output file: {output_file}")
+            logger.log(self._log_level, f"Overwriting existing output file: {output_file}")
             output_path.unlink()
 
         # Create replay in write mode
         with ReplaySegment(file_path=output_file, mode='w', game_id=game_id, player_id=player_id) as replay:
             # Record initial game state
             first_datetime = unix_ms_to_datetime(int(first_state.time_stamp))
-            logger.info(f"Recording initial state at {first_datetime} game time")
+            logger.log(self._log_level, f"Recording initial state at {first_datetime} game time")
             replay.record_initial_game_state(
                 time_stamp=first_datetime,
                 game_id=game_id,
