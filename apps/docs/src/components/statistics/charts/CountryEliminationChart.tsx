@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,14 +16,15 @@ interface Props {
   topN?: number;
 }
 
-export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
+export default function CountryEliminationChart({ data, topN = 20 }: Props) {
   const chartData = data
-    .sort((a, b) => b.avg_final_provinces - a.avg_final_provinces)
+    .sort((a, b) => b.elimination_rate - a.elimination_rate)
     .slice(0, topN)
     .map((c) => ({
       name: c.nation_name,
-      avg_final: parseFloat(c.avg_final_provinces.toFixed(1)),
-      avg_initial: parseFloat(c.avg_initial_provinces.toFixed(1)),
+      elimination_rate: parseFloat((c.elimination_rate * 100).toFixed(1)),
+      survival_days: parseFloat(c.avg_survival_days.toFixed(1)),
+      games: c.games_played,
     }));
 
   return (
@@ -30,13 +32,14 @@ export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
       <BarChart
         data={chartData}
         layout="vertical"
-        margin={{ top: 8, right: 32, left: 4, bottom: 8 }}
+        margin={{ top: 8, right: 48, left: 4, bottom: 8 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="var(--ifm-color-emphasis-300)" horizontal={false} />
         <XAxis
           type="number"
+          domain={[0, 100]}
+          tickFormatter={(v) => `${v}%`}
           tick={{ fontSize: 11, fill: 'var(--ifm-font-color-base)' }}
-          label={{ value: 'Provinces', position: 'insideBottomRight', offset: -8, fontSize: 11 }}
         />
         <YAxis
           type="category"
@@ -51,13 +54,19 @@ export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number, name: string) => [
-            value,
-            name === 'avg_final' ? 'Avg final provinces' : 'Avg starting provinces',
+          formatter={(value: number, _: string, props) => [
+            `${value}% eliminated · ${props.payload.survival_days}d avg survival · ${props.payload.games} games`,
+            'Elimination rate',
           ]}
         />
-        <Bar dataKey="avg_initial" name="avg_initial" fill="var(--ifm-color-emphasis-400)" radius={[0, 3, 3, 0]} />
-        <Bar dataKey="avg_final" name="avg_final" fill="var(--ifm-color-primary)" radius={[0, 3, 3, 0]} />
+        <Bar dataKey="elimination_rate" radius={[0, 3, 3, 0]}>
+          {chartData.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.elimination_rate < 25 ? '#50c878' : entry.elimination_rate < 50 ? '#f5a623' : '#e74c3c'}
+            />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
+import CountryEliminationChart from '../charts/CountryEliminationChart';
+import CountryExpansionChart from '../charts/CountryExpansionChart';
+import CountryPlacementChart from '../charts/CountryPlacementChart';
 import CountryTerritoryChart from '../charts/CountryTerritoryChart';
 import CountryWinRateChart from '../charts/CountryWinRateChart';
 import type { CountryAggregate } from '../types';
@@ -8,50 +11,42 @@ interface Props {
   data: CountryAggregate[];
 }
 
-const MIN_GAMES_OPTIONS = [3, 5, 10, 20];
-
 export default function CountryStatsSection({ data }: Props) {
-  const [minGames, setMinGames] = useState(5);
-
-  const eligible = data.filter((c) => c.games_played >= minGames);
-
   return (
     <section className={styles.section}>
       <div className={styles.sectionHeader}>
         <div>
           <h2 className={styles.heading}>Country Performance</h2>
           <p className={styles.description}>
-            Aggregated across all games per nation. {eligible.length} nations with ≥{minGames} games.
+            Aggregated across all games per nation. {data.length} nations.
           </p>
-        </div>
-        <div className={styles.filter}>
-          <label htmlFor="min-games" className={styles.filterLabel}>
-            Min games:
-          </label>
-          <select
-            id="min-games"
-            className={styles.filterSelect}
-            value={minGames}
-            onChange={(e) => setMinGames(Number(e.target.value))}
-          >
-            {MIN_GAMES_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n}+
-              </option>
-            ))}
-          </select>
         </div>
       </div>
       <div className={styles.grid}>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Win Rate by Country (Top 20)</h3>
           <p className={styles.chartSubtitle}>% of games won · coloured by performance tier</p>
-          <CountryWinRateChart data={data} minGames={minGames} topN={20} />
+          <CountryWinRateChart data={data} topN={20} />
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Territory Control (Top 20)</h3>
           <p className={styles.chartSubtitle}>Average provinces at start vs end of game</p>
-          <CountryTerritoryChart data={data} minGames={minGames} topN={20} />
+          <CountryTerritoryChart data={data} topN={20} />
+        </div>
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Average Placement (Top 20)</h3>
+          <p className={styles.chartSubtitle}>Lower = better rank · avg VP shown in tooltip</p>
+          <CountryPlacementChart data={data} topN={20} />
+        </div>
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Elimination Rate (Top 20)</h3>
+          <p className={styles.chartSubtitle}>% of games where country was eliminated · avg survival days in tooltip</p>
+          <CountryEliminationChart data={data} topN={20} />
+        </div>
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Territory Expansion (Top 20)</h3>
+          <p className={styles.chartSubtitle}>Avg province gain from game start to end</p>
+          <CountryExpansionChart data={data} topN={20} />
         </div>
       </div>
     </section>

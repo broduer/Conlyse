@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,14 +16,15 @@ interface Props {
   topN?: number;
 }
 
-export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
+export default function CountryPlacementChart({ data, topN = 20 }: Props) {
   const chartData = data
-    .sort((a, b) => b.avg_final_provinces - a.avg_final_provinces)
+    .sort((a, b) => a.avg_placement - b.avg_placement)
     .slice(0, topN)
     .map((c) => ({
       name: c.nation_name,
-      avg_final: parseFloat(c.avg_final_provinces.toFixed(1)),
-      avg_initial: parseFloat(c.avg_initial_provinces.toFixed(1)),
+      placement: parseFloat(c.avg_placement.toFixed(2)),
+      vp: Math.round(c.avg_final_vp),
+      games: c.games_played,
     }));
 
   return (
@@ -30,13 +32,13 @@ export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
       <BarChart
         data={chartData}
         layout="vertical"
-        margin={{ top: 8, right: 32, left: 4, bottom: 8 }}
+        margin={{ top: 8, right: 48, left: 4, bottom: 8 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="var(--ifm-color-emphasis-300)" horizontal={false} />
         <XAxis
           type="number"
           tick={{ fontSize: 11, fill: 'var(--ifm-font-color-base)' }}
-          label={{ value: 'Provinces', position: 'insideBottomRight', offset: -8, fontSize: 11 }}
+          tickFormatter={(v) => `#${v}`}
         />
         <YAxis
           type="category"
@@ -51,13 +53,19 @@ export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number, name: string) => [
-            value,
-            name === 'avg_final' ? 'Avg final provinces' : 'Avg starting provinces',
+          formatter={(value: number, _: string, props) => [
+            `#${value} avg rank · ${props.payload.vp} avg VP · ${props.payload.games} games`,
+            'Placement',
           ]}
         />
-        <Bar dataKey="avg_initial" name="avg_initial" fill="var(--ifm-color-emphasis-400)" radius={[0, 3, 3, 0]} />
-        <Bar dataKey="avg_final" name="avg_final" fill="var(--ifm-color-primary)" radius={[0, 3, 3, 0]} />
+        <Bar dataKey="placement" radius={[0, 3, 3, 0]}>
+          {chartData.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.placement <= 3 ? '#50c878' : entry.placement <= 6 ? '#f5a623' : '#e74c3c'}
+            />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

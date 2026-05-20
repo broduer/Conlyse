@@ -13,13 +13,11 @@ import type { CountryAggregate } from '../types';
 
 interface Props {
   data: CountryAggregate[];
-  minGames?: number;
   topN?: number;
 }
 
-export default function CountryWinRateChart({ data, minGames = 5, topN = 20 }: Props) {
+export default function CountryWinRateChart({ data, topN = 20 }: Props) {
   const chartData = data
-    .filter((c) => c.games_played >= minGames)
     .sort((a, b) => b.win_rate - a.win_rate)
     .slice(0, topN)
     .map((c) => ({
@@ -33,7 +31,7 @@ export default function CountryWinRateChart({ data, minGames = 5, topN = 20 }: P
       <BarChart
         data={chartData}
         layout="vertical"
-        margin={{ top: 8, right: 48, left: 100, bottom: 8 }}
+        margin={{ top: 8, right: 48, left: 4, bottom: 8 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="var(--ifm-color-emphasis-300)" horizontal={false} />
         <XAxis
