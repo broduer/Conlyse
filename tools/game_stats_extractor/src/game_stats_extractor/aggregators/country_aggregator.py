@@ -38,6 +38,8 @@ def _aggregate_country(
     initial_provs = [p.initial_province_count for _, p in entries]
     expansions = [p.final_province_count - p.initial_province_count for _, p in entries]
     eliminated = sum(1 for _, p in entries if p.is_defeated)
+    captures = [p.provinces_captured for _, p in entries]
+    losses = [p.provinces_lost for _, p in entries]
 
     # Placement: rank by final_vp within each game (1 = best)
     placements: list[float] = []
@@ -47,6 +49,7 @@ def _aggregate_country(
         )
         rank = sorted_vps.index(player.final_vp) + 1 if player.final_vp in sorted_vps else len(sorted_vps)
         placements.append(float(rank))
+    median_placement = statistics.median(placements) if placements else 0.0
 
     # Survival days: game_days for non-eliminated, partial for eliminated
     survival_days = []
@@ -71,9 +74,12 @@ def _aggregate_country(
         win_rate=wins / games_played,
         avg_final_vp=_mean(final_vps),
         avg_placement=_mean(placements),
+        median_placement=median_placement,
         avg_final_provinces=_mean(final_provs),
         avg_initial_provinces=_mean(initial_provs),
         avg_expansion=_mean(expansions),
+        avg_provinces_captured=_mean(captures),
+        avg_provinces_lost=_mean(losses),
         elimination_rate=eliminated / games_played,
         avg_survival_days=_mean(survival_days),
     )

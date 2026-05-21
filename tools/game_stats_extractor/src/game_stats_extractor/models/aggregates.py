@@ -27,6 +27,7 @@ class GlobalAggregate(BaseModel):
     player_count_distribution: dict[str, int]
     avg_dropout_rate: float
     avg_game_days: float
+    avg_update_interval_seconds: float
 
 
 class CountryAggregate(BaseModel):
@@ -37,9 +38,12 @@ class CountryAggregate(BaseModel):
     win_rate: float
     avg_final_vp: float
     avg_placement: float
+    median_placement: float
     avg_final_provinces: float
     avg_initial_provinces: float
     avg_expansion: float
+    avg_provinces_captured: float
+    avg_provinces_lost: float
     elimination_rate: float
     avg_survival_days: float
 
@@ -57,6 +61,7 @@ class ProvinceAggregate(BaseModel):
     resource_production_type: Optional[str]
     avg_resource_production: float
     avg_money_production: float
+    avg_morale: float
 
 
 class MetaInfo(BaseModel):

@@ -74,6 +74,11 @@ class ReplayExtractor(BaseExtractor):
         end_time = replay.last_time
         timestamps = replay.get_timestamps()
         total_updates = len(timestamps)
+        avg_update_interval_seconds = (
+            (end_time - start_time).total_seconds() / (total_updates - 1)
+            if total_updates > 1
+            else 0.0
+        )
 
         # game_id and day_of_game come from the timeline metadata header (authoritative)
         game_id: int = meta.game_id or 0
@@ -124,6 +129,8 @@ class ReplayExtractor(BaseExtractor):
                 current_player_counts[oid] += 1
 
         ownership_changes: dict[int, int] = defaultdict(int)
+        player_captures: dict[int, int] = defaultdict(int)
+        player_losses: dict[int, int] = defaultdict(int)
 
         # Morale accumulators — seeded with the initial snapshot
         prov_morale_sum: dict[int, float] = {pid: float(p.morale) for pid, p in initial_land.items()}
@@ -160,8 +167,10 @@ class ReplayExtractor(BaseExtractor):
                     current_owners[pid] = new_owner if new_owner is not None else _UNOWNED
                     if old_owner is not None and old_owner > _UNOWNED:
                         current_player_counts[old_owner] = max(0, current_player_counts[old_owner] - 1)
+                        player_losses[old_owner] += 1
                     if new_owner is not None and new_owner > _UNOWNED:
                         current_player_counts[new_owner] += 1
+                        player_captures[new_owner] += 1
 
                 if "morale" in attrs:
                     _, new_morale = attrs["morale"]
@@ -227,6 +236,8 @@ class ReplayExtractor(BaseExtractor):
                 max_province_count=player_prov_max.get(player_id, 0),
                 min_province_count=player_prov_min.get(player_id, 0),
                 avg_province_count=player_prov_sum.get(player_id, 0) / n,
+                provinces_captured=player_captures.get(player_id, 0),
+                provinces_lost=player_losses.get(player_id, 0),
             ))
 
         # ---- Victory detection ----
@@ -261,6 +272,7 @@ class ReplayExtractor(BaseExtractor):
             end_time=end_time,
             game_days=game_days,
             total_updates=total_updates,
+            avg_update_interval_seconds=avg_update_interval_seconds,
             winner_ids=winner_ids,
             victory_type=victory_type,
             game_ended=True,  # guaranteed by early exit in extract()

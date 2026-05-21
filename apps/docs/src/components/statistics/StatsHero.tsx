@@ -16,6 +16,13 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatInterval(seconds: number): string {
+  if (seconds <= 0) return '—';
+  if (seconds >= 3600) return `${(seconds / 3600).toFixed(1)}h`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)}min`;
+  return `${Math.round(seconds)}s`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
@@ -54,6 +61,7 @@ export default function StatsHero({ global: g, meta }: Props) {
         <StatCard label="Avg game days" value={g.avg_game_days.toFixed(0)} />
         <StatCard label="Avg players" value={g.avg_players_per_game.toFixed(1)} />
         <StatCard label="Avg dropout rate" value={`${(g.avg_dropout_rate * 100).toFixed(0)}%`} />
+        <StatCard label="Avg update interval" value={formatInterval(g.avg_update_interval_seconds)} />
         <StatCard label="Most common win" value={topTypeLabel} />
       </div>
     </div>

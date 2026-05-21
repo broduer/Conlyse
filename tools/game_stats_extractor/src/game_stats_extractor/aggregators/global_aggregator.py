@@ -23,6 +23,7 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
                 player_count_distribution={},
                 avg_dropout_rate=0,
                 avg_game_days=0,
+                avg_update_interval_seconds=0,
             )
 
         durations = [
@@ -62,6 +63,8 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
                 hours = (g.end_time - g.start_time).total_seconds() / 3600.0
                 game_days_list.append(hours / 4.0)
 
+        update_intervals = [g.avg_update_interval_seconds for g in games if g.avg_update_interval_seconds > 0]
+
         return GlobalAggregate(
             total_games=len(games),
             avg_duration_hours=statistics.mean(durations),
@@ -74,6 +77,7 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             player_count_distribution=human_count_dist,
             avg_dropout_rate=statistics.mean(dropout_rates) if dropout_rates else 0.0,
             avg_game_days=statistics.mean(game_days_list) if game_days_list else 0.0,
+            avg_update_interval_seconds=statistics.mean(update_intervals) if update_intervals else 0.0,
         )
 
 

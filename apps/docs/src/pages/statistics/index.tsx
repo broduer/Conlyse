@@ -19,12 +19,14 @@ interface StatsData {
   meta: MetaInfo;
 }
 
+const STATS_BASE_URL = 'https://r2.conlyse.zdox.dev/stats';
+
 async function fetchStats(): Promise<StatsData> {
   const [global, countries, provinces, meta] = await Promise.all([
-    fetch('/data/stats/global.json').then((r) => r.json()),
-    fetch('/data/stats/countries.json').then((r) => r.json()),
-    fetch('/data/stats/provinces.json').then((r) => r.json()),
-    fetch('/data/stats/meta.json').then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/global.json`).then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/countries.json`).then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/provinces.json`).then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/meta.json`).then((r) => r.json()),
   ]);
   return { global, countries, provinces, meta };
 }
@@ -49,7 +51,7 @@ export default function StatisticsPage() {
           <div className={styles.error}>
             <strong>Could not load statistics.</strong> Run the extractor first:
             <pre className={styles.errorPre}>
-              {`pip install -e tools/game_stats_extractor\ngame-stats-extractor --replays-dir /path/to/replays --output apps/docs/static/data/stats`}
+              {`pip install -e tools/game_stats_extractor\ngame-stats-extractor --replays-dir /path/to/replays --output /tmp/stats\n# then upload /tmp/stats/*.json to ${STATS_BASE_URL}`}
             </pre>
             <p className={styles.errorDetail}>{error}</p>
           </div>

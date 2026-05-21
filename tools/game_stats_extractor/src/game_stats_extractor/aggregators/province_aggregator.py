@@ -71,6 +71,7 @@ def _aggregate_province(
 
     avg_resource_production = statistics.mean(p.resource_production for _, p in entries)
     avg_money_production = statistics.mean(p.money_production for _, p in entries)
+    avg_morale = statistics.mean(p.avg_morale for _, p in entries)
 
     return ProvinceAggregate(
         province_id=province_id,
@@ -84,4 +85,5 @@ def _aggregate_province(
         resource_production_type=resource_production_type,
         avg_resource_production=avg_resource_production,
         avg_money_production=avg_money_production,
+        avg_morale=avg_morale,
     )

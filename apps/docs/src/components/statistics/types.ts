@@ -18,6 +18,7 @@ export interface GlobalAggregate {
   player_count_distribution: Record<string, number>;
   avg_dropout_rate: number;
   avg_game_days: number;
+  avg_update_interval_seconds: number;
 }
 
 export interface CountryAggregate {
@@ -27,9 +28,12 @@ export interface CountryAggregate {
   win_rate: number;
   avg_final_vp: number;
   avg_placement: number;
+  median_placement: number;
   avg_final_provinces: number;
   avg_initial_provinces: number;
   avg_expansion: number;
+  avg_provinces_captured: number;
+  avg_provinces_lost: number;
   elimination_rate: number;
   avg_survival_days: number;
 }
@@ -46,6 +50,7 @@ export interface ProvinceAggregate {
   resource_production_type: string | null;
   avg_resource_production: number;
   avg_money_production: number;
+  avg_morale: number;
 }
 
 export interface MetaInfo {

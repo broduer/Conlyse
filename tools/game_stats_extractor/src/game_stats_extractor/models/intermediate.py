@@ -21,6 +21,8 @@ class PlayerData:
     max_province_count: int
     min_province_count: int
     avg_province_count: float
+    provinces_captured: int = 0
+    provinces_lost: int = 0
 
 
 @dataclass
@@ -49,6 +51,7 @@ class GameData:
     end_time: datetime
     game_days: int
     total_updates: int
+    avg_update_interval_seconds: float
     winner_ids: list[int]
     victory_type: str  # "solo", "coalition", "unknown"
     game_ended: bool
