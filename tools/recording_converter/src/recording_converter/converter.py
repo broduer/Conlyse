@@ -1,13 +1,14 @@
 """
 Converter for transforming recorder data to replay format.
 """
+import sys
 from multiprocessing import Pool
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from tqdm import tqdm
 
-from conflict_interface.logger_config import get_logger
+from .recorder_logger import get_logger
 from .enums import OperatingMode
 from .from_game_state_using_make_bipatch_to_replay import FromGameStateUsingMakeBiPatchToReplay
 from .from_json_responses_using_update_to_replay import FromJsonResponsesUsingUpdateToReplay
@@ -38,18 +39,22 @@ class RecordingConverter:
         recording_dir: str | Path,
         operating_mode: OperatingMode,
         use_tqdm: bool = True,
+        bulk_mode: bool = False,
     ):
         """
         Initialize converter with recording directory.
-        
+
         Args:
             recording_dir: Path to the recording directory
             operating_mode: One of the three operating modes
+            bulk_mode: When True, per-game progress/success messages are logged at DEBUG
+                       instead of INFO to avoid flooding logs during bulk conversions.
         """
         self.path = Path(recording_dir)
         # Controls whether tqdm-based progress bars are enabled for this converter.
         # In multiprocessing worker processes we usually disable tqdm to avoid garbled output.
         self._use_tqdm = use_tqdm
+        self._bulk_mode = bulk_mode
         self.reader = RecordingReader(self.path, use_tqdm=self._use_tqdm)
         self.op_mode = operating_mode
 
@@ -83,14 +88,14 @@ class RecordingConverter:
             logger.error(f"Output file already exists: {output}")
             return False
         if self.op_mode == OperatingMode.gmr:
-            gmr = FromGameStateUsingMakeBiPatchToReplay(self.reader, use_tqdm=self._use_tqdm)
+            gmr = FromGameStateUsingMakeBiPatchToReplay(self.reader, use_tqdm=self._use_tqdm, bulk_mode=self._bulk_mode)
             return gmr.convert(output_file=output,
                                overwrite=overwrite,
                                limit=limit,
                                game_id=game_id,
                                player_id=player_id)
         elif self.op_mode == OperatingMode.rur:
-            rur = FromJsonResponsesUsingUpdateToReplay(self.reader, use_tqdm=self._use_tqdm)
+            rur = FromJsonResponsesUsingUpdateToReplay(self.reader, use_tqdm=self._use_tqdm, bulk_mode=self._bulk_mode)
             return rur.convert(output_file=output,
                                overwrite=overwrite,
                                limit=limit,
@@ -125,7 +130,7 @@ def _convert_single_recording_worker(
     try:
         # Disable tqdm inside worker processes to avoid clashing with the
         # main-process progress bar in bulk mode.
-        converter = RecordingConverter(recording_dir, op_mode, use_tqdm=False)
+        converter = RecordingConverter(recording_dir, op_mode, use_tqdm=False, bulk_mode=True)
         success = converter.convert(
             output=output_file,
             overwrite=overwrite,
@@ -209,7 +214,7 @@ def convert_recordings_root(
                 )
                 continue
 
-        output_file = output_dir / f"{recording_dir.name}.bin"
+        output_file = output_dir / f"{recording_dir.name}.conrp"
         jobs.append(
             (
                 recording_dir,
@@ -244,6 +249,7 @@ def convert_recordings_root(
                 total=len(jobs),
                 desc="Recordings",
                 unit="rec",
+                file=sys.stdout,
             )
         for recording_dir, success in iterator:
             if not success:
@@ -259,6 +265,7 @@ def convert_recordings_root(
                     total=len(jobs),
                     desc="Recordings",
                     unit="rec",
+                    file=sys.stdout,
                 )
             for recording_dir, success in iterator:
                 if not success:

@@ -35,26 +35,25 @@ rm converted_recordings.zip
 echo "[$(date)] Running recording conversion..."
 recording-converter \
   --recording-dir converted_recordings \
-  --output-dir replays_out \
+  --output-dir replays \
   --mode rur \
   --bulk \
   --processes $SLURM_CPUS_PER_TASK \
-  --overwrite \
-  -q
+  --overwrite
 
 
 echo "[$(date)] Loading modules for compression..."
 module load stack/2025-06
 module load pigz/2.8
 
-echo "[$(date)] Compressing replays_out directory..."
-tar cf - replays_out | pigz -p $SLURM_CPUS_PER_TASK > replays_out.tar.gz
+echo "[$(date)] Compressing replays directory..."
+tar cf - replays | pigz -p $SLURM_CPUS_PER_TASK > replays.tar.gz
 
 
 # Copy results back
 echo "[$(date)] Copying results back to SCRATCH..."
 
-rsync -aq --delete ${TMPDIR}/replays_out/ ${SCRATCH}/replays_out/
-rsync -aq ${TMPDIR}/replays_out.tar.gz ${SCRATCH}/replays_out.tar.gz
+rsync -aq --delete ${TMPDIR}/replays/ ${SCRATCH}/replays/
+rsync -aq ${TMPDIR}/replays.tar.gz ${SCRATCH}/replays.tar.gz
 
 echo "[$(date)] Job finished!"

@@ -1,0 +1,85 @@
+"""Section 2.2 — per-country aggregate across all games where that country was played."""
+import statistics
+from collections import defaultdict
+
+from .base import BaseAggregator
+from ..models.aggregates import CountryAggregate
+from ..models.intermediate import GameData, PlayerData
+
+
+class CountryAggregator(BaseAggregator[list[CountryAggregate]]):
+    def aggregate(self, games: list[GameData]) -> list[CountryAggregate]:
+        # Group player records by nation_name
+        by_nation: dict[str, list[tuple[GameData, PlayerData]]] = defaultdict(list)
+        for game in games:
+            for player in game.players:
+                by_nation[player.nation_name].append((game, player))
+
+        result: list[CountryAggregate] = []
+        for nation_name, entries in by_nation.items():
+            agg = _aggregate_country(nation_name, entries)
+            result.append(agg)
+
+        result.sort(key=lambda c: c.games_played, reverse=True)
+        return result
+
+
+def _aggregate_country(
+    nation_name: str, entries: list[tuple[GameData, PlayerData]]
+) -> CountryAggregate:
+    games_played = len(entries)
+
+    wins = sum(
+        1 for game, player in entries if player.player_id in game.winner_ids
+    )
+
+    final_vps = [p.final_vp for _, p in entries]
+    final_provs = [p.final_province_count for _, p in entries]
+    initial_provs = [p.initial_province_count for _, p in entries]
+    expansions = [p.final_province_count - p.initial_province_count for _, p in entries]
+    eliminated = sum(1 for _, p in entries if p.is_defeated)
+    captures = [p.provinces_captured for _, p in entries]
+    losses = [p.provinces_lost for _, p in entries]
+
+    # Placement: rank by final_vp within each game (1 = best)
+    placements: list[float] = []
+    for game, player in entries:
+        sorted_vps = sorted(
+            (p.final_vp for p in game.players), reverse=True
+        )
+        rank = sorted_vps.index(player.final_vp) + 1 if player.final_vp in sorted_vps else len(sorted_vps)
+        placements.append(float(rank))
+    median_placement = statistics.median(placements) if placements else 0.0
+
+    # Survival days: game_days for non-eliminated, partial for eliminated
+    survival_days = []
+    for game, player in entries:
+        if not player.is_defeated:
+            survival_days.append(float(game.game_days))
+        else:
+            # Approximation: proportional to final_province_count / initial, capped at game_days
+            if game.game_days > 0 and player.initial_province_count > 0:
+                fraction = min(1.0, player.final_province_count / player.initial_province_count)
+                survival_days.append(game.game_days * fraction)
+            else:
+                survival_days.append(0.0)
+
+    def _mean(lst: list) -> float:
+        return statistics.mean(lst) if lst else 0.0
+
+    return CountryAggregate(
+        nation_name=nation_name,
+        games_played=games_played,
+        wins=wins,
+        win_rate=wins / games_played,
+        avg_final_vp=_mean(final_vps),
+        avg_placement=_mean(placements),
+        median_placement=median_placement,
+        avg_final_provinces=_mean(final_provs),
+        avg_initial_provinces=_mean(initial_provs),
+        avg_expansion=_mean(expansions),
+        avg_provinces_captured=_mean(captures),
+        avg_provinces_lost=_mean(losses),
+        elimination_rate=eliminated / games_played,
+        avg_survival_days=_mean(survival_days),
+    )

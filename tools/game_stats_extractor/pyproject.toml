@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "game-stats-extractor"
+version = "0.1.0"
+description = "CLI tool to extract and aggregate statistics from Conflict of Nations replay files"
+requires-python = ">=3.12"
+dependencies = [
+    "conflict-interface>=0.1.2",
+    "pydantic>=2.0",
+    "tqdm",
+]
+
+[project.scripts]
+game-stats-extractor = "game_stats_extractor.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

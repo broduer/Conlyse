@@ -105,7 +105,7 @@ Patch creation modes:
         '--bulk-game-limit',
         type=int,
         default=None,
-        help='In bulk mode: limit number of recordings/games to convert after filtering'
+        help='In bulk mode: limit number of recordings to convert after filtering'
     )
 
     parser.add_argument(
@@ -260,6 +260,7 @@ Patch creation modes:
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as e:
+        logging.getLogger("rec_conv").error("Unhandled exception: %s", e, exc_info=True)
         sys.exit(1)
 
 

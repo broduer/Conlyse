@@ -4,6 +4,7 @@ import json
 import os
 import pickle
 from pathlib import Path
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -171,71 +172,69 @@ class RecordingReader:
             return 0
         return len(updates)
 
-    def read_json_response_file(self, file):
-        """
-        Read a single responses_XXXX.jsonl.zst file and return a list of
-        (ResponseMetadata, response_dict) tuples.
-        """
-        json_responses: List[Tuple[ResponseMetadata, dict]] = []
-        with open(self.recording_dir/file, 'rb') as f:
+    def _iter_json_response_file(self, file) -> Iterator[Tuple[ResponseMetadata, dict]]:
+        """Yield (ResponseMetadata, dict) tuples from a single responses_XXXX.jsonl.zst file."""
+        with open(self.recording_dir / file, 'rb') as f:
             while True:
-                # Read timestamp (8 bytes)
                 timestamp_bytes = f.read(8)
                 if not timestamp_bytes:
                     break
 
                 timestamp_ms = int.from_bytes(timestamp_bytes, 'big')
 
-                # Read length (4 bytes)
                 length_bytes = f.read(4)
                 if not length_bytes:
                     break
 
                 length = int.from_bytes(length_bytes, 'big')
-                # Read compressed data
                 compressed_data = f.read(length)
                 if len(compressed_data) != length:
                     logger.warning(f"Incomplete JSON data at timestamp {timestamp_ms}")
                     break
 
-                # Decompress and parse inner payload.
-                decompressed = self._decompressor.decompress(compressed_data)
-
                 # format: [4 bytes BE metadata_len][metadata JSON][4 bytes BE response_len][response JSON]
+                decompressed = self._decompressor.decompress(compressed_data)
                 try:
                     meta_len = int.from_bytes(decompressed[0:4], "big")
                     resp_offset = 4 + meta_len
                     if meta_len > 0 and resp_offset + 4 <= len(decompressed):
-                        resp_len = int.from_bytes(
-                            decompressed[resp_offset:resp_offset + 4],
-                            "big",
-                        )
+                        resp_len = int.from_bytes(decompressed[resp_offset:resp_offset + 4], "big")
                         meta_start = 4
                         meta_end = meta_start + meta_len
                         resp_start = resp_offset + 4
                         resp_end = resp_start + resp_len
 
                         if resp_end <= len(decompressed):
-                            meta_bytes = decompressed[meta_start:meta_end]
-                            resp_bytes = decompressed[resp_start:resp_end]
-
                             metadata = ResponseMetadata.from_string(
-                                meta_bytes.decode("utf-8")
+                                decompressed[meta_start:meta_end].decode("utf-8")
                             )
-                            json_response = orjson.loads(resp_bytes)
+                            json_response = orjson.loads(decompressed[resp_start:resp_end])
 
-                            # Prefer the inner timestamp if present; otherwise, keep outer.
                             if metadata.timestamp == 0:
                                 metadata.timestamp = int(timestamp_ms)
 
-                            json_responses.append((metadata, json_response))
+                            yield metadata, json_response
                             continue
                 except Exception as exc:
                     logger.warning(
                         f"Failed to parse response frame at timestamp {timestamp_ms}: {exc}"
                     )
 
-        return json_responses
+    def read_json_response_file(self, file) -> List[Tuple[ResponseMetadata, dict]]:
+        return list(self._iter_json_response_file(file))
+
+    def stream_json_responses(self, limit: int = None) -> Iterator[Tuple[ResponseMetadata, dict]]:
+        """Yield JSON responses one at a time without buffering the full recording in memory."""
+        response_files = sorted(
+            f for f in os.listdir(self.recording_dir) if f.startswith("responses")
+        )
+        yielded = 0
+        for file in response_files:
+            for item in self._iter_json_response_file(file):
+                yield item
+                yielded += 1
+                if limit is not None and yielded >= limit:
+                    return
 
     def read_json_responses(self, limit: int = None) -> List[Tuple[ResponseMetadata, dict]]:
         """
