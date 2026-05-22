@@ -17,8 +17,12 @@ pub struct GameFinderConfig {
     pub scan_interval: f64,
     #[serde(default = "default_enabled_scanning")]
     pub enabled_scanning: bool,
+    /// Total capacity ceiling: never start a game when active sessions >= this.
     #[serde(default = "default_max_parallel_recordings")]
     pub max_parallel_recordings: i32,
+    /// Per-scan rate limit: start at most this many new games per scan cycle.
+    #[serde(default = "default_max_games_per_scan")]
+    pub max_games_per_scan: i32,
     #[serde(default = "default_max_guest_games_per_account")]
     pub max_guest_games_per_account: i32,
 }
@@ -31,6 +35,9 @@ fn default_enabled_scanning() -> bool {
 }
 fn default_max_parallel_recordings() -> i32 {
     1
+}
+fn default_max_games_per_scan() -> i32 {
+    10
 }
 fn default_max_guest_games_per_account() -> i32 {
     -1
@@ -120,6 +127,12 @@ impl GameFinder {
         }
     }
 
+    pub fn set_max_games_per_scan(&mut self, max: i32) {
+        if max >= 1 {
+            self.cfg.lock().unwrap().max_games_per_scan = max;
+        }
+    }
+
     pub fn set_max_guest_games_per_account(&mut self, max_guest: i32) {
         if max_guest >= -1 {
             self.cfg.lock().unwrap().max_guest_games_per_account = max_guest;
@@ -185,10 +198,11 @@ impl GameFinder {
                         };
                         if let Some(listing) = listing_account {
                             tracing::info!("scanning for new games");
-                            let mut active_sessions = counter();
+                            let active_sessions = counter();
                             let selected_games =
                                 select_games(&listing, &cfg_snapshot.scenario_ids, &known_games);
                             tracing::info!("Found: {:#?} games", selected_games.len());
+                            let mut started_this_scan = 0usize;
                             for (scenario_id, game) in selected_games {
                                 if let Err(err) =
                                     registry.mark_discovered(game.game_id, scenario_id).await
@@ -199,9 +213,12 @@ impl GameFinder {
                                         "failed to upsert discovered game into db"
                                     );
                                 }
-                                if active_sessions
+                                if active_sessions + started_this_scan
                                     >= cfg_snapshot.max_parallel_recordings as usize
                                 {
+                                    continue;
+                                }
+                                if started_this_scan >= cfg_snapshot.max_games_per_scan as usize {
                                     continue;
                                 }
                                 let has_available_account = {
@@ -219,7 +236,7 @@ impl GameFinder {
                                     continue;
                                 }
                                 starter(game.game_id, scenario_id);
-                                active_sessions += 1;
+                                started_this_scan += 1;
                                 known_games.lock().unwrap().insert(game.game_id);
                             }
                         } else {

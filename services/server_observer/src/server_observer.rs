@@ -126,9 +126,9 @@ impl ServerObserver {
             .get::<f64>("game_finder.scan_interval_seconds")
             .unwrap_or(300.0);
 
-        let max_parallel_recordings_cfg = settings
+        let max_games_per_scan = settings
             .get::<i64>("game_finder.max_games_per_scan")
-            .unwrap_or(max_parallel_recordings as i64) as i32;
+            .unwrap_or(10) as i32;
 
         let scenario_ids = settings
             .get::<Vec<i32>>("game_finder.scenario_ids")
@@ -142,7 +142,8 @@ impl ServerObserver {
             scenario_ids,
             scan_interval,
             enabled_scanning,
-            max_parallel_recordings: max_parallel_recordings_cfg,
+            max_parallel_recordings,
+            max_games_per_scan,
             max_guest_games_per_account,
         };
         let mut game_finder =
@@ -150,6 +151,7 @@ impl ServerObserver {
         game_finder.set_scan_interval(game_finder_cfg.scan_interval);
         game_finder.set_scenario_ids(game_finder_cfg.scenario_ids.clone());
         game_finder.set_max_parallel_recordings(game_finder_cfg.max_parallel_recordings);
+        game_finder.set_max_games_per_scan(game_finder_cfg.max_games_per_scan);
         game_finder.set_max_guest_games_per_account(game_finder_cfg.max_guest_games_per_account);
 
         let observer = Arc::new(Self {
