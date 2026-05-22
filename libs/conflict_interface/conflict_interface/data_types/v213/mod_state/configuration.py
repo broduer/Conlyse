@@ -522,10 +522,8 @@ class ArmyBoostConfig(GameObject):
 class LimitedMobilizationConfig(GameObject):
     C = "ultshared.modding.configuration.UltLimitedMobilizationConfig"
 
-    mobilization_classes: UnmodifiableSet[int] #TODO Check typing, int is unknown
     limit: int
     MAPPING = {
-        "mobilization_classes": "mobilizationClasses",
         "limit": "limit",
     }
 
