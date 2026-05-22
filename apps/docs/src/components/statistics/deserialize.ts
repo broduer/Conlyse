@@ -21,8 +21,12 @@ export function deserializeCountries(raw: ColumnarData): CountryAggregate[] {
     avg_expansion:         r[idx.avg_expansion]         as number,
     avg_provinces_captured:r[idx.avg_provinces_captured]as number,
     avg_provinces_lost:    r[idx.avg_provinces_lost]    as number,
-    elimination_rate:      r[idx.elimination_rate]      as number,
-    avg_survival_days:     r[idx.avg_survival_days]     as number,
+    elimination_rate:          r[idx.elimination_rate]          as number,
+    avg_survival_days:         r[idx.avg_survival_days]         as number,
+    avg_wars_declared:         r[idx.avg_wars_declared]         as number,
+    avg_peace_treaties_signed: r[idx.avg_peace_treaties_signed] as number,
+    avg_alliances_formed:      r[idx.avg_alliances_formed]      as number,
+    avg_right_of_ways_signed:  r[idx.avg_right_of_ways_signed]  as number,
   }));
 }
 

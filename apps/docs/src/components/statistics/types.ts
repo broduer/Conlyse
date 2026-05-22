@@ -25,6 +25,10 @@ export interface GlobalAggregate {
   avg_dropout_rate: number;
   avg_game_days: number;
   avg_update_interval_seconds: number;
+  avg_wars_per_game: number;
+  avg_peace_treaties_per_game: number;
+  avg_alliances_per_game: number;
+  avg_right_of_ways_per_game: number;
 }
 
 export interface CountryAggregate {
@@ -42,6 +46,10 @@ export interface CountryAggregate {
   avg_provinces_lost: number;
   elimination_rate: number;
   avg_survival_days: number;
+  avg_wars_declared: number;
+  avg_peace_treaties_signed: number;
+  avg_alliances_formed: number;
+  avg_right_of_ways_signed: number;
 }
 
 export interface ProvinceAggregate {

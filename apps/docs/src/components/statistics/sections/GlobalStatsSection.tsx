@@ -1,4 +1,5 @@
 import React from 'react';
+import DiplomacyGlobalChart from '../charts/DiplomacyGlobalChart';
 import GameDurationChart from '../charts/GameDurationChart';
 import PlayerCountChart from '../charts/PlayerCountChart';
 import VictoryTypeChart from '../charts/VictoryTypeChart';
@@ -35,6 +36,13 @@ export default function GlobalStatsSection({ data }: Props) {
             Avg {data.avg_human_players_per_game.toFixed(1)} human players
           </p>
           <PlayerCountChart data={data.player_count_distribution} />
+        </div>
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Diplomacy per Game</h3>
+          <p className={styles.chartSubtitle}>
+            Avg {data.avg_wars_per_game.toFixed(0)} wars · {data.avg_right_of_ways_per_game.toFixed(0)} right-of-ways · {data.avg_peace_treaties_per_game.toFixed(0)} peace treaties
+          </p>
+          <DiplomacyGlobalChart data={data} />
         </div>
       </div>
     </section>

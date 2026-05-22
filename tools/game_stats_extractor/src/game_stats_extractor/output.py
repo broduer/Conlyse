@@ -48,6 +48,8 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
         "avg_placement", "median_placement", "avg_final_provinces",
         "avg_initial_provinces", "avg_expansion", "avg_provinces_captured",
         "avg_provinces_lost", "elimination_rate", "avg_survival_days",
+        "avg_wars_declared", "avg_peace_treaties_signed",
+        "avg_alliances_formed", "avg_right_of_ways_signed",
     ]
     rows = [
         [
@@ -56,6 +58,8 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
             _r(c.avg_initial_provinces), _r(c.avg_expansion),
             _r(c.avg_provinces_captured), _r(c.avg_provinces_lost),
             _r(c.elimination_rate), _r(c.avg_survival_days),
+            _r(c.avg_wars_declared), _r(c.avg_peace_treaties_signed),
+            _r(c.avg_alliances_formed), _r(c.avg_right_of_ways_signed),
         ]
         for c in countries
     ]
