@@ -69,6 +69,18 @@ class GameActivationErrorCodes(Enum):
     ANTI_CHEAT_IP_CONFLICT = -11
 
 
+class UnsupportedDatatypeVersionError(Exception):
+    """Raised when a game state uses a datatype version not supported by this build."""
+
+    def __init__(self, version: int, available_versions=None):
+        self.version = version
+        self.available_versions = sorted(available_versions) if available_versions else []
+        msg = f"Unsupported datatype version {version}"
+        if self.available_versions:
+            msg += f". Available versions: {self.available_versions}"
+        super().__init__(msg)
+
+
 class GameActivationException(Exception):
     def __init__(self, error_code: GameActivationErrorCodes, message: str = None):
         super().__init__(message or error_code.name)

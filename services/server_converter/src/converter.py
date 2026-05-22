@@ -9,6 +9,8 @@ from typing import Optional, List, Tuple, Dict, Any
 
 from conflict_interface.replay.replay_builder import ReplayBuilder
 from conflict_interface.replay.response_metadata import ResponseMetadata
+from conflict_interface.utils.exceptions import UnsupportedDatatypeVersionError
+from conflict_interface.versions import LATEST_VERSION
 from server_converter.config import ServerConverterConfig
 from server_converter.database import ReplayDatabase, ReplayStatus
 from server_converter.redis_consumer import RedisStreamConsumer
@@ -189,6 +191,13 @@ class ServerConverter:
                     )
                     continue
 
+                # Skip games blocked on a future datatype version — retried automatically on reboot
+                if self.db.is_version_pending(game_id, player_id):
+                    logger.debug(
+                        f"Skipping game {game_id}, player {player_id}: waiting for version update"
+                    )
+                    continue
+
                 # Get all cached responses for this game
                 cached_responses = self.response_cache.get_cached_responses(game_id, player_id)
                 
@@ -246,6 +255,24 @@ class ServerConverter:
                         f"recorded as conversion-failed and cleared cache"
                     )
                     
+            except UnsupportedDatatypeVersionError as e:
+                if e.version > LATEST_VERSION:
+                    # Future version: keep cache and wait for a reboot with updated conflict_interface
+                    logger.warning(
+                        f"Game {game_id}, player {player_id}: {e}. "
+                        f"Cached responses retained — reboot after updating conflict_interface."
+                    )
+                    self.db.record_version_pending(game_id, player_id, e.version)
+                    metrics.errors_total.labels(error_type='unsupported_version').inc()
+                else:
+                    # Older / never-to-be-supported version: permanently fail
+                    logger.error(
+                        f"Game {game_id}, player {player_id}: {e}. "
+                        f"Version is not newer than latest ({LATEST_VERSION}); marking as failed."
+                    )
+                    self.db.record_conversion_failure(game_id, player_id, reason=str(e)[:500])
+                    self.response_cache.clear_cache(game_id, player_id)
+                    metrics.errors_total.labels(error_type='processing').inc()
             except Exception as e:
                 logger.error(f"Error processing ready game {game_id}, player {player_id}: {e}", exc_info=True)
                 metrics.errors_total.labels(error_type='processing').inc()
@@ -374,12 +401,14 @@ class ServerConverter:
             logger.info(f"Created replay at {replay_path} with {len(json_responses)} responses")
             return True
             
+        except UnsupportedDatatypeVersionError:
+            raise
         except Exception as e:
             logger.error(f"Failed to create replay: {e}", exc_info=True)
             metrics.replay_operations_total.labels(operation='create', status='error').inc()
             metrics.errors_total.labels(error_type='storage').inc()
             return False
-            
+
         finally:
             duration = time.time() - start_time
             metrics.replay_creation_duration_seconds.observe(duration)
@@ -450,12 +479,14 @@ class ServerConverter:
             logger.info(f"Appended {len(json_responses)} responses to {replay_path}")
             return True
             
+        except UnsupportedDatatypeVersionError:
+            raise
         except Exception as e:
             logger.error(f"Failed to append to replay: {e}", exc_info=True)
             metrics.replay_operations_total.labels(operation='append', status='error').inc()
             metrics.errors_total.labels(error_type='storage').inc()
             return False
-            
+
         finally:
             duration = time.time() - start_time
             metrics.replay_append_duration_seconds.observe(duration)
