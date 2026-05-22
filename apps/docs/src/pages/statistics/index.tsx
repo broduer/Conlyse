@@ -4,11 +4,18 @@ import StatsHero from '../../components/statistics/StatsHero';
 import CountryStatsSection from '../../components/statistics/sections/CountryStatsSection';
 import GlobalStatsSection from '../../components/statistics/sections/GlobalStatsSection';
 import ProvinceStatsSection from '../../components/statistics/sections/ProvinceStatsSection';
+import TimeSeriesSection from '../../components/statistics/sections/TimeSeriesSection';
+import {
+  deserializeCountries,
+  deserializeProvinces,
+  deserializeTimeSeries,
+} from '../../components/statistics/deserialize';
 import type {
   CountryAggregate,
   GlobalAggregate,
   MetaInfo,
   ProvinceAggregate,
+  TimeSeriesOutput,
 } from '../../components/statistics/types';
 import styles from './statistics.module.css';
 
@@ -17,18 +24,28 @@ interface StatsData {
   countries: CountryAggregate[];
   provinces: ProvinceAggregate[];
   meta: MetaInfo;
+  timeseries: TimeSeriesOutput;
 }
 
-const STATS_BASE_URL = 'https://r2.conlyse.zdox.dev/stats';
+const STATS_BASE_URL = process.env.NODE_ENV === 'development'
+  ? '/data/stats'
+  : 'https://r2.conlyse.zdox.dev/stats';
 
 async function fetchStats(): Promise<StatsData> {
-  const [global, countries, provinces, meta] = await Promise.all([
+  const [global, countriesRaw, provincesRaw, meta, timeseriesRaw] = await Promise.all([
     fetch(`${STATS_BASE_URL}/global.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/countries.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/provinces.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/meta.json`).then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/timeseries.json`).then((r) => r.json()),
   ]);
-  return { global, countries, provinces, meta };
+  return {
+    global,
+    countries: deserializeCountries(countriesRaw),
+    provinces: deserializeProvinces(provincesRaw),
+    meta,
+    timeseries: deserializeTimeSeries(timeseriesRaw),
+  };
 }
 
 export default function StatisticsPage() {
@@ -70,6 +87,7 @@ export default function StatisticsPage() {
             <GlobalStatsSection data={data.global} />
             <CountryStatsSection data={data.countries} />
             <ProvinceStatsSection data={data.provinces} />
+            <TimeSeriesSection data={data.timeseries} countries={data.countries} />
           </>
         )}
       </main>

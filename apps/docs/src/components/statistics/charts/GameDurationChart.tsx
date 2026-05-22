@@ -16,7 +16,7 @@ interface Props {
 
 export default function GameDurationChart({ data }: Props) {
   const chartData = data.map((b) => ({
-    label: `${b.min_hours.toFixed(0)}–${b.max_hours.toFixed(0)}h`,
+    label: `${b.min_days.toFixed(0)}–${b.max_days.toFixed(0)}d`,
     count: b.count,
   }));
 

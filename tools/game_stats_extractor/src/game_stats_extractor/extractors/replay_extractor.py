@@ -10,6 +10,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
+from conflict_interface.data_types.newest.foreign_affairs_state.foreign_affairs_state_enums import (
+    ForeignAffairRelationTypes,
+)
 from conflict_interface.hook_system.replay_hook_tag import ReplayHookTag
 from conflict_interface.interface.replay_interface import ReplayInterface
 
@@ -24,6 +27,22 @@ _UNOWNED = 0
 def _is_land_province(province) -> bool:
     """True for LandProvince objects (which have owner_id / morale)."""
     return hasattr(province, "owner_id") and hasattr(province, "morale")
+
+
+def _pct_bucket(elapsed: float, total: float) -> int:
+    if total <= 0:
+        return 0
+    return max(0, min(100, round((elapsed / total) * 100 / 5) * 5))
+
+
+def _day_bucket(elapsed: float, total: float, game_days: int) -> int:
+    if total <= 0 or game_days <= 0:
+        return 0
+    return round((elapsed / total) * game_days)
+
+
+def _finalize_buckets(sums: dict[int, float], ns: dict[int, int]) -> dict[int, int]:
+    return {b: round(sums[b] / ns[b]) for b in sums if ns[b] > 0}
 
 
 class ReplayExtractor(BaseExtractor):
@@ -150,8 +169,24 @@ class ReplayExtractor(BaseExtractor):
                 player_prov_max[player_id] = cnt
                 player_prov_min[player_id] = cnt
 
-        # ---- Register hooks — only changed provinces fire events ----
+        # Time-series bucket accumulators
+        total_duration_seconds = (end_time - start_time).total_seconds()
+        pct_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        pct_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        day_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        day_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+
+        # Diplomacy counters — keyed by 1-indexed player id; populated by ForeignAffairsChanged events
+        dp_wars: dict[int, int] = defaultdict(int)
+        dp_peace: dict[int, int] = defaultdict(int)
+        dp_alliances: dict[int, int] = defaultdict(int)
+        dp_allianced: dict[int, int] = defaultdict(int)
+        dp_rows: dict[int, int] = defaultdict(int)
+        game_wars = game_peace = game_alliances = game_allianced = game_rows = 0
+
+        # ---- Register hooks — only changed provinces/relations fire events ----
         replay.register_province_trigger(["owner_id", "morale"])
+        replay.register_foreign_affairs_trigger()
 
         # ---- Iterate all timestamps ----
         while replay.jump_to_next_patch():
@@ -185,7 +220,50 @@ class ReplayExtractor(BaseExtractor):
                             prov_morale_min[pid] = morale
                             prov_morale_max[pid] = morale
 
+            # Diplomacy — one event per tick when neighbor_relations changed;
+            # extractor diffs old vs new to classify per-(sender, receiver) transitions.
+            # Use .value comparisons: game state enums may come from a versioned module
+            # (e.g. data_types.v210) while the extractor imports from data_types.newest —
+            # different classes, so == fails even for identical members.
+            _war_val = ForeignAffairRelationTypes.WAR.value
+            _peace_val = ForeignAffairRelationTypes.PEACE.value
+            _mutual_val = ForeignAffairRelationTypes.MUTUAL_PROTECTION.value
+            _row_val = ForeignAffairRelationTypes.RIGHT_OF_WAY.value
+            for fa_event in events.get(ReplayHookTag.ForeignAffairsRelationChanged, []):
+                old_rel, new_rel = fa_event.attributes["neighbor_relations"]
+                if old_rel is None or new_rel is None:
+                    continue
+                for s in set(old_rel) | set(new_rel):
+                    prev_row = old_rel.get(s, {})
+                    curr_row = new_rel.get(s, {})
+                    for r in set(prev_row) | set(curr_row):
+                        old_v = prev_row.get(r)
+                        new_v = curr_row.get(r)
+                        old_val = old_v.value if old_v is not None else _peace_val
+                        new_val = new_v.value if new_v is not None else _peace_val
+                        if old_val == new_val:
+                            continue
+                        sender_id = s + 1
+                        if new_val == _war_val:
+                            dp_wars[sender_id] += 1
+                            game_wars += 1
+                        elif old_val == _war_val and new_val >= _peace_val:
+                            dp_peace[sender_id] += 1
+                            game_peace += 1
+                        if new_val == _mutual_val:
+                            dp_alliances[sender_id] += 1
+                            game_alliances += 1
+                        elif old_val == _mutual_val:
+                            dp_allianced[sender_id] += 1
+                            game_allianced += 1
+                        if new_val == _row_val:
+                            dp_rows[sender_id] += 1
+                            game_rows += 1
+
             # Snapshot player territory counts — O(players), not O(provinces)
+            ct = replay.current_time
+            pb = _pct_bucket((ct - start_time).total_seconds(), total_duration_seconds) if ct else 0
+            db = _day_bucket((ct - start_time).total_seconds(), total_duration_seconds, game_days) if ct else 0
             for player_id, cnt in current_player_counts.items():
                 if cnt <= 0:
                     continue
@@ -196,6 +274,10 @@ class ReplayExtractor(BaseExtractor):
                     player_prov_min[player_id] = min(player_prov_min[player_id], cnt)
                 else:
                     player_prov_min[player_id] = cnt
+                pct_bucket_sum[player_id][pb] += cnt
+                pct_bucket_n[player_id][pb] += 1
+                day_bucket_sum[player_id][db] += cnt
+                day_bucket_n[player_id][db] += 1
 
         # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
@@ -238,6 +320,13 @@ class ReplayExtractor(BaseExtractor):
                 avg_province_count=player_prov_sum.get(player_id, 0) / n,
                 provinces_captured=player_captures.get(player_id, 0),
                 provinces_lost=player_losses.get(player_id, 0),
+                pct_buckets=_finalize_buckets(pct_bucket_sum[player_id], pct_bucket_n[player_id]),
+                day_buckets=_finalize_buckets(day_bucket_sum[player_id], day_bucket_n[player_id]),
+                wars_declared=dp_wars.get(player_id, 0),
+                peace_treaties_signed=dp_peace.get(player_id, 0),
+                alliances_formed=dp_alliances.get(player_id, 0),
+                alliance_dissolutions=dp_allianced.get(player_id, 0),
+                right_of_ways_signed=dp_rows.get(player_id, 0),
             ))
 
         # ---- Victory detection ----
@@ -278,6 +367,11 @@ class ReplayExtractor(BaseExtractor):
             game_ended=True,  # guaranteed by early exit in extract()
             players=players,
             provinces=provinces,
+            total_wars_declared=game_wars,
+            total_peace_treaties=game_peace,
+            total_alliances_formed=game_alliances,
+            total_alliance_dissolutions=game_allianced,
+            total_right_of_ways=game_rows,
         )
 
 

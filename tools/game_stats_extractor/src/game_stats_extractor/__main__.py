@@ -56,6 +56,12 @@ Examples:
         default=3,
         help="Minimum number of game appearances for a province to be included in output (default: 3)",
     )
+    parser.add_argument(
+        "--min-timeseries-games",
+        type=int,
+        default=3,
+        help="Minimum number of games for a country to be included in time series output (default: 3)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG logging")
     parser.add_argument("-q", "--quiet", action="store_true", help="Only show ERROR messages")
 
@@ -84,6 +90,7 @@ Examples:
         workers=args.workers,
         map_data_dir=args.map_data_dir,
         min_province_appearances=args.min_province_appearances,
+        min_timeseries_games=args.min_timeseries_games,
     )
 
     try:

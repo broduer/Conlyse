@@ -2,8 +2,9 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-from .models.aggregates import CountryAggregate, GlobalAggregate, MetaInfo, ProvinceAggregate
+from .models.aggregates import CountryAggregate, GlobalAggregate, MetaInfo, ProvinceAggregate, TimeSeriesOutput
 from .models.intermediate import GameData
 
 
@@ -13,11 +14,86 @@ def _default(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
+def _r(v) -> float | int:
+    return round(v, 2) if isinstance(v, float) else v
+
+
+def _rp(v) -> float:
+    """Higher-precision rounding for proportion/rate fields used in scatter plots."""
+    return round(v, 4)
+
+
+def _provinces_columnar(provinces: list[ProvinceAggregate]) -> dict:
+    cols = [
+        "province_id", "province_name", "terrain_type", "is_coastal",
+        "games_appeared", "avg_ownership_changes", "contest_frequency",
+        "win_correlation", "resource_production_type",
+        "avg_resource_production", "avg_money_production", "avg_morale",
+    ]
+    rows = [
+        [
+            p.province_id, p.province_name, p.terrain_type, p.is_coastal,
+            p.games_appeared, _r(p.avg_ownership_changes), _rp(p.contest_frequency),
+            _rp(p.win_correlation), p.resource_production_type,
+            _r(p.avg_resource_production), _r(p.avg_money_production), _r(p.avg_morale),
+        ]
+        for p in provinces
+    ]
+    return {"columns": cols, "rows": rows}
+
+
+def _countries_columnar(countries: list[CountryAggregate]) -> dict:
+    cols = [
+        "nation_name", "games_played", "wins", "win_rate", "avg_final_vp",
+        "avg_placement", "median_placement", "avg_final_provinces",
+        "avg_initial_provinces", "avg_expansion", "avg_provinces_captured",
+        "avg_provinces_lost", "elimination_rate", "avg_survival_days",
+    ]
+    rows = [
+        [
+            c.nation_name, c.games_played, c.wins, _r(c.win_rate), _r(c.avg_final_vp),
+            _r(c.avg_placement), _r(c.median_placement), _r(c.avg_final_provinces),
+            _r(c.avg_initial_provinces), _r(c.avg_expansion),
+            _r(c.avg_provinces_captured), _r(c.avg_provinces_lost),
+            _r(c.elimination_rate), _r(c.avg_survival_days),
+        ]
+        for c in countries
+    ]
+    return {"columns": cols, "rows": rows}
+
+
+def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
+    n_days = ts.max_game_days + 1
+    countries = []
+    for c in ts.countries:
+        pct_by_bucket = {p.bucket: p for p in c.pct_game}
+        day_by_bucket = {p.bucket: p for p in c.game_days}
+        pct_avg = [_r(pct_by_bucket[b].avg_provinces) if b in pct_by_bucket else None for b in ts.pct_buckets]
+        pct_n   = [pct_by_bucket[b].games_sampled if b in pct_by_bucket else None for b in ts.pct_buckets]
+        day_avg = [_r(day_by_bucket[d].avg_provinces) if d in day_by_bucket else None for d in range(n_days)]
+        day_n   = [day_by_bucket[d].games_sampled if d in day_by_bucket else None for d in range(n_days)]
+        countries.append({
+            "nation_name": c.nation_name,
+            "games_played": c.games_played,
+            "pct_avg": pct_avg,
+            "pct_n": pct_n,
+            "day_avg": day_avg,
+            "day_n": day_n,
+        })
+    return {
+        "pct_buckets": ts.pct_buckets,
+        "max_game_days": ts.max_game_days,
+        "generated_at": ts.generated_at.isoformat(),
+        "countries": countries,
+    }
+
+
 def write_output(
     output_dir: Path,
     global_agg: GlobalAggregate,
     country_aggs: list[CountryAggregate],
     province_aggs: list[ProvinceAggregate],
+    timeseries_agg: TimeSeriesOutput,
     games: list[GameData],
     replay_dir: Path,
     failed_replays: int,
@@ -34,10 +110,19 @@ def write_output(
         date_range_end=max(start_times) if start_times else None,
     )
 
+    # Large files: compact columnar format, no indentation
+    _write_compact(output_dir / "provinces.json",  _provinces_columnar(province_aggs))
+    _write_compact(output_dir / "countries.json",  _countries_columnar(country_aggs))
+    _write_compact(output_dir / "timeseries.json", _timeseries_compact(timeseries_agg))
+
+    # Small files: readable indented JSON
     _write_json(output_dir / "global.json", global_agg.model_dump())
-    _write_json(output_dir / "countries.json", [c.model_dump() for c in country_aggs])
-    _write_json(output_dir / "provinces.json", [p.model_dump() for p in province_aggs])
     _write_json(output_dir / "meta.json", meta.model_dump())
+
+
+def _write_compact(path: Path, data) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, separators=(",", ":"), default=_default)
 
 
 def _write_json(path: Path, data) -> None:

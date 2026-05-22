@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import ProvinceContestedChart from '../charts/ProvinceContestedChart';
 import ProvinceMoraleChart from '../charts/ProvinceMoraleChart';
-import ProvinceWinCorrelationChart from '../charts/ProvinceWinCorrelationChart';
+import ProvinceStrategicScatterChart from '../charts/ProvinceStrategicScatterChart';
 import type { ProvinceAggregate } from '../types';
 import styles from './Section.module.css';
 
@@ -41,19 +40,10 @@ export default function ProvinceStatsSection({ data }: Props) {
         </div>
       </div>
       <div className={styles.grid}>
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartTitle}>Most Contested Provinces (Top 25)</h3>
-          <p className={styles.chartSubtitle}>
-            % of games where ownership changed at least once
-          </p>
-          <ProvinceContestedChart data={filtered} topN={25} />
-        </div>
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartTitle}>Win Correlation (Top 25)</h3>
-          <p className={styles.chartSubtitle}>
-            % of games where the winner controlled this province at game end
-          </p>
-          <ProvinceWinCorrelationChart data={filtered} topN={25} />
+        <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+          <h3 className={styles.chartTitle}>Province Strategic Map</h3>
+          <p className={styles.chartSubtitle}>All provinces · contest frequency vs winner control rate · labeled outliers · coloured by terrain type</p>
+          <ProvinceStrategicScatterChart data={filtered} />
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Province Morale (Top 20)</h3>
