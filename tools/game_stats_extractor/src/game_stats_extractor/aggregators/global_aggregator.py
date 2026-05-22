@@ -30,8 +30,6 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             (g.end_time - g.start_time).total_seconds() / 3600.0 for g in games
         ]
 
-        distribution = _build_histogram(durations, _BUCKET_COUNT)
-
         victory_dist: dict[str, int] = {}
         for g in games:
             victory_dist[g.victory_type] = victory_dist.get(g.victory_type, 0) + 1
@@ -53,8 +51,7 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
                 defeated = sum(1 for p in human if p.is_defeated)
                 dropout_rates.append(defeated / len(human))
 
-        # avg_game_days from duration (day ≈ 4h real time in CoN speed 1)
-        # Use day_of_game when available (> 1), otherwise estimate from duration
+        # Use actual game_days when available (> 1), otherwise estimate from duration (day ≈ 4h real time)
         game_days_list = []
         for g in games:
             if g.game_days > 1:
@@ -63,7 +60,12 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
                 hours = (g.end_time - g.start_time).total_seconds() / 3600.0
                 game_days_list.append(hours / 4.0)
 
+        distribution = _build_histogram(game_days_list, _BUCKET_COUNT)
+
         update_intervals = [g.avg_update_interval_seconds for g in games if g.avg_update_interval_seconds > 0]
+
+        def _mean(lst: list) -> float:
+            return statistics.mean(lst) if lst else 0.0
 
         return GlobalAggregate(
             total_games=len(games),
@@ -78,6 +80,10 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             avg_dropout_rate=statistics.mean(dropout_rates) if dropout_rates else 0.0,
             avg_game_days=statistics.mean(game_days_list) if game_days_list else 0.0,
             avg_update_interval_seconds=statistics.mean(update_intervals) if update_intervals else 0.0,
+            avg_wars_per_game=_mean([g.total_wars_declared for g in games]),
+            avg_peace_treaties_per_game=_mean([g.total_peace_treaties for g in games]),
+            avg_alliances_per_game=_mean([g.total_alliances_formed for g in games]),
+            avg_right_of_ways_per_game=_mean([g.total_right_of_ways for g in games]),
         )
 
 
@@ -87,7 +93,7 @@ def _build_histogram(values: list[float], n_buckets: int) -> list[DurationBucket
     lo = min(values)
     hi = max(values)
     if hi == lo:
-        return [DurationBucket(min_hours=lo, max_hours=hi, count=len(values))]
+        return [DurationBucket(min_days=lo, max_days=hi, count=len(values))]
     width = (hi - lo) / n_buckets
     buckets: list[DurationBucket] = []
     for i in range(n_buckets):
@@ -98,5 +104,5 @@ def _build_histogram(values: list[float], n_buckets: int) -> list[DurationBucket
             count = sum(1 for v in values if b_lo <= v < b_hi)
         else:
             count = sum(1 for v in values if b_lo <= v <= b_hi)
-        buckets.append(DurationBucket(min_hours=round(b_lo, 1), max_hours=round(b_hi, 1), count=count))
+        buckets.append(DurationBucket(min_days=round(b_lo, 1), max_days=round(b_hi, 1), count=count))
     return buckets

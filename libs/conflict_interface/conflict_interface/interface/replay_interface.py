@@ -596,3 +596,18 @@ class ReplayInterface(GameInterface):
 
         for hs in self._hook_systems.values():
             hs.unregister_event_trigger(path)
+
+    def register_foreign_affairs_trigger(self) -> None:
+        path = ["states", "foreign_affairs_state", "relations"]
+        for hs in self._hook_systems.values():
+            hs.register_event_trigger(
+                tag=ReplayHookTag.ForeignAffairsRelationChanged,
+                path=path,
+                attributes=["neighbor_relations"],
+                search_end_depth=0,
+            )
+
+    def unregister_foreign_affairs_trigger(self) -> None:
+        path = ["states", "foreign_affairs_state", "relations"]
+        for hs in self._hook_systems.values():
+            hs.unregister_event_trigger(path)

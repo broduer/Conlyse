@@ -9,8 +9,8 @@ from pydantic import BaseModel
 
 
 class DurationBucket(BaseModel):
-    min_hours: float
-    max_hours: float
+    min_days: float
+    max_days: float
     count: int
 
 
@@ -28,6 +28,10 @@ class GlobalAggregate(BaseModel):
     avg_dropout_rate: float
     avg_game_days: float
     avg_update_interval_seconds: float
+    avg_wars_per_game: float = 0.0
+    avg_peace_treaties_per_game: float = 0.0
+    avg_alliances_per_game: float = 0.0
+    avg_right_of_ways_per_game: float = 0.0
 
 
 class CountryAggregate(BaseModel):
@@ -46,6 +50,10 @@ class CountryAggregate(BaseModel):
     avg_provinces_lost: float
     elimination_rate: float
     avg_survival_days: float
+    avg_wars_declared: float = 0.0
+    avg_peace_treaties_signed: float = 0.0
+    avg_alliances_formed: float = 0.0
+    avg_right_of_ways_signed: float = 0.0
 
 
 class ProvinceAggregate(BaseModel):
@@ -62,6 +70,26 @@ class ProvinceAggregate(BaseModel):
     avg_resource_production: float
     avg_money_production: float
     avg_morale: float
+
+
+class TimeSeriesPoint(BaseModel):
+    bucket: int
+    avg_provinces: float
+    games_sampled: int
+
+
+class CountryTimeSeries(BaseModel):
+    nation_name: str
+    games_played: int
+    pct_game: list[TimeSeriesPoint]
+    game_days: list[TimeSeriesPoint]
+
+
+class TimeSeriesOutput(BaseModel):
+    countries: list[CountryTimeSeries]
+    pct_buckets: list[int]
+    max_game_days: int
+    generated_at: datetime
 
 
 class MetaInfo(BaseModel):

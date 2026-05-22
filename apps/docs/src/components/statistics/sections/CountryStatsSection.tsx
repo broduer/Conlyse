@@ -1,5 +1,6 @@
 import React from 'react';
 import CountryAggressivenessChart from '../charts/CountryAggressivenessChart';
+import CountryDiplomacyChart from '../charts/CountryDiplomacyChart';
 import CountryEliminationChart from '../charts/CountryEliminationChart';
 import CountryExpansionChart from '../charts/CountryExpansionChart';
 import CountryPlacementChart from '../charts/CountryPlacementChart';
@@ -53,6 +54,11 @@ export default function CountryStatsSection({ data }: Props) {
           <h3 className={styles.chartTitle}>Territory Aggressiveness (Top 20)</h3>
           <p className={styles.chartSubtitle}>Avg provinces captured per game · tooltip shows losses and net gain</p>
           <CountryAggressivenessChart data={data} topN={20} />
+        </div>
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Wars Declared by Country (Top 20)</h3>
+          <p className={styles.chartSubtitle}>Avg wars declared per game · tooltip shows treaties and right-of-ways</p>
+          <CountryDiplomacyChart data={data} topN={20} />
         </div>
       </div>
     </section>

@@ -40,6 +40,10 @@ def _aggregate_country(
     eliminated = sum(1 for _, p in entries if p.is_defeated)
     captures = [p.provinces_captured for _, p in entries]
     losses = [p.provinces_lost for _, p in entries]
+    wars_declared = [p.wars_declared for _, p in entries]
+    peace_treaties = [p.peace_treaties_signed for _, p in entries]
+    alliances_formed = [p.alliances_formed for _, p in entries]
+    right_of_ways = [p.right_of_ways_signed for _, p in entries]
 
     # Placement: rank by final_vp within each game (1 = best)
     placements: list[float] = []
@@ -82,4 +86,8 @@ def _aggregate_country(
         avg_provinces_lost=_mean(losses),
         elimination_rate=eliminated / games_played,
         avg_survival_days=_mean(survival_days),
+        avg_wars_declared=_mean(wars_declared),
+        avg_peace_treaties_signed=_mean(peace_treaties),
+        avg_alliances_formed=_mean(alliances_formed),
+        avg_right_of_ways_signed=_mean(right_of_ways),
     )

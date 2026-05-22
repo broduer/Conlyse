@@ -1,8 +1,14 @@
 /** TypeScript interfaces mirroring the Python Pydantic aggregate models in game_stats_extractor. */
 
+/** Wire format for columnar JSON files (countries.json, provinces.json). */
+export interface ColumnarData {
+  columns: string[];
+  rows: unknown[][];
+}
+
 export interface DurationBucket {
-  min_hours: number;
-  max_hours: number;
+  min_days: number;
+  max_days: number;
   count: number;
 }
 
@@ -19,6 +25,10 @@ export interface GlobalAggregate {
   avg_dropout_rate: number;
   avg_game_days: number;
   avg_update_interval_seconds: number;
+  avg_wars_per_game: number;
+  avg_peace_treaties_per_game: number;
+  avg_alliances_per_game: number;
+  avg_right_of_ways_per_game: number;
 }
 
 export interface CountryAggregate {
@@ -36,6 +46,10 @@ export interface CountryAggregate {
   avg_provinces_lost: number;
   elimination_rate: number;
   avg_survival_days: number;
+  avg_wars_declared: number;
+  avg_peace_treaties_signed: number;
+  avg_alliances_formed: number;
+  avg_right_of_ways_signed: number;
 }
 
 export interface ProvinceAggregate {
@@ -51,6 +65,26 @@ export interface ProvinceAggregate {
   avg_resource_production: number;
   avg_money_production: number;
   avg_morale: number;
+}
+
+export interface TimeSeriesPoint {
+  bucket: number;
+  avg_provinces: number;
+  games_sampled: number;
+}
+
+export interface CountryTimeSeries {
+  nation_name: string;
+  games_played: number;
+  pct_game: TimeSeriesPoint[];
+  game_days: TimeSeriesPoint[];
+}
+
+export interface TimeSeriesOutput {
+  countries: CountryTimeSeries[];
+  pct_buckets: number[];
+  max_game_days: number;
+  generated_at: string;
 }
 
 export interface MetaInfo {

@@ -15,6 +15,7 @@ from tqdm import tqdm
 from .aggregators.country_aggregator import CountryAggregator
 from .aggregators.global_aggregator import GlobalAggregator
 from .aggregators.province_aggregator import ProvinceAggregator
+from .aggregators.timeseries_aggregator import TimeSeriesAggregator
 from .extractors.replay_extractor import ReplayExtractor
 from .models.intermediate import GameData
 from .output import write_output
@@ -37,12 +38,14 @@ class Pipeline:
         workers: int = os.cpu_count() or 1,
         map_data_dir: Optional[Path] = None,
         min_province_appearances: int = 3,
+        min_timeseries_games: int = 3,
     ):
         self.replays_dir = replays_dir
         self.output_dir = output_dir
         self.workers = workers
         self.map_data_dir = map_data_dir
         self.min_province_appearances = min_province_appearances
+        self.min_timeseries_games = min_timeseries_games
 
     def run(self) -> None:
         replay_files = sorted(self.replays_dir.glob("game_*.conrp"))
@@ -81,6 +84,9 @@ class Pipeline:
         logger.info("Aggregating province statistics (min appearances=%d)...", self.min_province_appearances)
         province_aggs = ProvinceAggregator(min_appearances=self.min_province_appearances).aggregate(games)
 
+        logger.info("Aggregating time series...")
+        timeseries_agg = TimeSeriesAggregator(min_games=self.min_timeseries_games).aggregate(games)
+
         logger.info(
             "Writing output: %d countries, %d provinces",
             len(country_aggs),
@@ -91,6 +97,7 @@ class Pipeline:
             global_agg,
             country_aggs,
             province_aggs,
+            timeseries_agg,
             games,
             self.replays_dir,
             failed,
