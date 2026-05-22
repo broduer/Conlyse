@@ -14,6 +14,7 @@ class ReplayStatus(Enum):
     RECORDING = "recording"
     COMPLETED = "completed"
     ARCHIVED = "archived"
+    VERSION_PENDING = "version_pending"
 
 
 class ReplayDatabase:
@@ -393,6 +394,43 @@ class ReplayDatabase:
             (game_id, player_id, replay_name, now, now, now),
         )
         self.conn.commit()
+
+    def is_version_pending(self, game_id: int, player_id: int) -> bool:
+        """Return True if this game/player is waiting for a newer conflict_interface build."""
+        cursor = self.conn.cursor()
+        query = self._format_query(
+            "SELECT 1 FROM replays WHERE game_id = {} AND player_id = {} AND status_converter = 'version_pending'",
+            2,
+        )
+        cursor.execute(query, (game_id, player_id))
+        return cursor.fetchone() is not None
+
+    def record_version_pending(
+        self, game_id: int, player_id: int, datatype_version: int
+    ) -> None:
+        """
+        Mark this game/player as blocked on an unsupported-but-future datatype version.
+
+        The cached responses are retained so they can be processed once the service
+        is rebooted with a conflict_interface build that supports the new version.
+        """
+        cursor = self.conn.cursor()
+        now = datetime.now()
+        replay_name = f"game_{game_id}_player_{player_id}"
+        cursor.execute(
+            """
+            INSERT INTO replays (game_id, player_id, replay_name, status_converter, created_at, updated_at)
+            VALUES (%s, %s, %s, 'version_pending', %s, %s)
+            ON CONFLICT (game_id, player_id)
+            DO UPDATE SET status_converter = 'version_pending', updated_at = EXCLUDED.updated_at
+            """,
+            (game_id, player_id, replay_name, now, now),
+        )
+        self.conn.commit()
+        logger.info(
+            f"Marked game {game_id}, player {player_id} as version_pending "
+            f"(unsupported datatype version {datatype_version})"
+        )
 
     # --- Static maps helpers -------------------------------------------------
     def get_map_by_id(self, map_id: int) -> Optional[Dict[str, Any]]:

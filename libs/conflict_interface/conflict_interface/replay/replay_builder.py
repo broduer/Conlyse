@@ -12,7 +12,11 @@ from conflict_interface.logger_config import get_logger
 from conflict_interface.replay.replay_patch import BidirectionalReplayPatch
 from conflict_interface.replay.replay_timeline import ReplayTimeline
 from conflict_interface.replay.response_metadata import ResponseMetadata
+from conflict_interface.utils.exceptions import UnsupportedDatatypeVersionError
 from conflict_interface.utils.helper import unix_ms_to_datetime
+
+import conflict_interface.data_types  # Ensure all supported versions are registered
+from conflict_interface.versions import get_supported_datatype_versions
 
 if TYPE_CHECKING:
     from conflict_interface.data_types.newest.game_state.game_state import GameState
@@ -42,7 +46,7 @@ class ReplayBuilder:
 
     def _setup_parsers(self) -> None:
         """Register a JsonParser for each supported datatype version. Called from __init__."""
-        for v in JsonParser.GAME_STATES.keys():
+        for v in get_supported_datatype_versions():
             self.parsers[v] = JsonParser(v)
 
     @staticmethod
@@ -86,6 +90,9 @@ class ReplayBuilder:
         # Parse initial game state
         initial_meta, initial_json = json_responses[initial_index]
         version = int(initial_meta.client_version)
+        available_versions = sorted(list(self.parsers.keys()))
+        if version not in available_versions:
+            raise UnsupportedDatatypeVersionError(version, available_versions)
 
         parser = self.parsers[version]
         initial_state: GameState = parser.parse_game_state(initial_json["result"], None)
@@ -160,6 +167,8 @@ class ReplayBuilder:
         num_responses = len(json_responses)
         logger.debug(f"Appending {num_responses} state updates...")
 
+        available_datatype_versions = get_supported_datatype_versions()
+
         for i in range(len(json_responses)):
             if progress_callback:
                 progress_callback(i, num_responses)
@@ -178,6 +187,9 @@ class ReplayBuilder:
                 json_response["full"] = True
 
             # Parse new state
+            if meta.client_version not in available_datatype_versions:
+                raise UnsupportedDatatypeVersionError(meta.client_version, available_datatype_versions)
+
             parser = self.parsers[meta.client_version]
             new_state: GameState = parser.parse_game_state(
                 json_response["result"], None
@@ -251,6 +263,8 @@ class ReplayBuilder:
                 continue
 
             version = int(meta.client_version)
+            if version not in self.parsers:
+                raise UnsupportedDatatypeVersionError(version, self.parsers.keys())
             parser = self.parsers[version]
             initial_state = parser.parse_game_state(json_response["result"], None)
             current_timestamp = unix_ms_to_datetime(int(initial_state.time_stamp))
@@ -306,6 +320,9 @@ class ReplayBuilder:
                 json_response["full"] = False
             else:
                 json_response["full"] = True
+
+            if meta.client_version not in self.parsers:
+                raise UnsupportedDatatypeVersionError(meta.client_version, self.parsers.keys())
 
             parser = self.parsers[meta.client_version]
             new_state = parser.parse_game_state(json_response["result"], None)
