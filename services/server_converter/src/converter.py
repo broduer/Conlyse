@@ -246,13 +246,10 @@ class ServerConverter:
                             metrics.errors_total.labels(error_type='processing').inc()
                 else:
                     metrics.messages_processed_total.labels(status='error').inc(len(cached_responses))
-                    # Record failure so we skip this game across restarts; clear cache to stop retry storm
                     reason = "conversion failed (inconsistent or unrecoverable state)"
                     self.db.record_conversion_failure(game_id, player_id, reason=reason)
-                    self.response_cache.clear_cache(game_id, player_id)
                     logger.warning(
-                        f"Failed to process game {game_id}, player {player_id}; "
-                        f"recorded as conversion-failed and cleared cache"
+                        f"Failed to process game {game_id}, player {player_id}; recorded as conversion-failed"
                     )
                     
             except UnsupportedDatatypeVersionError as e:
@@ -271,16 +268,11 @@ class ServerConverter:
                         f"Version is not newer than latest ({LATEST_VERSION}); marking as failed."
                     )
                     self.db.record_conversion_failure(game_id, player_id, reason=str(e)[:500])
-                    self.response_cache.clear_cache(game_id, player_id)
                     metrics.errors_total.labels(error_type='processing').inc()
             except Exception as e:
                 logger.error(f"Error processing ready game {game_id}, player {player_id}: {e}", exc_info=True)
                 metrics.errors_total.labels(error_type='processing').inc()
-                # Record so we do not retry this game indefinitely
-                self.db.record_conversion_failure(
-                    game_id, player_id, reason=str(e)[:500]
-                )
-                self.response_cache.clear_cache(game_id, player_id)
+                self.db.record_conversion_failure(game_id, player_id, reason=str(e)[:500])
         
     def _process_game_responses(self, game_id: int, player_id: int,
                                 json_responses: List[Tuple[ResponseMetadata, dict]]) -> bool:
