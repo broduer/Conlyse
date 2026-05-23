@@ -53,7 +53,6 @@ impl RecordingStorage {
             let metadata = json!({
                 "version": "1.0",
                 "created_at": now_epoch_seconds(),
-                "updates": []
             });
             save_metadata_file(&metadata_file, &metadata)?;
         }
@@ -86,21 +85,6 @@ impl RecordingStorage {
         let mut state = self.state.lock().expect("recording storage mutex poisoned");
         state.metadata_cache["resume"] = resume.clone();
         state.resume_metadata = resume;
-
-        if !state
-            .metadata_cache
-            .get("updates")
-            .is_some_and(Value::is_array)
-        {
-            state.metadata_cache["updates"] = Value::Array(Vec::new());
-        }
-        if let Some(updates) = state.metadata_cache.get_mut("updates").and_then(Value::as_array_mut)
-        {
-            updates.push(json!({
-                "timestamp": now_epoch_seconds(),
-                "datetime": now_epoch_seconds().to_string()
-            }));
-        }
 
         state.updates_since_last_flush += 1;
         if state.updates_since_last_flush >= METADATA_FLUSH_INTERVAL {
@@ -166,7 +150,6 @@ fn load_metadata_file(path: &Path) -> Result<Value, RecordingStorageError> {
     if !path.exists() {
         return Ok(json!({
             "version": "1.0",
-            "updates": []
         }));
     }
 
@@ -175,7 +158,6 @@ fn load_metadata_file(path: &Path) -> Result<Value, RecordingStorageError> {
     if contents.trim().is_empty() {
         return Ok(json!({
             "version": "1.0",
-            "updates": []
         }));
     }
 
