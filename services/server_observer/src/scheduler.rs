@@ -59,6 +59,11 @@ impl Scheduler {
         self.schedule_update(session);
     }
 
+    pub fn schedule_retry_update(&self, session: &mut ObservationSession, delay: Duration) {
+        session.next_update_at = SystemTime::now() + delay;
+        self.schedule_update(session);
+    }
+
     pub fn schedule_next_update(&self, session: &mut ObservationSession, missed_update: bool) {
         let interval_ms = self.update_interval_ms();
         let offset_ms = self.calculate_offset_ms(session.game_id);

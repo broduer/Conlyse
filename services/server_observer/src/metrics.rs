@@ -57,6 +57,18 @@ static GAMES_FAILED_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     vec
 });
 
+static GAME_UPDATE_RETRIES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "game_update_retries_total",
+        "Total number of failed update attempts that were retried, by error type",
+    );
+    let vec = IntCounterVec::new(opts, &["error_type"]).expect("create game_update_retries_total");
+    default_registry()
+        .register(Box::new(vec.clone()))
+        .expect("register game_update_retries_total");
+    vec
+});
+
 static ACTIVE_GAMES: Lazy<IntGaugeVec> = Lazy::new(|| {
     let opts = Opts::new(
         "active_games",
@@ -162,6 +174,12 @@ pub fn record_game_completed(scenario_id: i32) {
 
 pub fn record_game_failed(error_type: &str) {
     GAMES_FAILED_TOTAL
+        .with_label_values(&[error_type])
+        .inc();
+}
+
+pub fn record_game_update_retry(error_type: &str) {
+    GAME_UPDATE_RETRIES_TOTAL
         .with_label_values(&[error_type])
         .inc();
 }

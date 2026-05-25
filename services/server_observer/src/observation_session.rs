@@ -1,5 +1,5 @@
 use crate::account_pool::{Account, ProxyConfig};
-use crate::hub_interface_wrapper::HubInterfaceWrapper;
+use crate::hub_interface_wrapper::{HubInterfaceError, HubInterfaceWrapper};
 use crate::observation_api::{GameServerError, GameServerResult, ObservationApi, ObservationApiError};
 use crate::observation_package::ObservationPackage;
 use crate::recording_storage::{RecordingStorage, RecordingStorageError};
@@ -79,6 +79,14 @@ impl ObservationResult {
         }
     }
 
+    pub fn from_error(error_code: ObservationError, msg: impl Into<String>) -> Self {
+        Self {
+            error_code,
+            error_message: msg.into(),
+            game_ended: false,
+        }
+    }
+
     pub fn make_unknown_error(msg: impl Into<String>) -> Self {
         Self {
             error_code: ObservationError::UnknownError,
@@ -102,6 +110,15 @@ pub enum ObservationSessionError {
     Compression(#[from] io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+}
+
+fn hub_error_to_obs_error(err: HubInterfaceError) -> ObservationError {
+    match err {
+        HubInterfaceError::Network(_) => ObservationError::NetworkError,
+        HubInterfaceError::Server(_) => ObservationError::ServerError,
+        HubInterfaceError::Auth(_) => ObservationError::AuthFailed,
+        HubInterfaceError::Permanent(_) => ObservationError::PackageCreationFailed,
+    }
 }
 
 pub struct ObservationSession {
@@ -185,9 +202,9 @@ impl ObservationSession {
         Ok(self.storage.as_mut().expect("storage must be initialized"))
     }
 
-    fn ensure_observation_package(&mut self) -> bool {
+    fn ensure_observation_package(&mut self) -> Result<(), ObservationError> {
         if self.package.game_id != 0 {
-            return true;
+            return Ok(());
         }
 
         let resume_metadata = match self.ensure_storage() {
@@ -211,7 +228,7 @@ impl ObservationSession {
             ) {
                 Ok(api) => {
                     self.api = Some(api);
-                    return true;
+                    return Ok(());
                 }
                 Err(err) => {
                     tracing::warn!(
@@ -223,11 +240,11 @@ impl ObservationSession {
             }
         }
 
-        self.package = self.create_observation_package();
-        self.package.game_id != 0
+        self.package = self.create_observation_package()?;
+        Ok(())
     }
 
-    fn create_observation_package(&mut self) -> ObservationPackage {
+    fn create_observation_package(&mut self) -> Result<ObservationPackage, ObservationError> {
         let proxy_url = if self.account.proxy_config.enabled {
             self.account.proxy_config.to_url()
         } else {
@@ -239,13 +256,13 @@ impl ObservationSession {
                 Ok(wrapper) => self.hub_interface = Some(wrapper),
                 Err(err) => {
                     tracing::error!(?err, game_id = self.game_id, "failed creating HubInterfaceWrapper");
-                    return ObservationPackage::default();
+                    return Err(ObservationError::PackageCreationFailed);
                 }
             }
         }
 
         let Some(hub_itf) = &mut self.hub_interface else {
-            return ObservationPackage::default();
+            return Err(ObservationError::PackageCreationFailed);
         };
 
         if !hub_itf.is_authenticated() {
@@ -257,11 +274,11 @@ impl ObservationSession {
                         account = self.account.username,
                         "hub login returned false"
                     );
-                    return ObservationPackage::default();
+                    return Err(ObservationError::PackageCreationFailed);
                 }
                 Err(err) => {
                     tracing::error!(?err, game_id = self.game_id, "hub login failed");
-                    return ObservationPackage::default();
+                    return Err(hub_error_to_obs_error(err));
                 }
             }
         }
@@ -270,7 +287,7 @@ impl ObservationSession {
             Ok(data) => data,
             Err(err) => {
                 tracing::error!(?err, game_id = self.game_id, "failed to join game as guest");
-                return ObservationPackage::default();
+                return Err(hub_error_to_obs_error(err));
             }
         };
 
@@ -297,11 +314,11 @@ impl ObservationSession {
         ) {
             Ok(api) => {
                 self.api = Some(api);
-                pkg
+                Ok(pkg)
             }
             Err(err) => {
                 tracing::error!(?err, game_id = self.game_id, "failed creating ObservationApi");
-                ObservationPackage::default()
+                Err(ObservationError::PackageCreationFailed)
             }
         }
     }
@@ -311,7 +328,8 @@ impl ObservationSession {
             let _ = storage.flush_metadata();
         }
         self.hub_interface = None;
-        self.package = self.create_observation_package();
+        self.package = ObservationPackage::default();
+        self.api = None;
     }
 
     async fn ensure_static_map_data(&mut self, map_id: &str) -> bool {
@@ -341,6 +359,12 @@ impl ObservationSession {
                 ObservationResult::make_auth_failed(false, result.error_message.clone())
             }
             GameServerError::HttpError => {
+                // 4xx — permanent client error, reset so we re-authenticate
+                self.reset_package();
+                ObservationResult::make_server_error(result.error_message.clone())
+            }
+            GameServerError::ServerError => {
+                // 5xx / 429 — transient server error, reset so we reconnect
                 self.reset_package();
                 ObservationResult::make_server_error(result.error_message.clone())
             }
@@ -348,14 +372,24 @@ impl ObservationSession {
                 self.reset_package();
                 ObservationResult::make_network_error(false, result.error_message.clone())
             }
-            GameServerError::ClientVersionMismatch
-            | GameServerError::ServerSwitch
-            | GameServerError::ParseError => {
+            GameServerError::ParseError => {
+                // Malformed response — package is still valid, no reset needed
                 ObservationResult::make_unknown_error(result.error_message.clone())
             }
-            GameServerError::UnknownError | GameServerError::Success => {
+            GameServerError::ServerSwitch => {
+                // Server address already updated inline — no reset needed
+                ObservationResult::make_unknown_error(result.error_message.clone())
+            }
+            GameServerError::ClientVersionMismatch => {
+                // Client version already updated inline — no reset needed
+                ObservationResult::make_unknown_error(result.error_message.clone())
+            }
+            GameServerError::UnknownError => {
                 self.reset_package();
                 ObservationResult::make_unknown_error(result.error_message.clone())
+            }
+            GameServerError::Success => {
+                unreachable!("handle_game_server_error called with Success — guarded by result.success() upstream")
             }
         }
     }
@@ -405,8 +439,8 @@ impl ObservationSession {
         }
 
         let outcome = async {
-            if !self.ensure_observation_package() {
-                return ObservationResult::make_package_failed("Failed to create observation package");
+            if let Err(e) = self.ensure_observation_package() {
+                return ObservationResult::from_error(e, "failed to create observation package");
             }
 
             let Some(api) = &mut self.api else {
