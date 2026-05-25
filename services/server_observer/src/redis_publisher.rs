@@ -3,6 +3,10 @@ use serde::Deserialize;
 use serde_json;
 use thiserror::Error;
 
+/// Approximate upper bound on stream length. Gives ~20 hours of buffer at peak
+/// throughput (~2 500 entries/hour) before the converter must catch up.
+const STREAM_MAX_LEN: u64 = 50_000;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedisConfig {
     pub host: String,
@@ -62,6 +66,9 @@ impl RedisPublisher {
 
         let mut cmd = redis::cmd("XADD");
         cmd.arg(&self.cfg.stream_name)
+            .arg("MAXLEN")
+            .arg("~")
+            .arg(STREAM_MAX_LEN)
             .arg("*")
             .arg("metadata")
             .arg(meta_json)

@@ -22,7 +22,8 @@ pub struct HttpResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameServerError {
     Success,
-    HttpError,
+    HttpError,    // 4xx — permanent client error
+    ServerError,  // 5xx / 429 — transient server error
     ParseError,
     AuthError,
     ServerSwitch,
@@ -234,13 +235,17 @@ impl ObservationApi {
         }
 
         if response.status_code != 200 {
+            let error_code = match response.status_code {
+                429 | 500..=599 => GameServerError::ServerError,
+                _ => GameServerError::HttpError,
+            };
             let mut message = format!("HTTP status: {}", response.status_code);
             if !response.error_message.is_empty() {
                 message.push_str(" - ");
                 message.push_str(&response.error_message);
             }
             return GameServerResult {
-                error_code: GameServerError::HttpError,
+                error_code,
                 error_message: message,
                 raw_response: String::new(),
                 game_ended: false,
@@ -264,7 +269,7 @@ impl ObservationApi {
 
         let Some(result_obj) = game_state.get("result").and_then(Value::as_object) else {
             return GameServerResult {
-                error_code: GameServerError::UnknownError,
+                error_code: GameServerError::ParseError,
                 error_message: "No result object in response".to_string(),
                 raw_response: raw,
                 game_ended: false,
@@ -274,7 +279,7 @@ impl ObservationApi {
 
         let Some(result_class) = result_obj.get("@c").and_then(Value::as_str) else {
             return GameServerResult {
-                error_code: GameServerError::UnknownError,
+                error_code: GameServerError::ParseError,
                 error_message: "No @c field in result".to_string(),
                 raw_response: raw,
                 game_ended: false,

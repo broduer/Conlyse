@@ -2,9 +2,9 @@ use crate::account_pool::AccountPool;
 use crate::db::{DbClient, DbConfig};
 use crate::game_finder::{GameFinder, GameFinderConfig};
 use crate::metrics::{
-    record_game_completed, record_game_failed, record_game_started, record_missed_interval,
-    record_scheduled_update_latency, record_game_update_completed, record_game_update_started,
-    set_active_games,
+    record_game_completed, record_game_failed, record_game_started, record_game_update_retry,
+    record_missed_interval, record_scheduled_update_latency, record_game_update_completed,
+    record_game_update_started, set_active_games,
 };
 use crate::observation_session::{ObservationError, ObservationResult, ObservationSession};
 use crate::recording_registry::RecordingRegistry;
@@ -16,10 +16,12 @@ use config::Config as AppConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use thiserror::Error;
 
-const MAX_UPDATE_RETRIES: i32 = 3;
+const MAX_NETWORK_RETRIES: i32 = 12; // connection/proxy failure
+const MAX_SERVER_RETRIES: i32 = 6;   // transient 5xx from game server or hub
+const MAX_UPDATE_RETRIES: i32 = 3;   // auth, parse, unknown, permanent rejections
 
 #[derive(Debug, Error)]
 pub enum ServerObserverError {
@@ -581,24 +583,47 @@ impl ServerObserver {
         {
             let mut session = session_arc.lock().await;
             username = session.account.username.clone();
-            if session.get_attempt() >= MAX_UPDATE_RETRIES {
+            let (max_retries, delay_cap, reset_proxy) = match result.error_code {
+                ObservationError::NetworkError => {
+                    (MAX_NETWORK_RETRIES, Duration::from_secs(3600), true)
+                }
+                ObservationError::ServerError => {
+                    (MAX_SERVER_RETRIES, Duration::from_secs(1800), false)
+                }
+                _ => (
+                    MAX_UPDATE_RETRIES,
+                    Duration::from_secs_f64(
+                        *self.update_interval.lock().expect("update interval mutex poisoned"),
+                    ),
+                    false,
+                ),
+            };
+            if session.get_attempt() >= max_retries {
                 drop_session = true;
             } else {
                 session.increment_attempt();
-                needs_proxy_reset = result.error_code == ObservationError::NetworkError;
-                let immediate = self.should_retry_immediately(result.error_code);
+                needs_proxy_reset = reset_proxy;
+                let retry_index = (session.get_attempt() - 2) as u32;
+                let delay = Duration::from_secs(5)
+                    .saturating_mul(2u32.pow(retry_index))
+                    .min(delay_cap);
+                let error_type = match result.error_code {
+                    ObservationError::AuthFailed => "auth_failed",
+                    ObservationError::ServerError => "server_error",
+                    ObservationError::NetworkError => "network_error",
+                    ObservationError::PackageCreationFailed => "package_creation_failed",
+                    _ => "unknown_error",
+                };
+                record_game_update_retry(error_type);
                 tracing::warn!(
                     game_id,
                     attempt = session.get_attempt(),
+                    max_retries,
                     ?result.error_code,
-                    immediate_retry = immediate,
-                    "update failed; scheduling retry"
+                    retry_delay_secs = delay.as_secs_f64(),
+                    "update failed; scheduling retry with backoff"
                 );
-                if immediate {
-                    self.scheduler.schedule_immediate_update(&mut session);
-                } else {
-                    self.scheduler.schedule_next_update(&mut session, false);
-                }
+                self.scheduler.schedule_retry_update(&mut session, delay);
             }
         }
 
@@ -641,7 +666,9 @@ impl ServerObserver {
                 ObservationError::NetworkError => "network_error",
                 ObservationError::PackageCreationFailed => "package_creation_failed",
                 ObservationError::UnknownError => "unknown_error",
-                ObservationError::Success | ObservationError::GameEnded => "unknown_error",
+                ObservationError::Success | ObservationError::GameEnded => {
+                    unreachable!("Success/GameEnded are handled before handle_failed_update is called")
+                }
             };
             record_game_failed(error_type);
 
@@ -666,10 +693,6 @@ impl ServerObserver {
         for (scenario_id, count) in active_by_scenario {
             set_active_games(scenario_id, count);
         }
-    }
-
-    fn should_retry_immediately(&self, error_code: ObservationError) -> bool {
-        error_code == ObservationError::AuthFailed || error_code == ObservationError::ServerError
     }
 
     async fn reset_sessions_for_account(

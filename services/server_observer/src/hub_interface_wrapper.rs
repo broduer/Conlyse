@@ -36,8 +36,57 @@ pub struct GameApiData {
 
 #[derive(Debug, Error)]
 pub enum HubInterfaceError {
-    #[error("python error: {0}")]
-    Python(#[from] PyErr),
+    #[error("network error: {0}")]
+    Network(PyErr),
+    #[error("server error: {0}")]
+    Server(PyErr),
+    #[error("auth error: {0}")]
+    Auth(PyErr),
+    #[error("permanent error: {0}")]
+    Permanent(#[from] PyErr),
+}
+
+/// Classify a Python exception from the hub into the appropriate error variant.
+///
+/// `#[from] PyErr` converts infrastructure errors (module imports, attribute
+/// access) to `Permanent` automatically. This helper is used only at the
+/// specific `login` / `join_game_as_guest` call sites where we need to
+/// distinguish network from auth from permanent rejections.
+fn classify_pyerr(err: PyErr, py: Python<'_>) -> HubInterfaceError {
+    let type_name = err
+        .get_type(py)
+        .qualname()
+        .ok()
+        .and_then(|n| n.extract::<String>().ok())
+        .unwrap_or_default();
+
+    match type_name.as_str() {
+        "ConnectionError" | "Timeout" | "ConnectTimeout" | "ReadTimeout" | "ProxyError"
+        | "CloudflareException" | "CloudflareLoopProtection" | "CloudflareCode1020" => {
+            HubInterfaceError::Network(err)
+        }
+        "HTTPError" => {
+            let status: Option<u16> = err
+                .value(py)
+                .getattr("response")
+                .ok()
+                .and_then(|r| r.getattr("status_code").ok())
+                .and_then(|s| s.extract().ok());
+            match status {
+                Some(500..=599) | None => HubInterfaceError::Server(err),
+                Some(_) => HubInterfaceError::Auth(err),
+            }
+        }
+        "AuthenticationException" | "AuthenticationFailed" | "IncorrectPassword" => {
+            HubInterfaceError::Auth(err)
+        }
+        "JoiningGameFailed" | "GameFull" | "MaxJoinedGamesExceeded"
+        | "TooManyGameJoinsTooFrequently" | "RestrictedAction" | "NotEnoughTickets"
+        | "TooManyMessage" | "GameJoiningFailedOldGame" | "InvalidCountry" => {
+            HubInterfaceError::Permanent(err)
+        }
+        _ => HubInterfaceError::Permanent(err),
+    }
 }
 
 pub struct HubInterfaceWrapper {
@@ -79,7 +128,8 @@ impl HubInterfaceWrapper {
     pub fn login(&mut self, username: &str, password: &str) -> Result<bool, HubInterfaceError> {
         Python::attach(|py| -> Result<bool, HubInterfaceError> {
             let hub = self.hub_interface.bind(py);
-            hub.call_method1("login", (username, password))?;
+            hub.call_method1("login", (username, password))
+                .map_err(|err| classify_pyerr(err, py))?;
             Ok(true)
         })?;
         self.authenticated = true;
@@ -142,7 +192,8 @@ impl HubInterfaceWrapper {
             let auth_details = api.getattr("auth")?;
 
             let game_api = game_api_class.call1((session, auth_details, game_id, proxy))?;
-            game_api.call_method0("load_game_site")?;
+            game_api.call_method0("load_game_site")
+                .map_err(|err| classify_pyerr(err, py))?;
 
             let game_server_address = extract_attr_string(&game_api, "game_server_address");
             let client_version = extract_attr_i64(&game_api, "client_version") as i32;

@@ -92,6 +92,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - ./prod:/app/config:ro
       - observer-recordings:/app/recordings
