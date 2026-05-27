@@ -3,7 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,7 +31,7 @@ export default function CountryAggressivenessChart({ data, topN = 20, minGames =
     }));
 
   return (
-    <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 26)}>
+    <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 32)}>
       <BarChart
         data={chartData}
         layout="vertical"
@@ -56,23 +56,15 @@ export default function CountryAggressivenessChart({ data, topN = 20, minGames =
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number, _: string, props) => {
-            const { lost, net, games } = props.payload;
+          formatter={(value: number, name: string, props) => {
+            const { net, games } = props.payload;
             const sign = net >= 0 ? '+' : '';
-            return [
-              `${value} captured · ${lost} lost · net ${sign}${net} · ${games} games`,
-              'Avg provinces captured',
-            ];
+            return [`${value} avg · net ${sign}${net} · ${games} games`, name];
           }}
         />
-        <Bar dataKey="captured" radius={[0, 3, 3, 0]}>
-          {chartData.map((entry, index) => (
-            <Cell
-              key={`cell-${index}`}
-              fill={entry.net >= 5 ? '#e74c3c' : entry.net >= 0 ? '#f5a623' : '#4a90e2'}
-            />
-          ))}
-        </Bar>
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="captured" name="Captured" fill="#e74c3c" radius={[0, 3, 3, 0]} />
+        <Bar dataKey="lost" name="Lost" fill="#4a90e2" radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

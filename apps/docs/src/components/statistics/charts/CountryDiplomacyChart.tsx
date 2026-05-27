@@ -3,7 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,16 +20,15 @@ interface Props {
 export default function CountryDiplomacyChart({ data, topN = 20, minGames = 3 }: Props) {
   const chartData = [...data]
     .filter((c) => c.games_played >= minGames)
-    .sort((a, b) => b.avg_wars_declared - a.avg_wars_declared)
-    .slice(0, topN)
     .map((c) => ({
       name: c.nation_name,
       wars: parseFloat(c.avg_wars_declared.toFixed(1)),
-      peace: parseFloat(c.avg_peace_treaties_signed.toFixed(1)),
-      alliances: parseFloat(c.avg_alliances_formed.toFixed(1)),
       rows: parseFloat(c.avg_right_of_ways_signed.toFixed(1)),
+      peace: parseFloat(c.avg_peace_treaties_signed.toFixed(1)),
       games: c.games_played,
-    }));
+    }))
+    .sort((a, b) => (b.wars + b.rows + b.peace) - (a.wars + a.rows + a.peace))
+    .slice(0, topN);
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 26)}>
@@ -57,22 +56,18 @@ export default function CountryDiplomacyChart({ data, topN = 20, minGames = 3 }:
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number, _: string, props) => {
-            const { peace, alliances, rows, games } = props.payload;
+          formatter={(value: number, name: string, props) => {
+            const { wars, rows, peace, games } = props.payload;
             return [
-              `${value} wars · ${peace} peace · ${alliances} alliances · ${rows} ROW · ${games} games`,
-              'Avg wars declared',
+              `${value} avg · total ${(wars + rows + peace).toFixed(1)} diplomatic acts · ${games} games`,
+              name,
             ];
           }}
         />
-        <Bar dataKey="wars" radius={[0, 3, 3, 0]}>
-          {chartData.map((entry, index) => (
-            <Cell
-              key={`cell-${index}`}
-              fill={entry.wars >= 5 ? '#e74c3c' : entry.wars >= 2 ? '#f5a623' : '#4a90e2'}
-            />
-          ))}
-        </Bar>
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="wars" name="Wars Declared" stackId="a" fill="#e74c3c" />
+        <Bar dataKey="rows" name="Right of Ways" stackId="a" fill="#4a90e2" />
+        <Bar dataKey="peace" name="Peace Treaties" stackId="a" fill="#50c878" radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

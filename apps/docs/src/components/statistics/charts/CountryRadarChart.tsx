@@ -64,7 +64,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export default function CountryRadarChart({ data, topN = 6 }: Props) {
-  const top = [...data].sort((a, b) => b.games_played - a.games_played).slice(0, topN);
+  const top = [...data].sort((a, b) => b.win_rate - a.win_rate).slice(0, topN);
 
   const rawByDim = DIMENSIONS.map((dim) => top.map((c) => dim.raw(c)));
   const normalizedByDim = rawByDim.map(normalize);
