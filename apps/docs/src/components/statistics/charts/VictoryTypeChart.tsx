@@ -27,11 +27,10 @@ export default function VictoryTypeChart({ data }: Props) {
         <Pie
           data={chartData}
           cx="50%"
-          cy="45%"
+          cy="50%"
+          innerRadius={60}
           outerRadius={90}
           dataKey="value"
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-          labelLine={false}
         >
           {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -44,7 +43,10 @@ export default function VictoryTypeChart({ data }: Props) {
             borderRadius: 6,
             color: 'var(--ifm-font-color-base)',
           }}
-          formatter={(value: number) => [value, 'Games']}
+          formatter={(value: number, name: string) => {
+            const total = chartData.reduce((s, d) => s + d.value, 0);
+            return [`${value} games (${((value / total) * 100).toFixed(1)}%)`, name];
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: 'var(--ifm-font-color-base)' }} />
       </PieChart>

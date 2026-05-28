@@ -52,12 +52,12 @@ export default function CountryStatsSection({ data }: Props) {
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Territory Aggressiveness (Top 20)</h3>
-          <p className={styles.chartSubtitle}>Avg provinces captured per game · tooltip shows losses and net gain</p>
+          <p className={styles.chartSubtitle}>Avg provinces captured vs lost per game</p>
           <CountryAggressivenessChart data={data} topN={20} />
         </div>
         <div className={styles.chartCard}>
-          <h3 className={styles.chartTitle}>Wars Declared by Country (Top 20)</h3>
-          <p className={styles.chartSubtitle}>Avg wars declared per game · tooltip shows treaties and right-of-ways</p>
+          <h3 className={styles.chartTitle}>Diplomatic Activity by Country (Top 20)</h3>
+          <p className={styles.chartSubtitle}>Avg wars · right-of-ways · peace treaties per game · sorted by total activity</p>
           <CountryDiplomacyChart data={data} topN={20} />
         </div>
       </div>

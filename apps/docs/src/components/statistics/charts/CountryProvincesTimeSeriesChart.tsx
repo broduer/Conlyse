@@ -28,7 +28,7 @@ export default function CountryProvincesTimeSeriesChart({ data, countries, topN 
   const [mode, setMode] = useState<Mode>('pct');
 
   const topCountries = [...countries]
-    .sort((a, b) => b.games_played - a.games_played)
+    .sort((a, b) => b.win_rate - a.win_rate)
     .slice(0, topN)
     .map((c) => c.nation_name);
 

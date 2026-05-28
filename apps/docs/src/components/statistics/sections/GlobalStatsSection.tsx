@@ -1,7 +1,7 @@
 import React from 'react';
 import DiplomacyGlobalChart from '../charts/DiplomacyGlobalChart';
 import GameDurationChart from '../charts/GameDurationChart';
-import PlayerCountChart from '../charts/PlayerCountChart';
+import PlayerDropoutChart from '../charts/PlayerDropoutChart';
 import VictoryTypeChart from '../charts/VictoryTypeChart';
 import type { GlobalAggregate } from '../types';
 import styles from './Section.module.css';
@@ -21,9 +21,13 @@ export default function GlobalStatsSection({ data }: Props) {
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Game Duration Distribution</h3>
           <p className={styles.chartSubtitle}>
-            Median {data.median_duration_hours.toFixed(0)}h · σ {data.std_duration_hours.toFixed(0)}h
+            Mean {(data.avg_duration_hours / 24).toFixed(0)}d · Median {(data.median_duration_hours / 24).toFixed(0)}d · σ {(data.std_duration_hours / 24).toFixed(0)}d
           </p>
-          <GameDurationChart data={data.duration_distribution} />
+          <GameDurationChart
+            data={data.duration_distribution}
+            mean_days={data.avg_duration_hours / 24}
+            median_days={data.median_duration_hours / 24}
+          />
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Victory Types</h3>
@@ -31,11 +35,11 @@ export default function GlobalStatsSection({ data }: Props) {
           <VictoryTypeChart data={data.victory_type_distribution} />
         </div>
         <div className={styles.chartCard}>
-          <h3 className={styles.chartTitle}>Players per Game</h3>
+          <h3 className={styles.chartTitle}>Player Dropout</h3>
           <p className={styles.chartSubtitle}>
-            Avg {data.avg_human_players_per_game.toFixed(1)} human players
+            Avg {(data.avg_dropout_rate * 100).toFixed(0)}% of players drop out before the game ends
           </p>
-          <PlayerCountChart data={data.player_count_distribution} />
+          <PlayerDropoutChart dropout_rate={data.avg_dropout_rate} total_players={data.avg_players_per_game} />
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Diplomacy per Game</h3>

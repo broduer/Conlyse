@@ -6,6 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
+from pythonjsonlogger import jsonlogger
 from prometheus_client import start_http_server
 
 from server_converter.config import ServerConverterConfig
@@ -13,12 +14,15 @@ from server_converter.converter import ServerConverter
 
 
 def setup_logging(level: int = logging.INFO):
-    """Configure logging for the server converter."""
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+    handler = logging.StreamHandler()
+    formatter = jsonlogger.JsonFormatter(
+        fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+        rename_fields={"asctime": "timestamp", "name": "logger", "levelname": "level"},
     )
+    handler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 def main():

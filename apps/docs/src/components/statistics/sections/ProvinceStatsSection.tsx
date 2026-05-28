@@ -42,7 +42,7 @@ export default function ProvinceStatsSection({ data }: Props) {
       <div className={styles.grid}>
         <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
           <h3 className={styles.chartTitle}>Province Strategic Map</h3>
-          <p className={styles.chartSubtitle}>All provinces · contest frequency vs winner control rate · labeled outliers · coloured by terrain type</p>
+          <p className={styles.chartSubtitle}>All provinces · avg ownership changes per game vs winner control rate · reference lines at medians · top outliers labeled · coloured by terrain type</p>
           <ProvinceStrategicScatterChart data={filtered} />
         </div>
         <div className={styles.chartCard}>

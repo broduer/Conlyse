@@ -16,7 +16,7 @@ use config::Config as AppConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 const MAX_NETWORK_RETRIES: i32 = 12; // connection/proxy failure
@@ -53,6 +53,7 @@ pub struct ServerObserver {
     stop_flag: AtomicBool,
     map_cache: StaticMapCache,
     redis_publisher: RedisPublisher,
+    dead_letter_path: String,
 }
 
 impl ServerObserver {
@@ -156,6 +157,10 @@ impl ServerObserver {
         game_finder.set_max_games_per_scan(game_finder_cfg.max_games_per_scan);
         game_finder.set_max_guest_games_per_account(game_finder_cfg.max_guest_games_per_account);
 
+        let dead_letter_path = settings
+            .get::<String>("dead_letter_path")
+            .unwrap_or_else(|_| "dead_letter.jsonl".to_string());
+
         let observer = Arc::new(Self {
             account_pool,
             scheduler,
@@ -176,6 +181,7 @@ impl ServerObserver {
             stop_flag: AtomicBool::new(false),
             map_cache,
             redis_publisher,
+            dead_letter_path,
         });
 
         tracing::info!(
@@ -205,7 +211,7 @@ impl ServerObserver {
         let current_update_interval = *self
             .update_interval
             .lock()
-            .expect("update interval mutex poisoned");
+            .unwrap_or_else(|poisoned| { tracing::error!("update interval mutex poisoned; recovering"); poisoned.into_inner() });
         tracing::info!(
             max_parallel_recordings = current_max_parallel,
             max_parallel_normal_recordings = current_max_normal,
@@ -215,7 +221,7 @@ impl ServerObserver {
 
         self.resume_active().await;
         {
-            let mut guard = self.game_finder.lock().expect("game finder mutex poisoned");
+            let mut guard = self.game_finder.lock().unwrap_or_else(|poisoned| { tracing::error!("game finder mutex poisoned; recovering"); poisoned.into_inner() });
             if let Some(game_finder) = guard.as_mut() {
                 game_finder.refresh_known_games_from_registry();
                 let enabled = game_finder.is_scanning_enabled();
@@ -228,7 +234,7 @@ impl ServerObserver {
                 let sessions = self
                     .observer_sessions
                     .lock()
-                    .expect("observer sessions mutex poisoned");
+                    .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() });
                 let active_total = sessions.len() as i32;
                 let max_total = self.max_parallel_recordings.load(Ordering::SeqCst);
                 let total_left = (max_total - active_total).max(0) as usize;
@@ -236,7 +242,7 @@ impl ServerObserver {
                 let active_priority = self
                     .priority_sessions
                     .lock()
-                    .expect("priority sessions mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
                     .len() as i32;
                 let active_normal = (active_total - active_priority).max(0);
                 let max_normal = self.max_parallel_normal_recordings.load(Ordering::SeqCst);
@@ -267,7 +273,7 @@ impl ServerObserver {
         self.scheduler.stop();
 
         let mut game_finder = {
-            let mut guard = self.game_finder.lock().expect("game finder mutex poisoned");
+            let mut guard = self.game_finder.lock().unwrap_or_else(|poisoned| { tracing::error!("game finder mutex poisoned; recovering"); poisoned.into_inner() });
             guard.take()
         };
         if let Some(ref mut finder) = game_finder {
@@ -276,11 +282,11 @@ impl ServerObserver {
 
         self.observer_sessions
             .lock()
-            .expect("observer sessions mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
             .clear();
         self.priority_sessions
             .lock()
-            .expect("priority sessions mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
             .clear();
     }
 
@@ -333,13 +339,13 @@ impl ServerObserver {
             let mut sessions = self
                 .observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned");
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() });
             sessions.insert(game_id, Arc::new(tokio::sync::Mutex::new(session)));
         }
         if is_priority {
             self.priority_sessions
                 .lock()
-                .expect("priority sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .insert(game_id);
         }
 
@@ -349,7 +355,7 @@ impl ServerObserver {
         }
 
         {
-            let mut game_finder = self.game_finder.lock().expect("game finder mutex poisoned");
+            let mut game_finder = self.game_finder.lock().unwrap_or_else(|poisoned| { tracing::error!("game finder mutex poisoned; recovering"); poisoned.into_inner() });
             if let Some(finder) = game_finder.as_mut() {
                 finder.mark_game_known(game_id);
             }
@@ -389,7 +395,7 @@ impl ServerObserver {
             let already_exists = self
                 .observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .contains_key(&game_id);
             if already_exists {
                 tracing::debug!(game_id, "skipping resume for game already in observer_sessions");
@@ -399,7 +405,7 @@ impl ServerObserver {
             if self
                 .observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .len()
                 >= self.max_parallel_recordings.load(Ordering::SeqCst) as usize
             {
@@ -417,12 +423,12 @@ impl ServerObserver {
                 let active_total = self
                     .observer_sessions
                     .lock()
-                    .expect("observer sessions mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                     .len() as i32;
                 let active_priority = self
                     .priority_sessions
                     .lock()
-                    .expect("priority sessions mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
                     .len() as i32;
                 let active_normal = (active_total - active_priority).max(0);
                 let max_normal = self.max_parallel_normal_recordings.load(Ordering::SeqCst);
@@ -457,7 +463,7 @@ impl ServerObserver {
         let session_arc = {
             self.observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .get(&game_id)
                 .cloned()
         };
@@ -472,7 +478,7 @@ impl ServerObserver {
             let session_opt = {
                 self.observer_sessions
                     .lock()
-                    .expect("observer sessions mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                     .get(&game_id)
                     .cloned()
             };
@@ -534,11 +540,11 @@ impl ServerObserver {
         }
         self.observer_sessions
             .lock()
-            .expect("observer sessions mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
         self.priority_sessions
             .lock()
-            .expect("priority sessions mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
 
         if let Some(scenario_id) = scenario_id {
@@ -555,7 +561,7 @@ impl ServerObserver {
             .duration_since(session.next_update_at)
             .map(|d| d.as_secs_f64())
             .unwrap_or(0.0);
-        let update_interval = *self.update_interval.lock().expect("update interval mutex poisoned");
+        let update_interval = *self.update_interval.lock().unwrap_or_else(|poisoned| { tracing::error!("update interval mutex poisoned; recovering"); poisoned.into_inner() });
         let missed_update = latency_secs > update_interval;
 
         tracing::info!(
@@ -593,7 +599,7 @@ impl ServerObserver {
                 _ => (
                     MAX_UPDATE_RETRIES,
                     Duration::from_secs_f64(
-                        *self.update_interval.lock().expect("update interval mutex poisoned"),
+                        *self.update_interval.lock().unwrap_or_else(|poisoned| { tracing::error!("update interval mutex poisoned; recovering"); poisoned.into_inner() }),
                     ),
                     false,
                 ),
@@ -654,11 +660,11 @@ impl ServerObserver {
             }
             self.observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .remove(&game_id);
             self.priority_sessions
                 .lock()
-                .expect("priority sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("priority sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .remove(&game_id);
             let error_type = match result.error_code {
                 ObservationError::AuthFailed => "auth_failed",
@@ -672,6 +678,26 @@ impl ServerObserver {
             };
             record_game_failed(error_type);
 
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let record = serde_json::json!({
+                "timestamp": ts,
+                "game_id": game_id,
+                "error_code": error_type,
+                "error_message": &result.error_message,
+                "account": &username,
+            });
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.dead_letter_path)
+            {
+                use std::io::Write;
+                let _ = writeln!(f, "{}", record);
+            }
+
             self.update_active_games_metrics().await;
         }
     }
@@ -682,7 +708,7 @@ impl ServerObserver {
             let sessions = self
                 .observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned");
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() });
             for (&game_id, _) in sessions.iter() {
                 if let Some(scenario_id) = self.registry.get_scenario_id(game_id) {
                     *active_by_scenario.entry(scenario_id).or_insert(0) += 1;
@@ -703,7 +729,7 @@ impl ServerObserver {
         let session_arcs = {
             self.observer_sessions
                 .lock()
-                .expect("observer sessions mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                 .values()
                 .cloned()
                 .collect::<Vec<_>>()
@@ -720,7 +746,7 @@ impl ServerObserver {
     fn install_game_finder_callbacks(self: &Arc<Self>) {
         let weak = Arc::downgrade(self);
         let active_weak = Arc::downgrade(self);
-        let mut guard = self.game_finder.lock().expect("game finder mutex poisoned");
+        let mut guard = self.game_finder.lock().unwrap_or_else(|poisoned| { tracing::error!("game finder mutex poisoned; recovering"); poisoned.into_inner() });
         let Some(game_finder) = guard.as_mut() else {
             return;
         };
@@ -732,7 +758,7 @@ impl ServerObserver {
                 let is_active = observer
                     .observer_sessions
                     .lock()
-                    .expect("observer sessions mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                     .contains_key(&game_id);
                 if is_active {
                     return;
@@ -751,7 +777,7 @@ impl ServerObserver {
                     observer
                         .observer_sessions
                         .lock()
-                        .expect("observer sessions mutex poisoned")
+                        .unwrap_or_else(|poisoned| { tracing::error!("observer sessions mutex poisoned; recovering"); poisoned.into_inner() })
                         .len()
                 })
                 .unwrap_or(0)

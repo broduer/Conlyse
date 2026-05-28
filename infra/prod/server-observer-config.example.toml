@@ -8,6 +8,8 @@ max_parallel_updates = 3
 max_parallel_first_updates = 2
 output_dir = "/app/recordings"
 output_metadata_dir = "/app/recordings/metadata"
+metrics_port = 9091
+dead_letter_path = "/app/recordings/dead_letter.jsonl"
 
 [redis]
 host = "redis"

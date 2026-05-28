@@ -1,0 +1,67 @@
+groups:
+  - name: server_converter
+    rules:
+      - alert: ConverterRunLoopError
+        expr: rate(errors_total{error_type="run_loop"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "server_converter run loop crashed"
+          description: "An unhandled exception propagated out of process_batch(). The service is backing off but may exit soon."
+
+      - alert: ConverterRedisUnavailable
+        expr: rate(errors_total{error_type="redis"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "server_converter cannot reach Redis"
+          description: "Redis connection errors have been occurring for 5+ minutes. Check Redis container health."
+
+      - alert: ConverterVersionPendingGames
+        expr: errors_total{error_type="version_pending"} > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Games stuck waiting for conflict_interface update"
+          description: "One or more games are blocked on an unsupported datatype version. Deploy a new server_converter with an updated conflict_interface to unblock them."
+
+      - alert: ConverterHighErrorRate
+        expr: rate(errors_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "server_converter error rate is elevated"
+          description: "More than 0.1 errors/sec over 10 minutes. Check logs for details."
+
+  - name: server_observer
+    rules:
+      - alert: ObserverGameDropped
+        expr: rate(games_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Observer dropped a game session after max retries"
+          description: "A game session was permanently dropped. Check dead_letter.jsonl and observer logs for the error_type."
+
+      - alert: ObserverHighRetryRate
+        expr: rate(game_update_retries_total[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Observer game update retry rate is elevated"
+          description: "More than 0.5 retries/sec over 10 minutes — possible network, proxy, or game server issues."
+
+      - alert: ObserverNoActiveGames
+        expr: sum(active_games) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Observer has no active game recordings"
+          description: "No games have been active for 30 minutes. This may be normal off-peak, or the observer may be stuck."

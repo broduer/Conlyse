@@ -22,13 +22,27 @@ use config::{Config, File, FileFormat};
 use std::env;
 use std::sync::Arc;
 use tokio::signal;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber = FmtSubscriber::builder().with_env_filter(filter).finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    let log_dir = env::var("LOG_DIR").unwrap_or_else(|_| "logs".to_string());
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "server_observer.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_writer(non_blocking)
+        .with_filter(EnvFilter::new("info"));
+
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stdout)
+        .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")));
+
+    tracing_subscriber::registry()
+        .with(file_layer)
+        .with(stdout_layer)
+        .init();
 
     let args: Vec<String> = env::args().collect();
 

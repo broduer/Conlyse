@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -56,8 +57,9 @@ export default function CountryTerritoryChart({ data, topN = 20 }: Props) {
             name === 'avg_final' ? 'Avg final provinces' : 'Avg starting provinces',
           ]}
         />
-        <Bar dataKey="avg_initial" name="avg_initial" fill="var(--ifm-color-emphasis-400)" radius={[0, 3, 3, 0]} />
-        <Bar dataKey="avg_final" name="avg_final" fill="var(--ifm-color-primary)" radius={[0, 3, 3, 0]} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="avg_initial" name="Starting Provinces" fill="var(--ifm-color-emphasis-400)" radius={[0, 3, 3, 0]} />
+        <Bar dataKey="avg_final" name="Final Provinces" fill="var(--ifm-color-primary)" radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

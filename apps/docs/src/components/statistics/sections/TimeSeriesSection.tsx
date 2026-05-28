@@ -16,19 +16,19 @@ export default function TimeSeriesSection({ data, countries }: Props) {
         <div>
           <h2 className={styles.heading}>Province Control Over Time</h2>
           <p className={styles.description}>
-            Average territory per country across {data.countries.length} nations · top 10 by games played · toggle between % of game and absolute game days
+            Average territory per country across {data.countries.length} nations · top 10 by win rate · toggle between % of game and absolute game days
           </p>
         </div>
       </div>
       <div className={styles.grid}>
         <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
           <h3 className={styles.chartTitle}>Province Count Progression (Top 10 Nations)</h3>
-          <p className={styles.chartSubtitle}>Avg provinces held at each point in the game · use buttons to switch time axis</p>
+          <p className={styles.chartSubtitle}>Avg provinces held at each point in the game for the top 10 nations by win rate · use buttons to switch time axis</p>
           <CountryProvincesTimeSeriesChart data={data} countries={countries} topN={10} />
         </div>
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Nation Profile Comparison (Top 6)</h3>
-          <p className={styles.chartSubtitle}>Normalized across all nations · win rate, expansion, aggression, survival, territory</p>
+          <p className={styles.chartSubtitle}>Top 6 by win rate · normalized across all nations · win rate, expansion, aggression, survival, territory</p>
           <CountryRadarChart data={countries} topN={6} />
         </div>
       </div>

@@ -377,8 +377,17 @@ impl ObservationSession {
                 ObservationResult::make_unknown_error(result.error_message.clone())
             }
             GameServerError::ServerSwitch => {
-                // Server address already updated inline — no reset needed
-                ObservationResult::make_unknown_error(result.error_message.clone())
+                // Api already has the new server address set inline.
+                // Sync it into the package and clear stale state IDs so the
+                // next request does a full refresh against the new server.
+                // If auth is rejected on the new server, AuthError will trigger
+                // a full reset_package() on the subsequent attempt.
+                if let Some(api) = &self.api {
+                    api.update_package(&mut self.package);
+                }
+                self.package.state_ids.clear();
+                self.package.time_stamps.clear();
+                ObservationResult::make_server_error(result.error_message.clone())
             }
             GameServerError::ClientVersionMismatch => {
                 // Client version already updated inline — no reset needed

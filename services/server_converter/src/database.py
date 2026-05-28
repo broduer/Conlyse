@@ -1,12 +1,29 @@
 """
 Database interface for tracking replay metadata in PostgreSQL.
 """
+import functools
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple, Iterable
 from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _reconnect_on_failure(method):
+    """Retry a DB method once after reconnecting on connection errors."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        import psycopg2
+        for attempt in range(2):
+            try:
+                return method(self, *args, **kwargs)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                if attempt == 0:
+                    self._reconnect()
+                else:
+                    raise
+    return wrapper
 
 
 class ReplayStatus(Enum):
@@ -42,7 +59,7 @@ class ReplayDatabase:
                 "psycopg2 is required for PostgreSQL support. "
                 "Install it with: pip install psycopg2-binary"
             )
-        
+
         self.conn = psycopg2.connect(
             host=self.db_config.get('host', 'localhost'),
             port=self.db_config.get('port', 5432),
@@ -51,8 +68,28 @@ class ReplayDatabase:
             password=self.db_config.get('password', ''),
             cursor_factory=RealDictCursor
         )
-        
+
         self._create_tables()
+
+    def _reconnect(self):
+        """Re-establish the database connection after a transient failure."""
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        logger.warning("DB connection lost; reconnecting...")
+        try:
+            if self.conn and not self.conn.closed:
+                self.conn.close()
+        except Exception:
+            pass
+        self.conn = psycopg2.connect(
+            host=self.db_config.get('host', 'localhost'),
+            port=self.db_config.get('port', 5432),
+            database=self.db_config.get('database', 'replays'),
+            user=self.db_config.get('user', 'postgres'),
+            password=self.db_config.get('password', ''),
+            cursor_factory=RealDictCursor
+        )
+        logger.info("DB reconnected successfully")
         
     def close(self):
         """Close the database connection."""
@@ -164,7 +201,8 @@ class ReplayDatabase:
 
         self.conn.commit()
         
-    def create_replay_entry(self, game_id: int, player_id: int, 
+    @_reconnect_on_failure
+    def create_replay_entry(self, game_id: int, player_id: int,
                            replay_name: str, hot_storage_path: str,
                            recording_start_time: Optional[datetime] = None) -> int:
         """
@@ -207,6 +245,7 @@ class ReplayDatabase:
         self.conn.commit()
         return replay_id
         
+    @_reconnect_on_failure
     def get_replay_by_game_and_player(self, game_id: int, player_id: int) -> Optional[Dict[str, Any]]:
         """
         Get replay entry by game_id and player_id.
@@ -229,6 +268,7 @@ class ReplayDatabase:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    @_reconnect_on_failure
     def get_observer_completed_pairs(
         self,
         game_player_pairs: Iterable[Tuple[int, int]],
@@ -259,6 +299,7 @@ class ReplayDatabase:
         cursor.execute(query, params)
         return [(int(r["game_id"]), int(r["player_id"])) for r in cursor.fetchall()]
         
+    @_reconnect_on_failure
     def update_replay_status(
         self,
         replay_id: int,
@@ -319,6 +360,7 @@ class ReplayDatabase:
 
         self.conn.commit()
         
+    @_reconnect_on_failure
     def increment_response_count(self, replay_id: int, count: int = 1):
         """
         Increment the response count for a replay.
@@ -339,6 +381,7 @@ class ReplayDatabase:
         
         self.conn.commit()
         
+    @_reconnect_on_failure
     def get_all_active_replays(self) -> List[Dict[str, Any]]:
         """
         Get all replays that are currently recording.
@@ -356,6 +399,7 @@ class ReplayDatabase:
         
         return [dict(row) for row in cursor.fetchall()]
 
+    @_reconnect_on_failure
     def remove_game_from_recording_lists(self, game_id: int) -> None:
         """Remove a game from all users' recording lists."""
         cursor = self.conn.cursor()
@@ -363,6 +407,7 @@ class ReplayDatabase:
         cursor.execute(query, (game_id,))
         self.conn.commit()
 
+    @_reconnect_on_failure
     def is_conversion_failed(self, game_id: int, player_id: int) -> bool:
         """
         Check if this game/player is marked as conversion-failed (status_converter = 'failed').
@@ -375,6 +420,7 @@ class ReplayDatabase:
         cursor.execute(query, (game_id, player_id))
         return cursor.fetchone() is not None
 
+    @_reconnect_on_failure
     def record_conversion_failure(
         self, game_id: int, player_id: int, reason: Optional[str] = None
     ) -> None:
@@ -395,6 +441,7 @@ class ReplayDatabase:
         )
         self.conn.commit()
 
+    @_reconnect_on_failure
     def is_version_pending(self, game_id: int, player_id: int) -> bool:
         """Return True if this game/player is waiting for a newer conflict_interface build."""
         cursor = self.conn.cursor()
@@ -405,6 +452,7 @@ class ReplayDatabase:
         cursor.execute(query, (game_id, player_id))
         return cursor.fetchone() is not None
 
+    @_reconnect_on_failure
     def record_version_pending(
         self, game_id: int, player_id: int, datatype_version: int
     ) -> None:
@@ -433,6 +481,7 @@ class ReplayDatabase:
         )
 
     # --- Static maps helpers -------------------------------------------------
+    @_reconnect_on_failure
     def get_map_by_id(self, map_id: int) -> Optional[Dict[str, Any]]:
         """
         Get a static map entry by its id.
@@ -452,6 +501,7 @@ class ReplayDatabase:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    @_reconnect_on_failure
     def create_map_entry(self, map_id: int, s3_key: str, version: Optional[str] = None) -> int:
         """
         Create a new static map entry.
