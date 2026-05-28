@@ -36,6 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_filter(EnvFilter::new("info"));
 
     let stdout_layer = tracing_subscriber::fmt::layer()
+        .json()
         .with_writer(std::io::stdout)
         .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")));
 

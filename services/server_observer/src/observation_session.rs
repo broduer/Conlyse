@@ -441,7 +441,7 @@ impl ObservationSession {
     }
 
     pub async fn run_update_async(&mut self) -> ObservationResult {
-        tracing::info!(game_id = self.game_id, attempt = self.attempt, "starting update");
+        tracing::debug!(game_id = self.game_id, attempt = self.attempt, "starting update");
 
         if let Ok(storage) = self.ensure_storage() {
             let _ = storage.setup_logging();
