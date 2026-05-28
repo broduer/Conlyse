@@ -166,7 +166,11 @@ class RedisStreamConsumer:
             return result
 
         except Exception as e:
-            logger.error(f"Error reading from Redis stream: {e}")
+            import redis as redis_lib
+            if isinstance(e, (redis_lib.exceptions.ConnectionError, redis_lib.exceptions.TimeoutError)):
+                logger.error("Redis connection error reading stream: %s", e)
+                raise
+            logger.error("Unexpected error reading from Redis stream: %s", e, exc_info=True)
             return []
             
     def acknowledge_messages(self, message_ids: List[str]):

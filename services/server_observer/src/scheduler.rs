@@ -47,7 +47,7 @@ impl Scheduler {
     }
 
     pub fn schedule_update(&self, session: &ObservationSession) {
-        let mut queue = self.update_queue.lock().expect("scheduler queue mutex poisoned");
+        let mut queue = self.update_queue.lock().unwrap_or_else(|poisoned| { tracing::error!("scheduler queue mutex poisoned; recovering"); poisoned.into_inner() });
         queue
             .entry(session.next_update_at)
             .or_default()
@@ -92,18 +92,18 @@ impl Scheduler {
     pub fn mark_first_update(&self, game_id: i32) {
         self.first_update_sessions
             .lock()
-            .expect("scheduler first-update mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler first-update mutex poisoned; recovering"); poisoned.into_inner() })
             .insert(game_id);
     }
 
     pub fn cleanup_first_update_tracking(&self, game_id: i32) {
         self.first_update_sessions
             .lock()
-            .expect("scheduler first-update mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler first-update mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
         self.running_first_updates
             .lock()
-            .expect("scheduler running-first-update mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler running-first-update mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
     }
 
@@ -113,7 +113,7 @@ impl Scheduler {
             if self
                 .queued_priority
                 .lock()
-                .expect("scheduler queued-priority mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-priority mutex poisoned; recovering"); poisoned.into_inner() })
                 .contains(&game_id)
             {
                 return;
@@ -124,12 +124,12 @@ impl Scheduler {
                 let mut queued_normal = self
                     .queued_normal
                     .lock()
-                    .expect("scheduler queued-normal mutex poisoned");
+                    .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-normal mutex poisoned; recovering"); poisoned.into_inner() });
                 if queued_normal.remove(&game_id) {
                     let mut normal_q = self
                         .pending_normal_sessions
                         .lock()
-                        .expect("scheduler pending-normal mutex poisoned");
+                        .unwrap_or_else(|poisoned| { tracing::error!("scheduler pending-normal mutex poisoned; recovering"); poisoned.into_inner() });
                     let mut new_q = VecDeque::with_capacity(normal_q.len());
                     while let Some(item) = normal_q.pop_front() {
                         if item.0 != game_id {
@@ -142,18 +142,18 @@ impl Scheduler {
 
             self.pending_priority_sessions
                 .lock()
-                .expect("scheduler pending-priority mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler pending-priority mutex poisoned; recovering"); poisoned.into_inner() })
                 .push_back((game_id, scenario_id));
             self.queued_priority
                 .lock()
-                .expect("scheduler queued-priority mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-priority mutex poisoned; recovering"); poisoned.into_inner() })
                 .insert(game_id);
         } else {
             // Don't queue if already queued (either queue).
             if self
                 .queued_priority
                 .lock()
-                .expect("scheduler queued-priority mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-priority mutex poisoned; recovering"); poisoned.into_inner() })
                 .contains(&game_id)
             {
                 return;
@@ -161,7 +161,7 @@ impl Scheduler {
             if self
                 .queued_normal
                 .lock()
-                .expect("scheduler queued-normal mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-normal mutex poisoned; recovering"); poisoned.into_inner() })
                 .contains(&game_id)
             {
                 return;
@@ -169,11 +169,11 @@ impl Scheduler {
 
             self.pending_normal_sessions
                 .lock()
-                .expect("scheduler pending-normal mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler pending-normal mutex poisoned; recovering"); poisoned.into_inner() })
                 .push_back((game_id, scenario_id));
             self.queued_normal
                 .lock()
-                .expect("scheduler queued-normal mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-normal mutex poisoned; recovering"); poisoned.into_inner() })
                 .insert(game_id);
         }
     }
@@ -194,14 +194,14 @@ impl Scheduler {
             let mut q = self
                 .pending_priority_sessions
                 .lock()
-                .expect("scheduler pending-priority mutex poisoned");
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler pending-priority mutex poisoned; recovering"); poisoned.into_inner() });
             while out.len() < max_total {
                 let Some((game_id, scenario_id)) = q.pop_front() else {
                     break;
                 };
                 self.queued_priority
                     .lock()
-                    .expect("scheduler queued-priority mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-priority mutex poisoned; recovering"); poisoned.into_inner() })
                     .remove(&game_id);
                 out.push((game_id, scenario_id, true));
             }
@@ -215,14 +215,14 @@ impl Scheduler {
         let mut q = self
             .pending_normal_sessions
             .lock()
-            .expect("scheduler pending-normal mutex poisoned");
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler pending-normal mutex poisoned; recovering"); poisoned.into_inner() });
         while out.len() < max_total && normals_started < max_normal {
             let Some((game_id, scenario_id)) = q.pop_front() else {
                 break;
             };
             self.queued_normal
                 .lock()
-                .expect("scheduler queued-normal mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler queued-normal mutex poisoned; recovering"); poisoned.into_inner() })
                 .remove(&game_id);
             out.push((game_id, scenario_id, false));
             normals_started += 1;
@@ -235,7 +235,7 @@ impl Scheduler {
         let now = SystemTime::now();
         let max_parallel = self.max_parallel_updates.load(Ordering::SeqCst);
         let mut ready = Vec::new();
-        let mut queue = self.update_queue.lock().expect("scheduler queue mutex poisoned");
+        let mut queue = self.update_queue.lock().unwrap_or_else(|poisoned| { tracing::error!("scheduler queue mutex poisoned; recovering"); poisoned.into_inner() });
 
         loop {
             let in_flight = self.active_coroutines.load(Ordering::SeqCst) + ready.len() as i32;
@@ -259,12 +259,12 @@ impl Scheduler {
             if self
                 .first_update_sessions
                 .lock()
-                .expect("scheduler first-update mutex poisoned")
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler first-update mutex poisoned; recovering"); poisoned.into_inner() })
                 .contains(&game_id)
             {
                 self.running_first_updates
                     .lock()
-                    .expect("scheduler running-first-update mutex poisoned")
+                    .unwrap_or_else(|poisoned| { tracing::error!("scheduler running-first-update mutex poisoned; recovering"); poisoned.into_inner() })
                     .insert(game_id);
             }
 
@@ -280,7 +280,7 @@ impl Scheduler {
         }
 
         let queue_state = {
-            let queue = self.update_queue.lock().expect("scheduler queue mutex poisoned");
+            let queue = self.update_queue.lock().unwrap_or_else(|poisoned| { tracing::error!("scheduler queue mutex poisoned; recovering"); poisoned.into_inner() });
             queue.iter().next().map(|(k, _)| *k)
         };
 
@@ -303,7 +303,7 @@ impl Scheduler {
             let cap = *self
                 .update_interval
                 .lock()
-                .expect("scheduler interval mutex poisoned");
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler interval mutex poisoned; recovering"); poisoned.into_inner() });
             let actual_wait = wait.min(cap);
             if actual_wait > Duration::from_millis(0) {
                 sleep(actual_wait).await;
@@ -324,7 +324,7 @@ impl Scheduler {
             *self
                 .update_interval
                 .lock()
-                .expect("scheduler interval mutex poisoned") =
+                .unwrap_or_else(|poisoned| { tracing::error!("scheduler interval mutex poisoned; recovering"); poisoned.into_inner() }) =
                 Duration::from_secs_f64(interval_seconds);
         }
     }
@@ -346,7 +346,7 @@ impl Scheduler {
     fn update_interval_ms(&self) -> i64 {
         self.update_interval
             .lock()
-            .expect("scheduler interval mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler interval mutex poisoned; recovering"); poisoned.into_inner() })
             .as_millis()
             .max(1) as i64
     }
@@ -370,7 +370,7 @@ impl Scheduler {
         let first = self
             .first_update_sessions
             .lock()
-            .expect("scheduler first-update mutex poisoned");
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler first-update mutex poisoned; recovering"); poisoned.into_inner() });
         if !first.contains(&game_id) {
             return true;
         }
@@ -379,7 +379,7 @@ impl Scheduler {
         let running = self
             .running_first_updates
             .lock()
-            .expect("scheduler running-first-update mutex poisoned");
+            .unwrap_or_else(|poisoned| { tracing::error!("scheduler running-first-update mutex poisoned; recovering"); poisoned.into_inner() });
         let max_first = self.max_parallel_first_updates.load(Ordering::SeqCst);
         (running.len() as i32) < max_first
     }

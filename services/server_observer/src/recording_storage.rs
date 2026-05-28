@@ -82,7 +82,7 @@ impl RecordingStorage {
     }
 
     pub fn update_resume_metadata(&self, resume: Value) {
-        let mut state = self.state.lock().expect("recording storage mutex poisoned");
+        let mut state = self.state.lock().unwrap_or_else(|poisoned| { tracing::error!("recording storage mutex poisoned; recovering"); poisoned.into_inner() });
         state.metadata_cache["resume"] = resume.clone();
         state.resume_metadata = resume;
 
@@ -98,7 +98,7 @@ impl RecordingStorage {
     pub fn get_resume_metadata(&self) -> Value {
         self.state
             .lock()
-            .expect("recording storage mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording storage mutex poisoned; recovering"); poisoned.into_inner() })
             .resume_metadata
             .clone()
     }
@@ -106,7 +106,7 @@ impl RecordingStorage {
     pub fn has_resume_metadata(&self) -> bool {
         self.state
             .lock()
-            .expect("recording storage mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording storage mutex poisoned; recovering"); poisoned.into_inner() })
             .resume_metadata
             .get("auth")
             .is_some()
@@ -116,7 +116,7 @@ impl RecordingStorage {
         let metadata = self
             .state
             .lock()
-            .expect("recording storage mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording storage mutex poisoned; recovering"); poisoned.into_inner() })
             .metadata_cache
             .clone();
         save_metadata_file(&self.metadata_file, &metadata)

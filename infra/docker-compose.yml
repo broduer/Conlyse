@@ -1,10 +1,12 @@
 # Full Stack Docker Compose
 # Includes: PostgreSQL, Redis, MinIO (S3), Server Observer, Server Converter
-# 
+#           Prometheus, Alertmanager, Loki, Promtail, Grafana
+#
 # Quick Start:
 #   1. Copy .env.example to .env and customize
 #   2. docker compose -f infra/docker-compose.yml up -d
 #   3. Access MinIO console at http://localhost:9001 (minioadmin/minioadmin)
+#   4. Access Grafana at http://localhost:3000 (admin / $GRAFANA_PASSWORD or "admin")
 
 services:
   # PostgreSQL Database
@@ -98,8 +100,10 @@ services:
       - ./prod:/app/config:ro
       - observer-recordings:/app/recordings
       - observer-long-term-storage:/app/long_term_storage
+      - observer-logs:/app/logs
     environment:
       - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
     networks:
       - conlyse-network
     restart: unless-stopped
@@ -162,6 +166,77 @@ services:
     restart: unless-stopped
     security_opt:
       - label=disable
+
+  # --- Observability Stack ---
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: conlyse-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./prod/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prod/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - conlyse-network
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: conlyse-alertmanager
+    volumes:
+      - ./prod/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    networks:
+      - conlyse-network
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: conlyse-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - loki-data:/loki
+    networks:
+      - conlyse-network
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: conlyse-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./prod/promtail.yml:/etc/promtail/config.yml:ro
+    networks:
+      - conlyse-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: conlyse-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./prod/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - conlyse-network
+    restart: unless-stopped
+
 volumes:
   postgres-data:
     driver: local
@@ -173,7 +248,15 @@ volumes:
     driver: local
   observer-long-term-storage:
     driver: local
+  observer-logs:
+    driver: local
   converter-hot-storage:
+    driver: local
+  prometheus-data:
+    driver: local
+  loki-data:
+    driver: local
+  grafana-data:
     driver: local
 
 networks:

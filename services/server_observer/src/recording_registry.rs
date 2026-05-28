@@ -30,7 +30,7 @@ impl RecordingRegistry {
         self.db.mark_game_recording(game_id, scenario_id).await?;
         self.active
             .lock()
-            .expect("recording registry mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording registry mutex poisoned; recovering"); poisoned.into_inner() })
             .insert(game_id, scenario_id);
         Ok(())
     }
@@ -39,7 +39,7 @@ impl RecordingRegistry {
         self.db.mark_game_completed(game_id).await?;
         self.active
             .lock()
-            .expect("recording registry mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording registry mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
         Ok(())
     }
@@ -48,7 +48,7 @@ impl RecordingRegistry {
         self.db.mark_game_failed(game_id, reason).await?;
         self.active
             .lock()
-            .expect("recording registry mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording registry mutex poisoned; recovering"); poisoned.into_inner() })
             .remove(&game_id);
         Ok(())
     }
@@ -56,14 +56,14 @@ impl RecordingRegistry {
     pub fn active(&self) -> BTreeMap<i32, i32> {
         self.active
             .lock()
-            .expect("recording registry mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording registry mutex poisoned; recovering"); poisoned.into_inner() })
             .clone()
     }
 
     pub fn get_scenario_id(&self, game_id: i32) -> Option<i32> {
         self.active
             .lock()
-            .expect("recording registry mutex poisoned")
+            .unwrap_or_else(|poisoned| { tracing::error!("recording registry mutex poisoned; recovering"); poisoned.into_inner() })
             .get(&game_id)
             .copied()
     }

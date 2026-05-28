@@ -21,6 +21,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["full"] }
 tokio-postgres = "0.7.16"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 zstd = "0.13.3"
 pyo3 = { version = "0.27.1", features = ["auto-initialize", "abi3-py312"] }

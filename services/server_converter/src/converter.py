@@ -21,26 +21,21 @@ from server_converter import metrics
 
 logger = logging.getLogger(__name__)
 
+_VERSION_PENDING_WARN_INTERVAL = 3600
+
 
 class ServerConverter:
     """
     Converts game responses from Redis stream to replay files.
-    
+
     Caches responses on disk until a game accumulates enough for processing,
     then creates/appends to replay files in hot storage,
     and moves completed replays to cold storage.
     """
-    
+
     def __init__(self, config: ServerConverterConfig):
-        """
-        Initialize the server converter.
-        
-        Args:
-            config: ServerConverterConfig instance
-        """
         self.config = config
-        
-        # Initialize database with PostgreSQL config
+
         db_config = {
             'host': config.database.host,
             'port': config.database.port,
@@ -48,38 +43,34 @@ class ServerConverter:
             'user': config.database.user,
             'password': config.database.password
         }
-        
-        # Initialize components
+
         self.db = ReplayDatabase(db_config)
         self.db.connect()
-        
+
         self.redis_consumer = RedisStreamConsumer(config.redis)
         self.hot_storage = HotStorageManager(config.storage.hot_storage_dir)
-        
-        # Initialize response cache in a subdirectory of hot storage
+
         cache_dir = config.storage.hot_storage_dir / ".response_cache"
         self.response_cache = ResponseCache(cache_dir, config.batch_size)
-        
+
         self.cold_storage: Optional[ColdStorageManager] = None
         if config.storage.cold_storage_enabled and config.storage.s3_config:
             self.cold_storage = ColdStorageManager(config.storage.s3_config)
-            
+
+        self._last_version_pending_warn = 0.0
+
         logger.info("Server converter initialized with disk-based response caching")
-        
+
     def process_batch(self) -> int:
         """
         Process messages from Redis stream and cache them on disk.
-        
-        Reads messages from Redis, caches them to disk, then processes
-        any games that have accumulated enough responses.
-        
+
         Returns:
             Number of messages processed
         """
         start_time = time.time()
-        
+
         try:
-            # Drain Redis: one blocking read (idle wait), then keep reading until empty.
             total_cached = 0
             first_read = True
             next_ready_check_at = start_time + self.config.check_interval_seconds
@@ -95,42 +86,41 @@ class ServerConverter:
                 if not messages:
                     break
 
-                logger.info(f"Caching {len(messages)} messages to disk")
+                logger.info("Caching %d messages to disk", len(messages))
 
                 cached_message_ids = []
                 poison_message_ids = []
                 for message_id, message_data in messages:
                     try:
-                        # Extract core metadata from the ResponseMetadata payload.
                         meta_dict = message_data["metadata"]
                         response = message_data["response"]
 
                         metadata = ResponseMetadata.from_dict(meta_dict)
 
-                        # Cache to disk
                         self.response_cache.add_response(metadata, response)
                         cached_message_ids.append(message_id)
                         total_cached += 1
 
                     except Exception as e:
                         logger.warning(
-                            f"Poison message {message_id} (game {message_data.get('game_id')}, "
-                            f"player {message_data.get('player_id')}): {e}; acking to avoid retry"
+                            "Poison message %s: %s; acking to avoid retry",
+                            message_id, e,
+                            extra={
+                                "game_id": message_data.get("game_id"),
+                                "player_id": message_data.get("player_id"),
+                            },
                         )
                         metrics.errors_total.labels(error_type='caching').inc()
                         metrics.poison_messages_total.inc()
                         poison_message_ids.append(message_id)
 
-                # Acknowledge both successfully cached and poison messages so they leave the stream
                 if cached_message_ids:
                     self.redis_consumer.acknowledge_messages(cached_message_ids)
-                    logger.info(f"Cached and acknowledged {len(cached_message_ids)} messages")
+                    logger.info("Cached and acknowledged %d messages", len(cached_message_ids))
                 if poison_message_ids:
                     self.redis_consumer.acknowledge_messages(poison_message_ids)
-                    logger.info(f"Acked {len(poison_message_ids)} poison message(s) to avoid retry")
+                    logger.info("Acked %d poison message(s) to avoid retry", len(poison_message_ids))
 
-                # If we're in a high-throughput scenario, don't wait for Redis to go empty
-                # before attempting conversions.
                 now = time.time()
                 if now >= next_ready_check_at:
                     self._process_ready_games()
@@ -138,32 +128,23 @@ class ServerConverter:
                     next_ready_check_at = now + self.config.check_interval_seconds
 
             if total_cached == 0:
-                # No new messages, check if any cached games are ready to process
                 self._process_ready_games()
                 logger.debug("No new messages to cache")
                 return 0
 
-            # If we didn't already process during a continuous drain, do it once now.
             if not processed_ready_during_drain:
                 self._process_ready_games()
 
             return total_cached
-            
+
         finally:
-            # Record processing duration
             duration = time.time() - start_time
             metrics.messages_processing_duration_seconds.observe(duration)
-        
+
     def _process_ready_games(self):
         """
         Process games that have accumulated enough responses in the cache.
-        
-        Checks the cache for games with at least batch_size responses and
-        processes them into replay files.
         """
-        # A game is eligible for processing if:
-        # - it has at least batch_size cached responses, OR
-        # - the observer has marked the recording as completed (flush whatever remains).
         games_with_responses = self.response_cache.list_games_with_responses()
         if not games_with_responses:
             logger.debug("No games with responses found in cache")
@@ -173,177 +154,152 @@ class ServerConverter:
         observer_completed = set(self.db.get_observer_completed_pairs(games_with_responses))
 
         ready_games = set(batch_ready_games) | observer_completed
-        logger.debug(f"Ready games: {ready_games} ({len(batch_ready_games)} by batch, {len(observer_completed)} observer-completed)")
+        logger.debug(
+            "Ready games: %s (%d by batch, %d observer-completed)",
+            ready_games, len(batch_ready_games), len(observer_completed),
+        )
         if not ready_games:
             return
-            
+
         logger.info(
-            f"Found {len(ready_games)} games ready to process "
-            f"({len(batch_ready_games)} by batch, {len(observer_completed)} observer-completed)"
+            "Found %d games ready to process (%d by batch, %d observer-completed)",
+            len(ready_games), len(batch_ready_games), len(observer_completed),
         )
-        
+
+        version_pending_games = []
+
         for game_id, player_id in sorted(ready_games):
+            ctx = {"game_id": game_id, "player_id": player_id}
             try:
-                # Skip games we have permanently given up converting (persistent across restarts)
                 if self.db.is_conversion_failed(game_id, player_id):
-                    logger.debug(
-                        f"Skipping game {game_id}, player {player_id}: marked as conversion-failed"
-                    )
+                    logger.debug("Skipping: marked as conversion-failed", extra=ctx)
                     continue
 
-                # Skip games blocked on a future datatype version — retried automatically on reboot
                 if self.db.is_version_pending(game_id, player_id):
-                    logger.debug(
-                        f"Skipping game {game_id}, player {player_id}: waiting for version update"
-                    )
+                    logger.debug("Skipping: waiting for version update", extra=ctx)
+                    version_pending_games.append((game_id, player_id))
                     continue
 
-                # Get all cached responses for this game
                 cached_responses = self.response_cache.get_cached_responses(game_id, player_id)
-                
-                # Note: There's a potential TOCTOU race between list_games_ready_to_process()
-                # and this check. In distributed deployments with multiple converter instances,
-                # another instance might process and clear the cache. This is expected behavior
-                # and handled gracefully by skipping if responses are insufficient.
+
                 is_observer_completed = (game_id, player_id) in observer_completed
                 if is_observer_completed:
                     if len(cached_responses) == 0:
                         continue
                     logger.info(
-                        f"Observer marked completed; flushing {len(cached_responses)} cached responses "
-                        f"for game {game_id}, player {player_id}"
+                        "Observer marked completed; flushing %d cached responses",
+                        len(cached_responses),
+                        extra=ctx,
                     )
                 else:
                     if len(cached_responses) < self.config.batch_size:
-                        # Race condition - responses were removed by another process
                         logger.debug(
-                            f"Skipping game {game_id}, player {player_id}: "
-                            f"only {len(cached_responses)} responses available"
+                            "Skipping: only %d responses available (race condition)",
+                            len(cached_responses),
+                            extra=ctx,
                         )
                         continue
-                    
-                logger.info(f"Processing {len(cached_responses)} cached responses for game {game_id}, player {player_id}")
-                
-                # Process the responses
+
+                logger.info(
+                    "Processing %d cached responses",
+                    len(cached_responses),
+                    extra=ctx,
+                )
+
                 success = self._process_game_responses(game_id, player_id, cached_responses)
-                
+
                 if success:
-                    # Clear the cache on success
                     self.response_cache.clear_cache(game_id, player_id)
                     metrics.messages_processed_total.labels(status='success').inc(len(cached_responses))
-                    logger.info(f"Successfully processed and cleared cache for game {game_id}, player {player_id}")
+                    logger.info("Successfully processed and cleared cache", extra=ctx)
 
-                    # If the observer says the recording is completed, finalize the replay now
-                    # that we've flushed the remaining cached responses.
                     if is_observer_completed:
                         try:
                             self.mark_replay_completed(game_id, player_id)
                         except Exception as e:
                             logger.error(
-                                f"Failed to mark replay completed for game {game_id}, player {player_id}: {e}",
-                                exc_info=True,
+                                "Failed to mark replay completed: %s", e,
+                                exc_info=True, extra=ctx,
                             )
                             metrics.errors_total.labels(error_type='processing').inc()
                 else:
                     metrics.messages_processed_total.labels(status='error').inc(len(cached_responses))
                     reason = "conversion failed (inconsistent or unrecoverable state)"
                     self.db.record_conversion_failure(game_id, player_id, reason=reason)
-                    logger.warning(
-                        f"Failed to process game {game_id}, player {player_id}; recorded as conversion-failed"
-                    )
-                    
+                    logger.warning("Failed to process; recorded as conversion-failed", extra=ctx)
+
             except UnsupportedDatatypeVersionError as e:
+                ctx = {"game_id": game_id, "player_id": player_id}
                 if e.version > LATEST_VERSION:
-                    # Future version: keep cache and wait for a reboot with updated conflict_interface
                     logger.warning(
-                        f"Game {game_id}, player {player_id}: {e}. "
-                        f"Cached responses retained — reboot after updating conflict_interface."
+                        "%s — cached responses retained; reboot after updating conflict_interface",
+                        e, extra=ctx,
                     )
                     self.db.record_version_pending(game_id, player_id, e.version)
+                    version_pending_games.append((game_id, player_id))
                     metrics.errors_total.labels(error_type='unsupported_version').inc()
                 else:
-                    # Older / never-to-be-supported version: permanently fail
                     logger.error(
-                        f"Game {game_id}, player {player_id}: {e}. "
-                        f"Version is not newer than latest ({LATEST_VERSION}); marking as failed."
+                        "%s — version not newer than latest (%d); marking as failed",
+                        e, LATEST_VERSION, extra=ctx,
                     )
                     self.db.record_conversion_failure(game_id, player_id, reason=str(e)[:500])
                     metrics.errors_total.labels(error_type='processing').inc()
             except Exception as e:
-                logger.error(f"Error processing ready game {game_id}, player {player_id}: {e}", exc_info=True)
+                logger.error("Error processing ready game: %s", e, exc_info=True,
+                             extra={"game_id": game_id, "player_id": player_id})
                 metrics.errors_total.labels(error_type='processing').inc()
                 self.db.record_conversion_failure(game_id, player_id, reason=str(e)[:500])
-        
+
+        now = time.time()
+        if version_pending_games and (now - self._last_version_pending_warn) > _VERSION_PENDING_WARN_INTERVAL:
+            logger.warning(
+                "%d game(s) stuck waiting for conflict_interface update: %s",
+                len(version_pending_games), version_pending_games,
+            )
+            metrics.errors_total.labels(error_type='version_pending').inc()
+            self._last_version_pending_warn = now
+
     def _process_game_responses(self, game_id: int, player_id: int,
                                 json_responses: List[Tuple[ResponseMetadata, dict]]) -> bool:
-        """
-        Process responses for a specific game and player.
-        
-        Args:
-            game_id: Game ID
-            player_id: Player ID
-            json_responses: List of (timestamp, response) tuples
-            
-        Returns:
-            True if processing was successful
-        """
-        logger.info(f"Processing {len(json_responses)} responses for game {game_id}, player {player_id}")
-        
-        # Check if replay exists in hot storage using cache
+        ctx = {"game_id": game_id, "player_id": player_id}
+        logger.info("Processing %d responses", len(json_responses), extra=ctx)
+
         replay_exists = self.hot_storage.replay_exists(game_id, player_id)
-
-        # Get or create database entry
         replay_entry = self.db.get_replay_by_game_and_player(game_id, player_id)
-
-        # If status_converter is NULL, the observer may have created the row; conversion hasn't started yet, so no file exists.
         converter_started = replay_entry and replay_entry.get("status_converter") is not None
 
         if not replay_exists and not converter_started:
             return self._create_new_replay(game_id, player_id, json_responses)
         elif replay_exists and replay_entry:
-            # Append to existing replay
             return self._append_to_replay(game_id, player_id, json_responses, replay_entry)
         else:
-            # Inconsistent state: DB says converter has started (status_converter set) but no file on disk
             logger.error(
-                f"Inconsistent state for game {game_id}, player {player_id}: "
-                f"replay_exists={replay_exists}, replay_entry={replay_entry is not None}"
+                "Inconsistent state: replay_exists=%s, replay_entry=%s",
+                replay_exists, replay_entry is not None,
+                extra=ctx,
             )
             return False
-            
+
     def _create_new_replay(self, game_id: int, player_id: int,
                           json_responses: List[Tuple[ResponseMetadata, dict]]) -> bool:
-        """
-        Create a new replay file.
-        
-        Args:
-            game_id: Game ID
-            player_id: Player ID
-            json_responses: List of (timestamp, response) tuples
+        ctx = {"game_id": game_id, "player_id": player_id}
+        logger.info("Creating new replay", extra=ctx)
 
-        Returns:
-            True if successful
-        """
-        logger.info(f"Creating new replay for game {game_id}, player {player_id}")
-        
         start_time = time.time()
-        
+
         try:
-            # Register replay in hot storage cache and get path
             replay_path = self.hot_storage.add_replay(game_id, player_id)
 
-            # Create replay builder
             builder = ReplayBuilder(replay_path, game_id, player_id)
             initial_index = builder.create_replay(json_responses)
             remaining_responses = json_responses[initial_index + 1:] if initial_index + 1 < len(json_responses) else []
             builder.append_json_responses(remaining_responses)
 
-            # Create database entry
-            # recording_start_time is based on the first response metadata timestamp (ms)
             first_meta = json_responses[0][0]
             recording_start_time = datetime.fromtimestamp(first_meta.timestamp / 1000.0)
             replay_name = f"game_{game_id}_player_{player_id}"
-            
+
             self.db.create_replay_entry(
                 game_id=game_id,
                 player_id=player_id,
@@ -351,52 +307,39 @@ class ServerConverter:
                 hot_storage_path=str(replay_path),
                 recording_start_time=recording_start_time
             )
-            
-            # Update response count
+
             replay_entry = self.db.get_replay_by_game_and_player(game_id, player_id)
             self.db.increment_response_count(replay_entry['id'], len(json_responses))
 
-            # Optionally mirror the replay to cold storage after creating it.
             if self.cold_storage and self.config.storage.always_update_cold_storage:
-                logger.info(
-                    "Uploading new replay snapshot to cold storage: "
-                    f"game {game_id}, player {player_id}"
-                )
+                logger.info("Uploading new replay snapshot to cold storage", extra=ctx)
                 try:
-                    s3_key = self.cold_storage.upload_replay(
-                        replay_path, game_id, player_id
-                    )
+                    s3_key = self.cold_storage.upload_replay(replay_path, game_id, player_id)
                     if s3_key:
-                        # Keep status as RECORDING but store/update S3 key.
                         self.db.update_replay_status(
-                            replay_entry["id"],
-                            ReplayStatus.RECORDING,
-                            s3_key=s3_key,
+                            replay_entry["id"], ReplayStatus.RECORDING, s3_key=s3_key,
                         )
                         metrics.cold_storage_uploads_total.labels(status='success').inc()
                     else:
                         metrics.cold_storage_uploads_total.labels(status='error').inc()
                         metrics.errors_total.labels(error_type='storage').inc()
                 except Exception as e:
-                    logger.error(
-                        f"Failed to upload new replay snapshot to cold storage: {e}",
-                        exc_info=True,
-                    )
+                    logger.error("Failed to upload new replay snapshot to cold storage: %s", e,
+                                 exc_info=True, extra=ctx)
                     metrics.cold_storage_uploads_total.labels(status='error').inc()
                     metrics.errors_total.labels(error_type='storage').inc()
-            
-            # Update metrics
+
             metrics.responses_per_replay_summary.observe(len(json_responses))
             metrics.replay_operations_total.labels(operation='create', status='success').inc()
             metrics.hot_storage_replays.inc()
-            
-            logger.info(f"Created replay at {replay_path} with {len(json_responses)} responses")
+
+            logger.info("Created replay at %s with %d responses", replay_path, len(json_responses), extra=ctx)
             return True
-            
+
         except UnsupportedDatatypeVersionError:
             raise
         except Exception as e:
-            logger.error(f"Failed to create replay: {e}", exc_info=True)
+            logger.error("Failed to create replay: %s", e, exc_info=True, extra=ctx)
             metrics.replay_operations_total.labels(operation='create', status='error').inc()
             metrics.errors_total.labels(error_type='storage').inc()
             return False
@@ -404,77 +347,50 @@ class ServerConverter:
         finally:
             duration = time.time() - start_time
             metrics.replay_creation_duration_seconds.observe(duration)
-            
+
     def _append_to_replay(self, game_id: int, player_id: int,
                          json_responses: List[Tuple[ResponseMetadata, dict]],
                          replay_entry: Dict[str, Any]) -> bool:
-        """
-        Append responses to an existing replay.
-        
-        Args:
-            game_id: Game ID
-            player_id: Player ID
-            json_responses: List of (timestamp, response) tuples
-            replay_entry: Database entry for the replay
-            
-        Returns:
-            True if successful
-        """
-        logger.info(f"Appending {len(json_responses)} responses to existing replay")
-        
+        ctx = {"game_id": game_id, "player_id": player_id}
+        logger.info("Appending %d responses to existing replay", len(json_responses), extra=ctx)
+
         start_time = time.time()
-        
+
         try:
-            # Get replay path from hot storage
             replay_path = self.hot_storage.get_replay_path(game_id, player_id)
-            # Create replay builder in append mode
             builder = ReplayBuilder(replay_path, game_id, player_id)
-            # Append responses
             builder.append_json_responses(json_responses)
-            
-            # Update response count
+
             self.db.increment_response_count(replay_entry['id'], len(json_responses))
-            
-            # Optionally mirror the updated replay to cold storage after appending.
+
             if self.cold_storage and self.config.storage.always_update_cold_storage:
-                logger.info(
-                    "Uploading updated replay snapshot to cold storage: "
-                    f"game {game_id}, player {player_id}"
-                )
+                logger.info("Uploading updated replay snapshot to cold storage", extra=ctx)
                 try:
-                    s3_key = self.cold_storage.upload_replay(
-                        replay_path, game_id, player_id
-                    )
+                    s3_key = self.cold_storage.upload_replay(replay_path, game_id, player_id)
                     if s3_key:
-                        # Keep status as RECORDING but store/update S3 key.
                         self.db.update_replay_status(
-                            replay_entry["id"],
-                            ReplayStatus.RECORDING,
-                            s3_key=s3_key,
+                            replay_entry["id"], ReplayStatus.RECORDING, s3_key=s3_key,
                         )
                         metrics.cold_storage_uploads_total.labels(status='success').inc()
                     else:
                         metrics.cold_storage_uploads_total.labels(status='error').inc()
                         metrics.errors_total.labels(error_type='storage').inc()
                 except Exception as e:
-                    logger.error(
-                        f"Failed to upload updated replay snapshot to cold storage: {e}",
-                        exc_info=True,
-                    )
+                    logger.error("Failed to upload updated replay snapshot to cold storage: %s", e,
+                                 exc_info=True, extra=ctx)
                     metrics.cold_storage_uploads_total.labels(status='error').inc()
                     metrics.errors_total.labels(error_type='storage').inc()
 
-            # Update metrics
             metrics.responses_per_replay_summary.observe(len(json_responses))
             metrics.replay_operations_total.labels(operation='append', status='success').inc()
-            
-            logger.info(f"Appended {len(json_responses)} responses to {replay_path}")
+
+            logger.info("Appended %d responses to %s", len(json_responses), replay_path, extra=ctx)
             return True
-            
+
         except UnsupportedDatatypeVersionError:
             raise
         except Exception as e:
-            logger.error(f"Failed to append to replay: {e}", exc_info=True)
+            logger.error("Failed to append to replay: %s", e, exc_info=True, extra=ctx)
             metrics.replay_operations_total.labels(operation='append', status='error').inc()
             metrics.errors_total.labels(error_type='storage').inc()
             return False
@@ -482,53 +398,36 @@ class ServerConverter:
         finally:
             duration = time.time() - start_time
             metrics.replay_append_duration_seconds.observe(duration)
-            
+
     def mark_replay_completed(self, game_id: int, player_id: int) -> bool:
-        """
-        Mark a replay as completed and move to cold storage if enabled.
-        
-        Args:
-            game_id: Game ID
-            player_id: Player ID
-            
-        Returns:
-            True if successful
-        """
+        ctx = {"game_id": game_id, "player_id": player_id}
+
         replay_entry = self.db.get_replay_by_game_and_player(game_id, player_id)
         if not replay_entry:
-            logger.error(f"No replay entry found for game {game_id}, player {player_id}")
+            logger.error("No replay entry found", extra=ctx)
             metrics.replay_operations_total.labels(operation='complete', status='error').inc()
             return False
 
-        # Idempotency: if we've already completed/archived on the converter side, don't redo work.
         status_converter = replay_entry.get("status_converter")
         if status_converter in (ReplayStatus.COMPLETED.value, ReplayStatus.ARCHIVED.value):
-            logger.debug(
-                f"Replay already finalized (status_converter={status_converter}) "
-                f"for game {game_id}, player {player_id}"
-            )
+            logger.debug("Replay already finalized (status_converter=%s)", status_converter, extra=ctx)
             return True
-            
+
         replay_path = self.hot_storage.get_replay_path(game_id, player_id)
         if not replay_path.exists():
-            logger.error(f"Replay file not found: {replay_path}")
+            logger.error("Replay file not found: %s", replay_path, extra=ctx)
             metrics.replay_operations_total.labels(operation='complete', status='error').inc()
             return False
-            
-        # Update recording end time
+
         recording_end_time = datetime.now()
 
-        # Move to cold storage if enabled
         s3_key = None
         if self.cold_storage:
-            logger.info(f"Moving replay to cold storage: game {game_id}, player {player_id}")
+            logger.info("Moving replay to cold storage", extra=ctx)
             try:
-                s3_key = self.cold_storage.upload_replay(
-                    replay_path, game_id, player_id
-                )
+                s3_key = self.cold_storage.upload_replay(replay_path, game_id, player_id)
 
                 if s3_key:
-                    # Delete from hot storage after successful upload
                     self.hot_storage.delete_replay(game_id, player_id)
                     metrics.hot_storage_replays.dec()
                     metrics.cold_storage_uploads_total.labels(status="success").inc()
@@ -537,11 +436,10 @@ class ServerConverter:
                     metrics.errors_total.labels(error_type="storage").inc()
 
             except Exception as e:
-                logger.error(f"Failed to upload to cold storage: {e}", exc_info=True)
+                logger.error("Failed to upload to cold storage: %s", e, exc_info=True, extra=ctx)
                 metrics.cold_storage_uploads_total.labels(status='error').inc()
                 metrics.errors_total.labels(error_type='storage').inc()
 
-        # Update database
         status = ReplayStatus.ARCHIVED if s3_key else ReplayStatus.COMPLETED
         self.db.update_replay_status(
             replay_entry["id"],
@@ -553,49 +451,55 @@ class ServerConverter:
         try:
             self.db.remove_game_from_recording_lists(game_id)
         except Exception as e:
-            logger.warning(
-                f"Failed to remove game {game_id} from recording lists: {e}",
-                exc_info=True,
-            )
+            logger.warning("Failed to remove game from recording lists: %s", e,
+                           exc_info=True, extra=ctx)
 
         metrics.replay_operations_total.labels(operation='complete', status='success').inc()
-        logger.info(f"Marked replay as {status.value}: game {game_id}, player {player_id}")
+        logger.info("Marked replay as %s", status.value, extra=ctx)
         return True
-        
+
     def run(self):
-        """
-        Run the server converter main loop.
-        """
         logger.info("Starting server converter main loop")
-        
+        consecutive_failures = 0
+        MAX_CONSECUTIVE = 10
         try:
             while True:
-                # Update hot storage gauge
                 self._update_hot_storage_metric()
-                
-                # process_batch() is expected to perform a blocking read with the
-                # configured timeout, so no additional sleep is needed here.
-                self.process_batch()
+                try:
+                    self.process_batch()
+                    consecutive_failures = 0
+                except Exception as e:
+                    consecutive_failures += 1
+                    metrics.errors_total.labels(error_type='run_loop').inc()
+                    logger.error(
+                        "Unhandled exception in process_batch (consecutive=%d): %s",
+                        consecutive_failures, e, exc_info=True,
+                    )
+                    if consecutive_failures >= MAX_CONSECUTIVE:
+                        logger.critical(
+                            "Reached %d consecutive failures; exiting for supervisor restart",
+                            MAX_CONSECUTIVE,
+                        )
+                        raise
+                    time.sleep(min(5 * consecutive_failures, 60))
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal, shutting down...")
         finally:
             self.shutdown()
-            
+
     def _update_hot_storage_metric(self):
-        """Update the hot storage replays gauge metric using cached count."""
         try:
             replay_count = self.hot_storage.count_replays()
             metrics.hot_storage_replays.set(replay_count)
         except Exception as e:
-            logger.warning(f"Failed to update hot storage metric: {e}")
-            
+            logger.warning("Failed to update hot storage metric: %s", e)
+
     def shutdown(self):
-        """Clean up resources."""
         logger.info("Shutting down server converter")
 
         if self.redis_consumer:
             self.redis_consumer.close()
-            
+
         if self.db:
             self.db.close()
