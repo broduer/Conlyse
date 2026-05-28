@@ -37,7 +37,7 @@ class HotStorageManager:
         if self._cache_initialized:
             return
 
-        logger.info(f"Initializing replay cache from {self.hot_storage_dir}")
+        logger.info("Initializing replay cache from %s", self.hot_storage_dir)
         count = 0
 
         try:
@@ -56,13 +56,13 @@ class HotStorageManager:
                                 self._replay_cache.add((game_id, player_id))
                                 count += 1
                         except (ValueError, IndexError) as e:
-                            logger.warning(f"Could not parse replay filename: {entry.name}")
+                            logger.warning("Could not parse replay filename: %s", entry.name)
 
             self._cache_initialized = True
-            logger.info(f"Replay cache initialized with {count} replays")
+            logger.info("Replay cache initialized with %d replays", count)
 
         except Exception as e:
-            logger.error(f"Error initializing replay cache: {e}")
+            logger.error("Error initializing replay cache: %s", e)
             self._cache_initialized = False
 
     def get_replay_path(self, game_id: int, player_id: int) -> Path:
@@ -106,7 +106,7 @@ class HotStorageManager:
         """
         replay_path = self.get_replay_path(game_id, player_id)
         self._replay_cache.add((game_id, player_id))
-        logger.debug(f"Added replay to cache: game {game_id}, player {player_id}")
+        logger.debug("Added replay to cache: game %d, player %d", game_id, player_id)
         return replay_path
 
     def delete_replay(self, game_id: int, player_id: int) -> bool:
@@ -125,7 +125,7 @@ class HotStorageManager:
             replay_path.unlink()
             self._replay_cache.discard((game_id, player_id))
 
-            logger.info(f"Deleted replay from hot storage: {replay_path}")
+            logger.info("Deleted replay from hot storage: %s", replay_path)
             return True
         return False
 

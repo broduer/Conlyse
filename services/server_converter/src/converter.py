@@ -86,7 +86,7 @@ class ServerConverter:
                 if not messages:
                     break
 
-                logger.info("Caching %d messages to disk", len(messages))
+                logger.debug("Caching %d messages to disk", len(messages))
 
                 cached_message_ids = []
                 poison_message_ids = []
@@ -116,7 +116,7 @@ class ServerConverter:
 
                 if cached_message_ids:
                     self.redis_consumer.acknowledge_messages(cached_message_ids)
-                    logger.info("Cached and acknowledged %d messages", len(cached_message_ids))
+                    logger.debug("Cached and acknowledged %d messages", len(cached_message_ids))
                 if poison_message_ids:
                     self.redis_consumer.acknowledge_messages(poison_message_ids)
                     logger.info("Acked %d poison message(s) to avoid retry", len(poison_message_ids))
@@ -263,7 +263,7 @@ class ServerConverter:
     def _process_game_responses(self, game_id: int, player_id: int,
                                 json_responses: List[Tuple[ResponseMetadata, dict]]) -> bool:
         ctx = {"game_id": game_id, "player_id": player_id}
-        logger.info("Processing %d responses", len(json_responses), extra=ctx)
+        logger.debug("Processing %d responses", len(json_responses), extra=ctx)
 
         replay_exists = self.hot_storage.replay_exists(game_id, player_id)
         replay_entry = self.db.get_replay_by_game_and_player(game_id, player_id)
@@ -312,7 +312,7 @@ class ServerConverter:
             self.db.increment_response_count(replay_entry['id'], len(json_responses))
 
             if self.cold_storage and self.config.storage.always_update_cold_storage:
-                logger.info("Uploading new replay snapshot to cold storage", extra=ctx)
+                logger.debug("Uploading new replay snapshot to cold storage", extra=ctx)
                 try:
                     s3_key = self.cold_storage.upload_replay(replay_path, game_id, player_id)
                     if s3_key:
@@ -352,7 +352,7 @@ class ServerConverter:
                          json_responses: List[Tuple[ResponseMetadata, dict]],
                          replay_entry: Dict[str, Any]) -> bool:
         ctx = {"game_id": game_id, "player_id": player_id}
-        logger.info("Appending %d responses to existing replay", len(json_responses), extra=ctx)
+        logger.debug("Appending %d responses to existing replay", len(json_responses), extra=ctx)
 
         start_time = time.time()
 
@@ -364,7 +364,7 @@ class ServerConverter:
             self.db.increment_response_count(replay_entry['id'], len(json_responses))
 
             if self.cold_storage and self.config.storage.always_update_cold_storage:
-                logger.info("Uploading updated replay snapshot to cold storage", extra=ctx)
+                logger.debug("Uploading updated replay snapshot to cold storage", extra=ctx)
                 try:
                     s3_key = self.cold_storage.upload_replay(replay_path, game_id, player_id)
                     if s3_key:

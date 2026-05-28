@@ -42,8 +42,8 @@ class ResponseCache:
         self._initialize_counts()
         
         logger.info(
-            f"Response cache initialized at {self.cache_dir}, batch_size={batch_size}, "
-            f"found {len(self._response_counts)} cached games"
+            "Response cache initialized at %s, batch_size=%d, found %d cached games",
+            self.cache_dir, batch_size, len(self._response_counts),
         )
         
     def _get_cache_file(self, game_id: int, player_id: int) -> Path:
@@ -69,12 +69,12 @@ class ResponseCache:
                     with open(cache_file, 'r') as f:
                         count = sum(1 for _ in f)
                     self._response_counts[(game_id, player_id)] = count
-                    logger.debug(f"Initialized count for game {game_id}, player {player_id}: {count}")
+                    logger.debug("Initialized count for game %d, player %d: %d", game_id, player_id, count)
 
                 except ValueError:
-                    logger.warning(f"Invalid cache filename: {cache_file.name}")
+                    logger.warning("Invalid cache filename: %s", cache_file.name)
                 except Exception as e:
-                    logger.error(f"Error initializing count for {cache_file.name}: {e}")
+                    logger.error("Error initializing count for %s: %s", cache_file.name, e)
         
     def add_response(self, metadata: ResponseMetadata, response: dict):
         """
@@ -104,7 +104,7 @@ class ResponseCache:
         key = (game_id, player_id)
         self._response_counts[key] = self._response_counts.get(key, 0) + 1
 
-        logger.debug(f"Cached response for game {game_id}, player {player_id}")
+        logger.debug("Cached response for game %d, player %d", game_id, player_id)
 
     def get_response_count(self, game_id: int, player_id: int) -> int:
         """
@@ -185,7 +185,7 @@ class ResponseCache:
 
         if cache_file.exists():
             cache_file.unlink()
-            logger.debug(f"Cleared cache for game {game_id}, player {player_id}")
+            logger.debug("Cleared cache for game %d, player %d", game_id, player_id)
 
         # Remove from in-memory counter
         key = (game_id, player_id)

@@ -38,11 +38,11 @@ class ColdStorageManager:
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
         except Exception as e:
-            logger.info(f"Creating S3 bucket: {self.bucket_name}")
+            logger.info("Creating S3 bucket: %s", self.bucket_name)
             try:
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
             except Exception as create_error:
-                logger.error(f"Failed to create bucket: {create_error}")
+                logger.error("Failed to create bucket: %s", create_error)
                 
     def upload_replay(self, local_path: Path, game_id: int, player_id: int) -> Optional[str]:
         """
@@ -57,7 +57,7 @@ class ColdStorageManager:
             S3 object key if successful, None otherwise
         """
         if not local_path.exists():
-            logger.error(f"Local file not found: {local_path}")
+            logger.error("Local file not found: %s", local_path)
             return None
             
         s3_key = f"replays/game_{game_id}_player_{player_id}{self.REPLAY_EXTENSION}"
@@ -68,11 +68,11 @@ class ColdStorageManager:
                 self.bucket_name,
                 s3_key,
             )
-            logger.info(f"Uploaded replay to S3: {s3_key}")
+            logger.info("Uploaded replay to S3: %s", s3_key)
             # Only return the S3 object key; bucket name is configured separately.
             return s3_key
         except Exception as e:
-            logger.error(f"Failed to upload to S3: {e}")
+            logger.error("Failed to upload to S3: %s", e)
             return None
             
     def download_replay(self, s3_key: str, local_path: Path) -> bool:
@@ -92,10 +92,10 @@ class ColdStorageManager:
                 s3_key,
                 str(local_path)
             )
-            logger.info(f"Downloaded replay from S3: {s3_key}")
+            logger.info("Downloaded replay from S3: %s", s3_key)
             return True
         except Exception as e:
-            logger.error(f"Failed to download from S3: {e}")
+            logger.error("Failed to download from S3: %s", e)
             return False
             
     def replay_exists(self, game_id: int, player_id: int) -> bool:
@@ -116,5 +116,5 @@ class ColdStorageManager:
             return True
         except Exception as e:
             # Log the error but don't fail
-            logger.debug(f"Replay not found in S3: {e}")
+            logger.debug("Replay not found in S3: %s", e)
             return False
