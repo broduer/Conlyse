@@ -74,11 +74,11 @@ class RedisStreamConsumer:
                 id='0',
                 mkstream=True
             )
-            logger.info(f"Created consumer group: {self.config.consumer_group}")
+            logger.info("Created consumer group: %s", self.config.consumer_group)
         except Exception as e:
             # Group already exists or stream doesn't exist yet
             if "BUSYGROUP" not in str(e):
-                logger.debug(f"Consumer group creation: {e}")
+                logger.debug("Consumer group creation: %s", e)
                 
     def read_messages(
         self,
@@ -167,7 +167,10 @@ class RedisStreamConsumer:
 
         except Exception as e:
             import redis as redis_lib
-            if isinstance(e, (redis_lib.exceptions.ConnectionError, redis_lib.exceptions.TimeoutError)):
+            if isinstance(e, redis_lib.exceptions.TimeoutError):
+                # Blocking read expired with no new messages — not an error.
+                return []
+            if isinstance(e, redis_lib.exceptions.ConnectionError):
                 logger.error("Redis connection error reading stream: %s", e)
                 raise
             logger.error("Unexpected error reading from Redis stream: %s", e, exc_info=True)
@@ -189,9 +192,9 @@ class RedisStreamConsumer:
                 self.config.consumer_group,
                 *message_ids
             )
-            logger.debug(f"Acknowledged {len(message_ids)} messages")
+            logger.debug("Acknowledged %d messages", len(message_ids))
         except Exception as e:
-            logger.error(f"Error acknowledging messages: {e}")
+            logger.error("Error acknowledging messages: %s", e)
             
     def get_pending_messages(self) -> int:
         """
@@ -207,7 +210,7 @@ class RedisStreamConsumer:
             )
             return pending['pending'] if pending else 0
         except Exception as e:
-            logger.error(f"Error getting pending messages: {e}")
+            logger.error("Error getting pending messages: %s", e)
             return 0
             
     def close(self):

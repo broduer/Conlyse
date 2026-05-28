@@ -476,8 +476,8 @@ class ReplayDatabase:
         )
         self.conn.commit()
         logger.info(
-            f"Marked game {game_id}, player {player_id} as version_pending "
-            f"(unsupported datatype version {datatype_version})"
+            "Marked game %d, player %d as version_pending (unsupported datatype version %d)",
+            game_id, player_id, datatype_version,
         )
 
     # --- Static maps helpers -------------------------------------------------
