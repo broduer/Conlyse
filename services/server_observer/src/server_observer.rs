@@ -564,7 +564,7 @@ impl ServerObserver {
         let update_interval = *self.update_interval.lock().unwrap_or_else(|poisoned| { tracing::error!("update interval mutex poisoned; recovering"); poisoned.into_inner() });
         let missed_update = latency_secs > update_interval;
 
-        tracing::info!(
+        tracing::debug!(
             game_id = session.game_id,
             latency_secs,
             missed_update,
