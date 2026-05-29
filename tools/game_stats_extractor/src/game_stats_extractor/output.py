@@ -50,6 +50,7 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
         "avg_provinces_lost", "elimination_rate", "avg_survival_days",
         "avg_wars_declared", "avg_peace_treaties_signed",
         "avg_alliances_formed", "avg_right_of_ways_signed",
+        "avg_total_production", "avg_production_rate",
     ]
     rows = [
         [
@@ -60,6 +61,8 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
             _r(c.elimination_rate), _r(c.avg_survival_days),
             _r(c.avg_wars_declared), _r(c.avg_peace_treaties_signed),
             _r(c.avg_alliances_formed), _r(c.avg_right_of_ways_signed),
+            {k: _r(v) for k, v in c.avg_total_production.items()},
+            {k: _r(v) for k, v in c.avg_production_rate.items()},
         ]
         for c in countries
     ]
@@ -76,6 +79,23 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
         pct_n   = [pct_by_bucket[b].games_sampled if b in pct_by_bucket else None for b in ts.pct_buckets]
         day_avg = [_r(day_by_bucket[d].avg_provinces) if d in day_by_bucket else None for d in range(n_days)]
         day_n   = [day_by_bucket[d].games_sampled if d in day_by_bucket else None for d in range(n_days)]
+
+        prod_pct: dict = {}
+        for rtype, points in c.production_pct_game.items():
+            by_b = {p.bucket: p for p in points}
+            prod_pct[rtype] = {
+                "avg": [_r(by_b[b].avg_production) if b in by_b else None for b in ts.pct_buckets],
+                "n":   [by_b[b].games_sampled if b in by_b else None for b in ts.pct_buckets],
+            }
+
+        prod_day: dict = {}
+        for rtype, points in c.production_game_days.items():
+            by_b = {p.bucket: p for p in points}
+            prod_day[rtype] = {
+                "avg": [_r(by_b[d].avg_production) if d in by_b else None for d in range(n_days)],
+                "n":   [by_b[d].games_sampled if d in by_b else None for d in range(n_days)],
+            }
+
         countries.append({
             "nation_name": c.nation_name,
             "games_played": c.games_played,
@@ -83,6 +103,8 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
             "pct_n": pct_n,
             "day_avg": day_avg,
             "day_n": day_n,
+            "prod_pct": prod_pct,
+            "prod_day": prod_day,
         })
     return {
         "pct_buckets": ts.pct_buckets,

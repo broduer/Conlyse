@@ -21,11 +21,11 @@ const COLORS = [
 ];
 
 const DIMENSIONS = [
-  { key: 'win_rate',              label: 'Win Rate',      raw: (c: CountryAggregate) => c.win_rate },
-  { key: 'avg_expansion',        label: 'Expansion',     raw: (c: CountryAggregate) => c.avg_expansion },
-  { key: 'avg_prov_captured',    label: 'Aggression',    raw: (c: CountryAggregate) => c.avg_provinces_captured },
-  { key: 'survival',             label: 'Survival',      raw: (c: CountryAggregate) => 1 - c.elimination_rate },
-  { key: 'avg_final_provinces',  label: 'Territory',     raw: (c: CountryAggregate) => c.avg_final_provinces },
+  { key: 'win_rate',           label: 'Win Rate',   raw: (c: CountryAggregate) => c.win_rate },
+  { key: 'survival',           label: 'Survival',   raw: (c: CountryAggregate) => 1 - c.elimination_rate },
+  { key: 'avg_prov_captured',  label: 'Aggression', raw: (c: CountryAggregate) => c.avg_provinces_captured },
+  { key: 'avg_expansion',      label: 'Expansion',  raw: (c: CountryAggregate) => c.avg_expansion },
+  { key: 'economy',            label: 'Economy',    raw: (c: CountryAggregate) => Object.values(c.avg_total_production ?? {}).reduce((s, v) => s + v, 0) },
 ];
 
 function normalize(values: number[]): number[] {

@@ -67,6 +67,12 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
         def _mean(lst: list) -> float:
             return statistics.mean(lst) if lst else 0.0
 
+        all_res = {k for g in games for k in g.game_total_production}
+        avg_game_total_production = {
+            rtype: _mean([g.game_total_production.get(rtype, 0.0) for g in games])
+            for rtype in sorted(all_res)
+        }
+
         return GlobalAggregate(
             total_games=len(games),
             avg_duration_hours=statistics.mean(durations),
@@ -84,6 +90,7 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             avg_peace_treaties_per_game=_mean([g.total_peace_treaties for g in games]),
             avg_alliances_per_game=_mean([g.total_alliances_formed for g in games]),
             avg_right_of_ways_per_game=_mean([g.total_right_of_ways for g in games]),
+            avg_game_total_production=avg_game_total_production,
         )
 
 
