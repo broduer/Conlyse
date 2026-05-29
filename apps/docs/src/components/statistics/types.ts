@@ -6,6 +6,12 @@ export interface ColumnarData {
   rows: unknown[][];
 }
 
+export interface ProductionTimeSeriesPoint {
+  bucket: number;
+  avg_production: number;
+  games_sampled: number;
+}
+
 export interface DurationBucket {
   min_days: number;
   max_days: number;
@@ -29,6 +35,7 @@ export interface GlobalAggregate {
   avg_peace_treaties_per_game: number;
   avg_alliances_per_game: number;
   avg_right_of_ways_per_game: number;
+  avg_game_total_production?: Record<string, number>;
 }
 
 export interface CountryAggregate {
@@ -50,6 +57,8 @@ export interface CountryAggregate {
   avg_peace_treaties_signed: number;
   avg_alliances_formed: number;
   avg_right_of_ways_signed: number;
+  avg_total_production?: Record<string, number>;
+  avg_production_rate?: Record<string, number>;
 }
 
 export interface ProvinceAggregate {
@@ -78,6 +87,8 @@ export interface CountryTimeSeries {
   games_played: number;
   pct_game: TimeSeriesPoint[];
   game_days: TimeSeriesPoint[];
+  production_pct_game?: Record<string, ProductionTimeSeriesPoint[]>;
+  production_game_days?: Record<string, ProductionTimeSeriesPoint[]>;
 }
 
 export interface TimeSeriesOutput {

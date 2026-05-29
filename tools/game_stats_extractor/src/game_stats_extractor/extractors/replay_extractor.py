@@ -45,6 +45,10 @@ def _finalize_buckets(sums: dict[int, float], ns: dict[int, int]) -> dict[int, i
     return {b: round(sums[b] / ns[b]) for b in sums if ns[b] > 0}
 
 
+def _finalize_float_buckets(sums: dict[int, float], ns: dict[int, int]) -> dict[int, float]:
+    return {b: sums[b] / ns[b] for b in sums if ns[b] > 0}
+
+
 class ReplayExtractor(BaseExtractor):
     def __init__(self, map_data_dir: Optional[Path] = None):
         self._map_data_dir = map_data_dir
@@ -140,6 +144,24 @@ class ReplayExtractor(BaseExtractor):
 
         initial_owners: dict[int, int] = {pid: p.owner_id for pid, p in initial_land.items()}
 
+        # Province production state: pid -> {resource_type_name: current_amount}
+        # "MONEY" always present; additional type key present if province has resource_production_type
+        province_production: dict[int, dict[str, float]] = {}
+        for pid, p in initial_land.items():
+            prod: dict[str, float] = {"MONEY": float(int(p.money_production or 0))}
+            rtype = province_meta[pid]["resource_production_type"]
+            if rtype:
+                prod[rtype] = float(int(p.resource_production or 0))
+            province_production[pid] = prod
+
+        # Per-player running production sums (updated on ownership and upgrade events)
+        current_player_production: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        for pid, prod in province_production.items():
+            owner = initial_owners[pid]
+            if owner > _UNOWNED:
+                for rtype, amount in prod.items():
+                    current_player_production[owner][rtype] += amount
+
         # Incrementally maintained ownership and player counts
         current_owners: dict[int, int] = dict(initial_owners)
         current_player_counts: dict[int, int] = defaultdict(int)
@@ -176,6 +198,17 @@ class ReplayExtractor(BaseExtractor):
         day_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
         day_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
 
+        # Production accumulators: [player_id][resource_type][bucket]
+        player_prod_sum: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        player_prod_n: dict[int, int] = defaultdict(int)
+        player_total_prod: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        player_peak_prod: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        prod_pct_sum: dict[int, dict[str, dict[int, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+        prod_pct_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        prod_day_sum: dict[int, dict[str, dict[int, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+        prod_day_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        prev_time = start_time
+
         # Diplomacy counters — keyed by 1-indexed player id; populated by ForeignAffairsChanged events
         dp_wars: dict[int, int] = defaultdict(int)
         dp_peace: dict[int, int] = defaultdict(int)
@@ -185,7 +218,7 @@ class ReplayExtractor(BaseExtractor):
         game_wars = game_peace = game_alliances = game_allianced = game_rows = 0
 
         # ---- Register hooks — only changed provinces/relations fire events ----
-        replay.register_province_trigger(["owner_id", "morale"])
+        replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production"])
         replay.register_foreign_affairs_trigger()
 
         # ---- Iterate all timestamps ----
@@ -206,6 +239,37 @@ class ReplayExtractor(BaseExtractor):
                     if new_owner is not None and new_owner > _UNOWNED:
                         current_player_counts[new_owner] += 1
                         player_captures[new_owner] += 1
+                    # Transfer production sums between players
+                    for rtype, amount in province_production.get(pid, {}).items():
+                        if amount <= 0:
+                            continue
+                        if old_owner is not None and old_owner > _UNOWNED:
+                            current_player_production[old_owner][rtype] = max(
+                                0.0, current_player_production[old_owner][rtype] - amount
+                            )
+                        if new_owner is not None and new_owner > _UNOWNED:
+                            current_player_production[new_owner][rtype] += amount
+
+                if "money_production" in attrs:
+                    _, new_mprod = attrs["money_production"]
+                    if new_mprod is not None:
+                        old_val = province_production.get(pid, {}).get("MONEY", 0.0)
+                        new_val = float(int(new_mprod))
+                        province_production.setdefault(pid, {})["MONEY"] = new_val
+                        owner = current_owners.get(pid, _UNOWNED)
+                        if owner > _UNOWNED:
+                            current_player_production[owner]["MONEY"] += (new_val - old_val)
+
+                if "resource_production" in attrs:
+                    _, new_rprod = attrs["resource_production"]
+                    rtype = province_meta[pid]["resource_production_type"]
+                    if new_rprod is not None and rtype:
+                        old_val = province_production.get(pid, {}).get(rtype, 0.0)
+                        new_val = float(int(new_rprod))
+                        province_production.setdefault(pid, {})[rtype] = new_val
+                        owner = current_owners.get(pid, _UNOWNED)
+                        if owner > _UNOWNED:
+                            current_player_production[owner][rtype] += (new_val - old_val)
 
                 if "morale" in attrs:
                     _, new_morale = attrs["morale"]
@@ -264,6 +328,31 @@ class ReplayExtractor(BaseExtractor):
             ct = replay.current_time
             pb = _pct_bucket((ct - start_time).total_seconds(), total_duration_seconds) if ct else 0
             db = _day_bucket((ct - start_time).total_seconds(), total_duration_seconds, game_days) if ct else 0
+
+            # Integrate production over elapsed time and snapshot for averages/buckets
+            if ct is not None:
+                delta_days = (ct - prev_time).total_seconds() / 86400.0
+                for player_id, rtypes in current_player_production.items():
+                    for rtype, rprod in rtypes.items():
+                        if rprod > 0:
+                            player_total_prod[player_id][rtype] += rprod * delta_days
+                prev_time = ct
+
+            for player_id, rtypes in current_player_production.items():
+                if not any(v > 0 for v in rtypes.values()):
+                    continue
+                player_prod_n[player_id] += 1
+                for rtype, rprod in rtypes.items():
+                    if rprod <= 0:
+                        continue
+                    player_prod_sum[player_id][rtype] += rprod
+                    if rprod > player_peak_prod[player_id].get(rtype, 0.0):
+                        player_peak_prod[player_id][rtype] = rprod
+                    prod_pct_sum[player_id][rtype][pb] += rprod
+                    prod_pct_n[player_id][rtype][pb] += 1
+                    prod_day_sum[player_id][rtype][db] += rprod
+                    prod_day_n[player_id][rtype][db] += 1
+
             for player_id, cnt in current_player_counts.items():
                 if cnt <= 0:
                     continue
@@ -304,6 +393,7 @@ class ReplayExtractor(BaseExtractor):
             if player_id <= 0 or not profile.nation_name or profile.name == "Guest":
                 continue
             n = player_prov_n.get(player_id, 1)
+            n_prod = player_prod_n.get(player_id, 1)
             players.append(PlayerData(
                 player_id=player_id,
                 nation_name=profile.nation_name,
@@ -327,6 +417,20 @@ class ReplayExtractor(BaseExtractor):
                 alliances_formed=dp_alliances.get(player_id, 0),
                 alliance_dissolutions=dp_allianced.get(player_id, 0),
                 right_of_ways_signed=dp_rows.get(player_id, 0),
+                avg_production_by_type={
+                    rtype: player_prod_sum[player_id][rtype] / n_prod
+                    for rtype in player_prod_sum.get(player_id, {})
+                },
+                total_production_by_type=dict(player_total_prod.get(player_id, {})),
+                peak_production_by_type=dict(player_peak_prod.get(player_id, {})),
+                production_pct_buckets={
+                    rtype: _finalize_float_buckets(prod_pct_sum[player_id][rtype], prod_pct_n[player_id][rtype])
+                    for rtype in prod_pct_sum.get(player_id, {})
+                },
+                production_day_buckets={
+                    rtype: _finalize_float_buckets(prod_day_sum[player_id][rtype], prod_day_n[player_id][rtype])
+                    for rtype in prod_day_sum.get(player_id, {})
+                },
             ))
 
         # ---- Victory detection ----
@@ -353,6 +457,11 @@ class ReplayExtractor(BaseExtractor):
                 max_morale=prov_morale_max.get(pid, 0.0),
             ))
 
+        game_total_prod: dict[str, float] = defaultdict(float)
+        for player in players:
+            for rtype, val in player.total_production_by_type.items():
+                game_total_prod[rtype] += val
+
         return GameData(
             game_id=game_id,
             map_id=map_id,
@@ -372,6 +481,7 @@ class ReplayExtractor(BaseExtractor):
             total_alliances_formed=game_alliances,
             total_alliance_dissolutions=game_allianced,
             total_right_of_ways=game_rows,
+            game_total_production=dict(game_total_prod),
         )
 
 

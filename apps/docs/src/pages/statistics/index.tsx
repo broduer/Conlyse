@@ -2,6 +2,7 @@ import Layout from '@theme/Layout';
 import React, { useEffect, useState } from 'react';
 import StatsHero from '../../components/statistics/StatsHero';
 import CountryStatsSection from '../../components/statistics/sections/CountryStatsSection';
+import EconomicStatsSection from '../../components/statistics/sections/EconomicStatsSection';
 import GlobalStatsSection from '../../components/statistics/sections/GlobalStatsSection';
 import ProvinceStatsSection from '../../components/statistics/sections/ProvinceStatsSection';
 import TimeSeriesSection from '../../components/statistics/sections/TimeSeriesSection';
@@ -86,6 +87,7 @@ export default function StatisticsPage() {
             <StatsHero global={data.global} meta={data.meta} />
             <GlobalStatsSection data={data.global} />
             <CountryStatsSection data={data.countries} />
+            <EconomicStatsSection global={data.global} countries={data.countries} timeseries={data.timeseries} />
             <ProvinceStatsSection data={data.provinces} />
             <TimeSeriesSection data={data.timeseries} countries={data.countries} />
           </>

@@ -30,6 +30,11 @@ class PlayerData:
     alliances_formed: int = 0
     alliance_dissolutions: int = 0
     right_of_ways_signed: int = 0
+    avg_production_by_type: dict[str, float] = field(default_factory=dict)
+    total_production_by_type: dict[str, float] = field(default_factory=dict)
+    peak_production_by_type: dict[str, float] = field(default_factory=dict)
+    production_pct_buckets: dict[str, dict[int, float]] = field(default_factory=dict)
+    production_day_buckets: dict[str, dict[int, float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -69,3 +74,4 @@ class GameData:
     total_alliances_formed: int = 0
     total_alliance_dissolutions: int = 0
     total_right_of_ways: int = 0
+    game_total_production: dict[str, float] = field(default_factory=dict)
