@@ -40,6 +40,16 @@ const SECTIONS: SidebarSection[] = [
     ],
   },
   {
+    id: 'section-economic',
+    label: 'Economic Overview',
+    items: [
+      { id: 'chart-economic-total',      label: 'Production per Game' },
+      { id: 'chart-economic-money',      label: 'Money by Country' },
+      { id: 'chart-economic-rate',       label: 'Production Rate' },
+      { id: 'chart-economic-timeseries', label: 'Rate over Time' },
+    ],
+  },
+  {
     id: 'section-provinces',
     label: 'Province Analysis',
     items: [
