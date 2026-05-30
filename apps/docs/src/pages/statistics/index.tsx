@@ -1,11 +1,11 @@
 import Layout from '@theme/Layout';
 import React, { useEffect, useState } from 'react';
+import StatsSidebar from '../../components/statistics/StatsSidebar';
 import StatsHero from '../../components/statistics/StatsHero';
 import CountryStatsSection from '../../components/statistics/sections/CountryStatsSection';
 import EconomicStatsSection from '../../components/statistics/sections/EconomicStatsSection';
 import GlobalStatsSection from '../../components/statistics/sections/GlobalStatsSection';
 import ProvinceStatsSection from '../../components/statistics/sections/ProvinceStatsSection';
-import TimeSeriesSection from '../../components/statistics/sections/TimeSeriesSection';
 import {
   deserializeCountries,
   deserializeProvinces,
@@ -64,35 +64,37 @@ export default function StatisticsPage() {
       title="Statistics"
       description="Aggregated statistics from 1000+ recorded Conflict of Nations games"
     >
-      <main className={styles.main}>
-        {error && (
-          <div className={styles.error}>
-            <strong>Could not load statistics.</strong> Run the extractor first:
-            <pre className={styles.errorPre}>
-              {`pip install -e tools/game_stats_extractor\ngame-stats-extractor --replays-dir /path/to/replays --output /tmp/stats\n# then upload /tmp/stats/*.json to ${STATS_BASE_URL}`}
-            </pre>
-            <p className={styles.errorDetail}>{error}</p>
-          </div>
-        )}
+      <div className={styles.pageLayout}>
+        {data && <StatsSidebar />}
+        <main className={styles.main}>
+          {error && (
+            <div className={styles.error}>
+              <strong>Could not load statistics.</strong> Run the extractor first:
+              <pre className={styles.errorPre}>
+                {`pip install -e tools/game_stats_extractor\ngame-stats-extractor --replays-dir /path/to/replays --output /tmp/stats\n# then upload /tmp/stats/*.json to ${STATS_BASE_URL}`}
+              </pre>
+              <p className={styles.errorDetail}>{error}</p>
+            </div>
+          )}
 
-        {!data && !error && (
-          <div className={styles.loading}>
-            <div className={styles.spinner} />
-            <p>Loading statistics…</p>
-          </div>
-        )}
+          {!data && !error && (
+            <div className={styles.loading}>
+              <div className={styles.spinner} />
+              <p>Loading statistics…</p>
+            </div>
+          )}
 
-        {data && (
-          <>
-            <StatsHero global={data.global} meta={data.meta} />
-            <GlobalStatsSection data={data.global} />
-            <CountryStatsSection data={data.countries} />
-            <EconomicStatsSection global={data.global} countries={data.countries} timeseries={data.timeseries} />
-            <ProvinceStatsSection data={data.provinces} />
-            <TimeSeriesSection data={data.timeseries} countries={data.countries} />
-          </>
-        )}
-      </main>
+          {data && (
+            <>
+              <StatsHero global={data.global} meta={data.meta} countries={data.countries} />
+              <GlobalStatsSection data={data.global} timeseries={data.timeseries} />
+              <CountryStatsSection data={data.countries} timeseries={data.timeseries} />
+              <EconomicStatsSection global={data.global} countries={data.countries} timeseries={data.timeseries} />
+              <ProvinceStatsSection data={data.provinces} />
+            </>
+          )}
+        </main>
+      </div>
     </Layout>
   );
 }

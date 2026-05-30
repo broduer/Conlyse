@@ -79,6 +79,7 @@ export interface ProvinceAggregate {
 export interface TimeSeriesPoint {
   bucket: number;
   avg_provinces: number;
+  avg_vp: number;
   games_sampled: number;
 }
 
@@ -91,11 +92,20 @@ export interface CountryTimeSeries {
   production_game_days?: Record<string, ProductionTimeSeriesPoint[]>;
 }
 
+export interface PlayerActivityPoint {
+  bucket: number;
+  avg_alive: number;
+  avg_alive_human: number;
+  games_sampled: number;
+}
+
 export interface TimeSeriesOutput {
   countries: CountryTimeSeries[];
   pct_buckets: number[];
   max_game_days: number;
   generated_at: string;
+  player_activity_pct: PlayerActivityPoint[];
+  player_activity_days: PlayerActivityPoint[];
 }
 
 export interface MetaInfo {

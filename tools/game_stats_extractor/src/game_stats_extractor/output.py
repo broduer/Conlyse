@@ -75,10 +75,12 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
     for c in ts.countries:
         pct_by_bucket = {p.bucket: p for p in c.pct_game}
         day_by_bucket = {p.bucket: p for p in c.game_days}
-        pct_avg = [_r(pct_by_bucket[b].avg_provinces) if b in pct_by_bucket else None for b in ts.pct_buckets]
-        pct_n   = [pct_by_bucket[b].games_sampled if b in pct_by_bucket else None for b in ts.pct_buckets]
-        day_avg = [_r(day_by_bucket[d].avg_provinces) if d in day_by_bucket else None for d in range(n_days)]
-        day_n   = [day_by_bucket[d].games_sampled if d in day_by_bucket else None for d in range(n_days)]
+        pct_avg    = [_r(pct_by_bucket[b].avg_provinces) if b in pct_by_bucket else None for b in ts.pct_buckets]
+        pct_n      = [pct_by_bucket[b].games_sampled if b in pct_by_bucket else None for b in ts.pct_buckets]
+        pct_vp_avg = [_r(pct_by_bucket[b].avg_vp) if b in pct_by_bucket else None for b in ts.pct_buckets]
+        day_avg    = [_r(day_by_bucket[d].avg_provinces) if d in day_by_bucket else None for d in range(n_days)]
+        day_n      = [day_by_bucket[d].games_sampled if d in day_by_bucket else None for d in range(n_days)]
+        day_vp_avg = [_r(day_by_bucket[d].avg_vp) if d in day_by_bucket else None for d in range(n_days)]
 
         prod_pct: dict = {}
         for rtype, points in c.production_pct_game.items():
@@ -101,8 +103,10 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
             "games_played": c.games_played,
             "pct_avg": pct_avg,
             "pct_n": pct_n,
+            "pct_vp_avg": pct_vp_avg,
             "day_avg": day_avg,
             "day_n": day_n,
+            "day_vp_avg": day_vp_avg,
             "prod_pct": prod_pct,
             "prod_day": prod_day,
         })
@@ -110,6 +114,12 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
         "pct_buckets": ts.pct_buckets,
         "max_game_days": ts.max_game_days,
         "generated_at": ts.generated_at.isoformat(),
+        "pct_alive":       [_r(p.avg_alive)       for p in ts.player_activity_pct],
+        "pct_alive_human": [_r(p.avg_alive_human) for p in ts.player_activity_pct],
+        "pct_alive_n":     [p.games_sampled        for p in ts.player_activity_pct],
+        "day_alive":       [_r(p.avg_alive)       for p in ts.player_activity_days],
+        "day_alive_human": [_r(p.avg_alive_human) for p in ts.player_activity_days],
+        "day_alive_n":     [p.games_sampled        for p in ts.player_activity_days],
         "countries": countries,
     }
 

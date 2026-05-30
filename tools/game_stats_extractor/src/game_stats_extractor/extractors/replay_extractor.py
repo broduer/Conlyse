@@ -197,6 +197,19 @@ class ReplayExtractor(BaseExtractor):
         pct_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         day_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
         day_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        pct_vp_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        pct_vp_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        day_vp_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        day_vp_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        # Game-level alive-player bucket accumulators
+        pct_alive_sum: dict[int, float] = defaultdict(float)
+        pct_alive_n: dict[int, int] = defaultdict(int)
+        pct_human_sum: dict[int, float] = defaultdict(float)
+        pct_human_n: dict[int, int] = defaultdict(int)
+        day_alive_sum: dict[int, float] = defaultdict(float)
+        day_alive_n: dict[int, int] = defaultdict(int)
+        day_human_sum: dict[int, float] = defaultdict(float)
+        day_human_n: dict[int, int] = defaultdict(int)
 
         # Production accumulators: [player_id][resource_type][bucket]
         player_prod_sum: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
@@ -217,8 +230,22 @@ class ReplayExtractor(BaseExtractor):
         dp_rows: dict[int, int] = defaultdict(int)
         game_wars = game_peace = game_alliances = game_allianced = game_rows = 0
 
+        # Seed initial VP from player profiles at start_time; also record AI flag
+        initial_players_map = gs.states.player_state.players
+        current_player_vp: dict[int, int] = {
+            pid: int(profile.victory_points)
+            for pid, profile in initial_players_map.items()
+            if pid > _UNOWNED
+        }
+        is_ai_player: dict[int, bool] = {
+            pid: bool(profile.computer_player)
+            for pid, profile in initial_players_map.items()
+            if pid > _UNOWNED
+        }
+
         # ---- Register hooks — only changed provinces/relations fire events ----
         replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production"])
+        replay.register_player_trigger(["victory_points"])
         replay.register_foreign_affairs_trigger()
 
         # ---- Iterate all timestamps ----
@@ -324,7 +351,15 @@ class ReplayExtractor(BaseExtractor):
                             dp_rows[sender_id] += 1
                             game_rows += 1
 
-            # Snapshot player territory counts — O(players), not O(provinces)
+            for player_event in events.get(ReplayHookTag.PlayerChanged, []):
+                player_profile = player_event.reference
+                pid = player_profile.player_id
+                if "victory_points" in player_event.attributes:
+                    _, new_vp = player_event.attributes["victory_points"]
+                    if new_vp is not None:
+                        current_player_vp[pid] = int(new_vp)
+
+            # Snapshot player territory counts and VP — O(players), not O(provinces)
             ct = replay.current_time
             pb = _pct_bucket((ct - start_time).total_seconds(), total_duration_seconds) if ct else 0
             db = _day_bucket((ct - start_time).total_seconds(), total_duration_seconds, game_days) if ct else 0
@@ -353,9 +388,14 @@ class ReplayExtractor(BaseExtractor):
                     prod_day_sum[player_id][rtype][db] += rprod
                     prod_day_n[player_id][rtype][db] += 1
 
+            n_alive = 0
+            n_human = 0
             for player_id, cnt in current_player_counts.items():
                 if cnt <= 0:
                     continue
+                n_alive += 1
+                if not is_ai_player.get(player_id, False):
+                    n_human += 1
                 player_prov_sum[player_id] += cnt
                 player_prov_n[player_id] += 1
                 player_prov_max[player_id] = max(player_prov_max[player_id], cnt)
@@ -367,6 +407,19 @@ class ReplayExtractor(BaseExtractor):
                 pct_bucket_n[player_id][pb] += 1
                 day_bucket_sum[player_id][db] += cnt
                 day_bucket_n[player_id][db] += 1
+                vp = current_player_vp.get(player_id, 0)
+                pct_vp_bucket_sum[player_id][pb] += vp
+                pct_vp_bucket_n[player_id][pb] += 1
+                day_vp_bucket_sum[player_id][db] += vp
+                day_vp_bucket_n[player_id][db] += 1
+            pct_alive_sum[pb] += n_alive
+            pct_alive_n[pb] += 1
+            pct_human_sum[pb] += n_human
+            pct_human_n[pb] += 1
+            day_alive_sum[db] += n_alive
+            day_alive_n[db] += 1
+            day_human_sum[db] += n_human
+            day_human_n[db] += 1
 
         # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
@@ -412,6 +465,8 @@ class ReplayExtractor(BaseExtractor):
                 provinces_lost=player_losses.get(player_id, 0),
                 pct_buckets=_finalize_buckets(pct_bucket_sum[player_id], pct_bucket_n[player_id]),
                 day_buckets=_finalize_buckets(day_bucket_sum[player_id], day_bucket_n[player_id]),
+                pct_vp_buckets=_finalize_buckets(pct_vp_bucket_sum[player_id], pct_vp_bucket_n[player_id]),
+                day_vp_buckets=_finalize_buckets(day_vp_bucket_sum[player_id], day_vp_bucket_n[player_id]),
                 wars_declared=dp_wars.get(player_id, 0),
                 peace_treaties_signed=dp_peace.get(player_id, 0),
                 alliances_formed=dp_alliances.get(player_id, 0),
@@ -481,6 +536,10 @@ class ReplayExtractor(BaseExtractor):
             total_alliances_formed=game_alliances,
             total_alliance_dissolutions=game_allianced,
             total_right_of_ways=game_rows,
+            pct_alive_buckets=_finalize_buckets(pct_alive_sum, pct_alive_n),
+            pct_human_buckets=_finalize_buckets(pct_human_sum, pct_human_n),
+            day_alive_buckets=_finalize_buckets(day_alive_sum, day_alive_n),
+            day_human_buckets=_finalize_buckets(day_human_sum, day_human_n),
             game_total_production=dict(game_total_prod),
         )
 

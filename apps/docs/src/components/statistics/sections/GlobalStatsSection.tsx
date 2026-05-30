@@ -1,24 +1,26 @@
 import React from 'react';
 import DiplomacyGlobalChart from '../charts/DiplomacyGlobalChart';
 import GameDurationChart from '../charts/GameDurationChart';
+import PlayerActivityTimeSeriesChart from '../charts/PlayerActivityTimeSeriesChart';
 import PlayerDropoutChart from '../charts/PlayerDropoutChart';
 import VictoryTypeChart from '../charts/VictoryTypeChart';
-import type { GlobalAggregate } from '../types';
+import type { GlobalAggregate, TimeSeriesOutput } from '../types';
 import styles from './Section.module.css';
 
 interface Props {
   data: GlobalAggregate;
+  timeseries: TimeSeriesOutput;
 }
 
-export default function GlobalStatsSection({ data }: Props) {
+export default function GlobalStatsSection({ data, timeseries }: Props) {
   return (
-    <section className={styles.section}>
+    <section id="section-global" className={styles.section}>
       <h2 className={styles.heading}>Global Overview</h2>
       <p className={styles.description}>
         Patterns across all {data.total_games.toLocaleString()} recorded games.
       </p>
       <div className={styles.grid}>
-        <div className={styles.chartCard}>
+        <div id="chart-global-duration" className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Game Duration Distribution</h3>
           <p className={styles.chartSubtitle}>
             Mean {(data.avg_duration_hours / 24).toFixed(0)}d · Median {(data.median_duration_hours / 24).toFixed(0)}d · σ {(data.std_duration_hours / 24).toFixed(0)}d
@@ -29,24 +31,29 @@ export default function GlobalStatsSection({ data }: Props) {
             median_days={data.median_duration_hours / 24}
           />
         </div>
-        <div className={styles.chartCard}>
+        <div id="chart-global-victory" className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Victory Types</h3>
           <p className={styles.chartSubtitle}>How games were won</p>
           <VictoryTypeChart data={data.victory_type_distribution} />
         </div>
-        <div className={styles.chartCard}>
+        <div id="chart-global-dropout" className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Player Dropout</h3>
           <p className={styles.chartSubtitle}>
             Avg {(data.avg_dropout_rate * 100).toFixed(0)}% of players drop out before the game ends
           </p>
           <PlayerDropoutChart dropout_rate={data.avg_dropout_rate} total_players={data.avg_players_per_game} />
         </div>
-        <div className={styles.chartCard}>
+        <div id="chart-global-diplomacy" className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Diplomacy per Game</h3>
           <p className={styles.chartSubtitle}>
             Avg {data.avg_wars_per_game.toFixed(0)} wars · {data.avg_right_of_ways_per_game.toFixed(0)} right-of-ways · {data.avg_peace_treaties_per_game.toFixed(0)} peace treaties
           </p>
           <DiplomacyGlobalChart data={data} />
+        </div>
+        <div id="chart-global-activity" className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+          <h3 className={styles.chartTitle}>Player Activity Over Time</h3>
+          <p className={styles.chartSubtitle}>Avg alive players and active humans at each point in a typical game · use buttons to switch time axis</p>
+          <PlayerActivityTimeSeriesChart data={timeseries} />
         </div>
       </div>
     </section>
