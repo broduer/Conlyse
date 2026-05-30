@@ -2,6 +2,7 @@ import type {
   ColumnarData,
   CountryAggregate,
   CountryTimeSeries,
+  PlayerActivityPoint,
   ProvinceAggregate,
   TimeSeriesOutput,
 } from './types';
@@ -52,30 +53,62 @@ export function deserializeTimeSeries(raw: {
   pct_buckets: number[];
   max_game_days: number;
   generated_at: string;
+  pct_alive?: (number | null)[];
+  pct_alive_human?: (number | null)[];
+  pct_alive_n?: (number | null)[];
+  day_alive?: (number | null)[];
+  day_alive_human?: (number | null)[];
+  day_alive_n?: (number | null)[];
   countries: Array<{
     nation_name: string;
     games_played: number;
     pct_avg: (number | null)[];
     pct_n:   (number | null)[];
+    pct_vp_avg?: (number | null)[];
     day_avg: (number | null)[];
     day_n:   (number | null)[];
+    day_vp_avg?: (number | null)[];
   }>;
 }): TimeSeriesOutput {
+  const player_activity_pct: PlayerActivityPoint[] = raw.pct_buckets
+    .map((b, i) => raw.pct_alive?.[i] != null
+      ? {
+          bucket: b,
+          avg_alive: raw.pct_alive![i]!,
+          avg_alive_human: raw.pct_alive_human?.[i] ?? 0,
+          games_sampled: (raw.pct_alive_n?.[i] ?? 0) as number,
+        }
+      : null)
+    .filter((p): p is PlayerActivityPoint => p !== null);
+
+  const player_activity_days: PlayerActivityPoint[] = (raw.day_alive ?? [])
+    .map((v, i) => v != null
+      ? {
+          bucket: i,
+          avg_alive: v,
+          avg_alive_human: raw.day_alive_human?.[i] ?? 0,
+          games_sampled: (raw.day_alive_n?.[i] ?? 0) as number,
+        }
+      : null)
+    .filter((p): p is PlayerActivityPoint => p !== null);
+
   return {
     pct_buckets:  raw.pct_buckets,
     max_game_days: raw.max_game_days,
     generated_at:  raw.generated_at,
+    player_activity_pct,
+    player_activity_days,
     countries: raw.countries.map((c): CountryTimeSeries => ({
       nation_name:  c.nation_name,
       games_played: c.games_played,
       pct_game: raw.pct_buckets
         .map((b, i) => c.pct_avg[i] != null
-          ? { bucket: b, avg_provinces: c.pct_avg[i]!, games_sampled: c.pct_n[i]! }
+          ? { bucket: b, avg_provinces: c.pct_avg[i]!, avg_vp: c.pct_vp_avg?.[i] ?? 0, games_sampled: c.pct_n[i]! }
           : null)
         .filter((p): p is NonNullable<typeof p> => p !== null),
       game_days: c.day_avg
         .map((v, i) => v != null
-          ? { bucket: i, avg_provinces: v, games_sampled: c.day_n[i]! }
+          ? { bucket: i, avg_provinces: v, avg_vp: c.day_vp_avg?.[i] ?? 0, games_sampled: c.day_n[i]! }
           : null)
         .filter((p): p is NonNullable<typeof p> => p !== null),
     })),

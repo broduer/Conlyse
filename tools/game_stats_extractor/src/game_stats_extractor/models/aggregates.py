@@ -75,6 +75,7 @@ class ProvinceAggregate(BaseModel):
 class TimeSeriesPoint(BaseModel):
     bucket: int
     avg_provinces: float
+    avg_vp: float
     games_sampled: int
 
 
@@ -85,11 +86,20 @@ class CountryTimeSeries(BaseModel):
     game_days: list[TimeSeriesPoint]
 
 
+class PlayerActivityPoint(BaseModel):
+    bucket: int
+    avg_alive: float
+    avg_alive_human: float
+    games_sampled: int
+
+
 class TimeSeriesOutput(BaseModel):
     countries: list[CountryTimeSeries]
     pct_buckets: list[int]
     max_game_days: int
     generated_at: datetime
+    player_activity_pct: list[PlayerActivityPoint] = []
+    player_activity_days: list[PlayerActivityPoint] = []
 
 
 class MetaInfo(BaseModel):

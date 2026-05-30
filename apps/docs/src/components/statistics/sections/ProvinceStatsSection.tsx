@@ -18,7 +18,7 @@ export default function ProvinceStatsSection({ data }: Props) {
   });
 
   return (
-    <section className={styles.section}>
+    <section id="section-provinces" className={styles.section}>
       <div className={styles.sectionHeader}>
         <div>
           <h2 className={styles.heading}>Province Analysis</h2>
@@ -40,12 +40,12 @@ export default function ProvinceStatsSection({ data }: Props) {
         </div>
       </div>
       <div className={styles.grid}>
-        <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+        <div id="chart-provinces-strategic" className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
           <h3 className={styles.chartTitle}>Province Strategic Map</h3>
           <p className={styles.chartSubtitle}>All provinces · avg ownership changes per game vs winner control rate · reference lines at medians · top outliers labeled · coloured by terrain type</p>
           <ProvinceStrategicScatterChart data={filtered} />
         </div>
-        <div className={styles.chartCard}>
+        <div id="chart-provinces-morale" className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Province Morale (Top 20)</h3>
           <p className={styles.chartSubtitle}>Average morale across all games · coloured by terrain type</p>
           <ProvinceMoraleChart data={filtered} topN={20} />

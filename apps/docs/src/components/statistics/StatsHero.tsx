@@ -1,10 +1,11 @@
 import React from 'react';
-import type { GlobalAggregate, MetaInfo } from './types';
+import type { CountryAggregate, GlobalAggregate, MetaInfo } from './types';
 import styles from './StatsHero.module.css';
 
 interface Props {
   global: GlobalAggregate;
   meta: MetaInfo;
+  countries: CountryAggregate[];
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -28,13 +29,15 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
 }
 
-export default function StatsHero({ global: g, meta }: Props) {
+export default function StatsHero({ global: g, meta, countries }: Props) {
   const topVictoryType = Object.entries(g.victory_type_distribution).sort(
     ([, a], [, b]) => b - a,
   )[0];
   const topTypeLabel = topVictoryType
     ? topVictoryType[0].charAt(0).toUpperCase() + topVictoryType[0].slice(1)
     : '—';
+
+  const topCountry = [...countries].sort((a, b) => b.win_rate - a.win_rate)[0];
 
   return (
     <div className={styles.hero}>
@@ -57,9 +60,8 @@ export default function StatsHero({ global: g, meta }: Props) {
       </div>
       <div className={styles.cards}>
         <StatCard label="Games analyzed" value={g.total_games.toLocaleString()} />
-        <StatCard label="Avg duration" value={`${g.avg_duration_hours.toFixed(0)}h`} />
         <StatCard label="Avg game days" value={g.avg_game_days.toFixed(0)} />
-        <StatCard label="Avg players" value={g.avg_players_per_game.toFixed(1)} />
+        <StatCard label="Top win rate" value={topCountry ? topCountry.nation_name : '—'} />
         <StatCard label="Avg dropout rate" value={`${(g.avg_dropout_rate * 100).toFixed(0)}%`} />
         <StatCard label="Avg update interval" value={formatInterval(g.avg_update_interval_seconds)} />
         <StatCard label="Most common win" value={topTypeLabel} />

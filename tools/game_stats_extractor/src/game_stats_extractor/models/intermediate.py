@@ -25,6 +25,8 @@ class PlayerData:
     provinces_lost: int = 0
     pct_buckets: dict[int, int] = field(default_factory=dict)
     day_buckets: dict[int, int] = field(default_factory=dict)
+    pct_vp_buckets: dict[int, int] = field(default_factory=dict)
+    day_vp_buckets: dict[int, int] = field(default_factory=dict)
     wars_declared: int = 0
     peace_treaties_signed: int = 0
     alliances_formed: int = 0
@@ -69,3 +71,7 @@ class GameData:
     total_alliances_formed: int = 0
     total_alliance_dissolutions: int = 0
     total_right_of_ways: int = 0
+    pct_alive_buckets: dict[int, int] = field(default_factory=dict)
+    pct_human_buckets: dict[int, int] = field(default_factory=dict)
+    day_alive_buckets: dict[int, int] = field(default_factory=dict)
+    day_human_buckets: dict[int, int] = field(default_factory=dict)
