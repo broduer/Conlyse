@@ -71,6 +71,16 @@ def _aggregate_country(
     def _mean(lst: list) -> float:
         return statistics.mean(lst) if lst else 0.0
 
+    all_res = {k for _, p in entries for k in p.avg_production_by_type}
+    avg_total_production = {
+        rtype: _mean([p.total_production_by_type.get(rtype, 0.0) for _, p in entries])
+        for rtype in sorted(all_res)
+    }
+    avg_production_rate = {
+        rtype: _mean([p.avg_production_by_type.get(rtype, 0.0) for _, p in entries])
+        for rtype in sorted(all_res)
+    }
+
     return CountryAggregate(
         nation_name=nation_name,
         games_played=games_played,
@@ -90,4 +100,6 @@ def _aggregate_country(
         avg_peace_treaties_signed=_mean(peace_treaties),
         avg_alliances_formed=_mean(alliances_formed),
         avg_right_of_ways_signed=_mean(right_of_ways),
+        avg_total_production=avg_total_production,
+        avg_production_rate=avg_production_rate,
     )

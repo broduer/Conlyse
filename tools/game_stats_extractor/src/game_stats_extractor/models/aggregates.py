@@ -8,6 +8,12 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class ProductionTimeSeriesPoint(BaseModel):
+    bucket: int
+    avg_production: float
+    games_sampled: int
+
+
 class DurationBucket(BaseModel):
     min_days: float
     max_days: float
@@ -32,6 +38,7 @@ class GlobalAggregate(BaseModel):
     avg_peace_treaties_per_game: float = 0.0
     avg_alliances_per_game: float = 0.0
     avg_right_of_ways_per_game: float = 0.0
+    avg_game_total_production: dict[str, float] = {}
 
 
 class CountryAggregate(BaseModel):
@@ -54,6 +61,8 @@ class CountryAggregate(BaseModel):
     avg_peace_treaties_signed: float = 0.0
     avg_alliances_formed: float = 0.0
     avg_right_of_ways_signed: float = 0.0
+    avg_total_production: dict[str, float] = {}
+    avg_production_rate: dict[str, float] = {}
 
 
 class ProvinceAggregate(BaseModel):
@@ -84,6 +93,8 @@ class CountryTimeSeries(BaseModel):
     games_played: int
     pct_game: list[TimeSeriesPoint]
     game_days: list[TimeSeriesPoint]
+    production_pct_game: dict[str, list[ProductionTimeSeriesPoint]] = {}
+    production_game_days: dict[str, list[ProductionTimeSeriesPoint]] = {}
 
 
 class PlayerActivityPoint(BaseModel):

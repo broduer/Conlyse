@@ -1,10 +1,10 @@
-"""Section 1.4 — per-country province-count and VP time series, averaged across all games."""
+"""Section 1.4 — per-country province-count and production time series, averaged across all games."""
 import statistics
 from collections import defaultdict
 from datetime import datetime
 
 from .base import BaseAggregator
-from ..models.aggregates import CountryTimeSeries, PlayerActivityPoint, TimeSeriesOutput, TimeSeriesPoint
+from ..models.aggregates import CountryTimeSeries, PlayerActivityPoint, ProductionTimeSeriesPoint, TimeSeriesOutput, TimeSeriesPoint
 from ..models.intermediate import GameData, PlayerData
 
 _PCT_BUCKETS = list(range(0, 101, 5))
@@ -45,11 +45,33 @@ class TimeSeriesAggregator(BaseAggregator[TimeSeriesOutput]):
             if all_day_keys:
                 max_game_days = max(max_game_days, max(all_day_keys))
 
+            all_res_types = {rtype for _, p in entries for rtype in p.production_pct_buckets}
+            all_res_day_keys: set[int] = set()
+            for _, p in entries:
+                for buckets in p.production_day_buckets.values():
+                    all_res_day_keys.update(buckets.keys())
+
+            production_pct_game = {
+                rtype: _aggregate_prod_buckets(
+                    [p.production_pct_buckets.get(rtype, {}) for _, p in entries], _PCT_BUCKETS
+                )
+                for rtype in sorted(all_res_types)
+            }
+            production_game_days = {
+                rtype: _aggregate_prod_buckets(
+                    [p.production_day_buckets.get(rtype, {}) for _, p in entries],
+                    sorted(all_res_day_keys),
+                )
+                for rtype in sorted(all_res_types)
+            }
+
             countries.append(CountryTimeSeries(
                 nation_name=nation_name,
                 games_played=len(entries),
                 pct_game=pct_series,
                 game_days=day_series,
+                production_pct_game=production_pct_game,
+                production_game_days=production_game_days,
             ))
 
         countries.sort(key=lambda c: c.games_played, reverse=True)
@@ -115,5 +137,22 @@ def _aggregate_buckets(
             avg_provinces=round(statistics.mean(prov_values), 2),
             avg_vp=round(statistics.mean(vp_values), 2) if vp_values else 0.0,
             games_sampled=len(prov_values),
+        ))
+    return points
+
+
+def _aggregate_prod_buckets(
+    player_buckets: list[dict[int, float]],
+    bucket_keys: list[int],
+) -> list[ProductionTimeSeriesPoint]:
+    points: list[ProductionTimeSeriesPoint] = []
+    for b in bucket_keys:
+        values = [pb[b] for pb in player_buckets if b in pb]
+        if not values:
+            continue
+        points.append(ProductionTimeSeriesPoint(
+            bucket=b,
+            avg_production=round(statistics.mean(values), 2),
+            games_sampled=len(values),
         ))
     return points

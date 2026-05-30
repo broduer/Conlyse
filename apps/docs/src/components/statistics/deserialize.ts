@@ -4,6 +4,7 @@ import type {
   CountryTimeSeries,
   PlayerActivityPoint,
   ProvinceAggregate,
+  ProductionTimeSeriesPoint,
   TimeSeriesOutput,
 } from './types';
 
@@ -28,6 +29,8 @@ export function deserializeCountries(raw: ColumnarData): CountryAggregate[] {
     avg_peace_treaties_signed: r[idx.avg_peace_treaties_signed] as number,
     avg_alliances_formed:      r[idx.avg_alliances_formed]      as number,
     avg_right_of_ways_signed:  r[idx.avg_right_of_ways_signed]  as number,
+    avg_total_production:      (r[idx.avg_total_production]  as Record<string, number> | undefined) ?? {},
+    avg_production_rate:       (r[idx.avg_production_rate]   as Record<string, number> | undefined) ?? {},
   }));
 }
 
@@ -49,6 +52,37 @@ export function deserializeProvinces(raw: ColumnarData): ProvinceAggregate[] {
   }));
 }
 
+type ProdSeries = Record<string, { avg: (number | null)[]; n: (number | null)[] }>;
+
+function _deserializeProdBuckets(
+  series: ProdSeries,
+  pct_buckets: number[],
+): Record<string, ProductionTimeSeriesPoint[]> {
+  const result: Record<string, ProductionTimeSeriesPoint[]> = {};
+  for (const [rtype, s] of Object.entries(series)) {
+    result[rtype] = pct_buckets
+      .map((b, i) => s.avg[i] != null
+        ? { bucket: b, avg_production: s.avg[i]!, games_sampled: s.n[i]! }
+        : null)
+      .filter((p): p is ProductionTimeSeriesPoint => p !== null);
+  }
+  return result;
+}
+
+function _deserializeProdDayBuckets(
+  series: ProdSeries,
+): Record<string, ProductionTimeSeriesPoint[]> {
+  const result: Record<string, ProductionTimeSeriesPoint[]> = {};
+  for (const [rtype, s] of Object.entries(series)) {
+    result[rtype] = s.avg
+      .map((v, i) => v != null
+        ? { bucket: i, avg_production: v, games_sampled: s.n[i]! }
+        : null)
+      .filter((p): p is ProductionTimeSeriesPoint => p !== null);
+  }
+  return result;
+}
+
 export function deserializeTimeSeries(raw: {
   pct_buckets: number[];
   max_game_days: number;
@@ -68,6 +102,8 @@ export function deserializeTimeSeries(raw: {
     day_avg: (number | null)[];
     day_n:   (number | null)[];
     day_vp_avg?: (number | null)[];
+    prod_pct?: ProdSeries;
+    prod_day?: ProdSeries;
   }>;
 }): TimeSeriesOutput {
   const player_activity_pct: PlayerActivityPoint[] = raw.pct_buckets
@@ -111,6 +147,12 @@ export function deserializeTimeSeries(raw: {
           ? { bucket: i, avg_provinces: v, avg_vp: c.day_vp_avg?.[i] ?? 0, games_sampled: c.day_n[i]! }
           : null)
         .filter((p): p is NonNullable<typeof p> => p !== null),
+      production_pct_game: c.prod_pct
+        ? _deserializeProdBuckets(c.prod_pct, raw.pct_buckets)
+        : undefined,
+      production_game_days: c.prod_day
+        ? _deserializeProdDayBuckets(c.prod_day)
+        : undefined,
     })),
   };
 }

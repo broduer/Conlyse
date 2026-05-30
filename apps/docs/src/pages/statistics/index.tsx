@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import StatsSidebar from '../../components/statistics/StatsSidebar';
 import StatsHero from '../../components/statistics/StatsHero';
 import CountryStatsSection from '../../components/statistics/sections/CountryStatsSection';
+import EconomicStatsSection from '../../components/statistics/sections/EconomicStatsSection';
 import GlobalStatsSection from '../../components/statistics/sections/GlobalStatsSection';
 import ProvinceStatsSection from '../../components/statistics/sections/ProvinceStatsSection';
 import {
@@ -88,6 +89,7 @@ export default function StatisticsPage() {
               <StatsHero global={data.global} meta={data.meta} countries={data.countries} />
               <GlobalStatsSection data={data.global} timeseries={data.timeseries} />
               <CountryStatsSection data={data.countries} timeseries={data.timeseries} />
+              <EconomicStatsSection global={data.global} countries={data.countries} timeseries={data.timeseries} />
               <ProvinceStatsSection data={data.provinces} />
             </>
           )}
