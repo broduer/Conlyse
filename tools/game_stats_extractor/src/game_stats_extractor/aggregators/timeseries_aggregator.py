@@ -98,24 +98,32 @@ def _aggregate_player_activity(
 ) -> list[PlayerActivityPoint]:
     points: list[PlayerActivityPoint] = []
     for b in bucket_keys:
-        alive_vals = []
-        human_vals = []
+        alive_vals: list[float] = []
+        active_human_vals: list[float] = []
+        passive_human_vals: list[float] = []
+        ai_vals: list[float] = []
         if mode == "pct":
             for g in games:
                 if b in g.pct_alive_buckets:
                     alive_vals.append(g.pct_alive_buckets[b])
-                    human_vals.append(g.pct_human_buckets.get(b, 0))
+                    active_human_vals.append(g.pct_active_human_buckets.get(b, 0))
+                    passive_human_vals.append(g.pct_passive_human_buckets.get(b, 0))
+                    ai_vals.append(g.pct_ai_buckets.get(b, 0))
         else:
             for g in games:
                 if b in g.day_alive_buckets:
                     alive_vals.append(g.day_alive_buckets[b])
-                    human_vals.append(g.day_human_buckets.get(b, 0))
+                    active_human_vals.append(g.day_active_human_buckets.get(b, 0))
+                    passive_human_vals.append(g.day_passive_human_buckets.get(b, 0))
+                    ai_vals.append(g.day_ai_buckets.get(b, 0))
         if not alive_vals:
             continue
         points.append(PlayerActivityPoint(
             bucket=b,
             avg_alive=round(statistics.mean(alive_vals), 2),
-            avg_alive_human=round(statistics.mean(human_vals), 2),
+            avg_active_human=round(statistics.mean(active_human_vals), 2),
+            avg_passive_human=round(statistics.mean(passive_human_vals), 2),
+            avg_ai=round(statistics.mean(ai_vals), 2),
             games_sampled=len(alive_vals),
         ))
     return points

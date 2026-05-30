@@ -201,15 +201,23 @@ class ReplayExtractor(BaseExtractor):
         pct_vp_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         day_vp_bucket_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
         day_vp_bucket_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
-        # Game-level alive-player bucket accumulators
+        # Game-level alive-player bucket accumulators (4 categories)
         pct_alive_sum: dict[int, float] = defaultdict(float)
         pct_alive_n: dict[int, int] = defaultdict(int)
-        pct_human_sum: dict[int, float] = defaultdict(float)
-        pct_human_n: dict[int, int] = defaultdict(int)
+        pct_active_human_sum: dict[int, float] = defaultdict(float)
+        pct_active_human_n: dict[int, int] = defaultdict(int)
+        pct_passive_human_sum: dict[int, float] = defaultdict(float)
+        pct_passive_human_n: dict[int, int] = defaultdict(int)
+        pct_ai_sum: dict[int, float] = defaultdict(float)
+        pct_ai_n: dict[int, int] = defaultdict(int)
         day_alive_sum: dict[int, float] = defaultdict(float)
         day_alive_n: dict[int, int] = defaultdict(int)
-        day_human_sum: dict[int, float] = defaultdict(float)
-        day_human_n: dict[int, int] = defaultdict(int)
+        day_active_human_sum: dict[int, float] = defaultdict(float)
+        day_active_human_n: dict[int, int] = defaultdict(int)
+        day_passive_human_sum: dict[int, float] = defaultdict(float)
+        day_passive_human_n: dict[int, int] = defaultdict(int)
+        day_ai_sum: dict[int, float] = defaultdict(float)
+        day_ai_n: dict[int, int] = defaultdict(int)
 
         # Production accumulators: [player_id][resource_type][bucket]
         player_prod_sum: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
@@ -237,15 +245,25 @@ class ReplayExtractor(BaseExtractor):
             for pid, profile in initial_players_map.items()
             if pid > _UNOWNED
         }
-        is_ai_player: dict[int, bool] = {
+        is_native_computer: dict[int, bool] = {
+            pid: bool(profile.native_computer)
+            for pid, profile in initial_players_map.items()
+            if pid > _UNOWNED
+        }
+        is_computer_player: dict[int, bool] = {
             pid: bool(profile.computer_player)
+            for pid, profile in initial_players_map.items()
+            if pid > _UNOWNED
+        }
+        current_player_defeated: dict[int, bool] = {
+            pid: bool(profile.defeated)
             for pid, profile in initial_players_map.items()
             if pid > _UNOWNED
         }
 
         # ---- Register hooks — only changed provinces/relations fire events ----
         replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production"])
-        replay.register_player_trigger(["victory_points"])
+        replay.register_player_trigger(["victory_points", "defeated", "computer_player"])
         replay.register_foreign_affairs_trigger()
 
         # ---- Iterate all timestamps ----
@@ -358,6 +376,14 @@ class ReplayExtractor(BaseExtractor):
                     _, new_vp = player_event.attributes["victory_points"]
                     if new_vp is not None:
                         current_player_vp[pid] = int(new_vp)
+                if "defeated" in player_event.attributes:
+                    _, new_defeated = player_event.attributes["defeated"]
+                    if new_defeated is not None:
+                        current_player_defeated[pid] = bool(new_defeated)
+                if "computer_player" in player_event.attributes:
+                    _, new_cp = player_event.attributes["computer_player"]
+                    if new_cp is not None:
+                        is_computer_player[pid] = bool(new_cp)
 
             # Snapshot player territory counts and VP — O(players), not O(provinces)
             ct = replay.current_time
@@ -388,14 +414,9 @@ class ReplayExtractor(BaseExtractor):
                     prod_day_sum[player_id][rtype][db] += rprod
                     prod_day_n[player_id][rtype][db] += 1
 
-            n_alive = 0
-            n_human = 0
             for player_id, cnt in current_player_counts.items():
                 if cnt <= 0:
                     continue
-                n_alive += 1
-                if not is_ai_player.get(player_id, False):
-                    n_human += 1
                 player_prov_sum[player_id] += cnt
                 player_prov_n[player_id] += 1
                 player_prov_max[player_id] = max(player_prov_max[player_id], cnt)
@@ -412,14 +433,35 @@ class ReplayExtractor(BaseExtractor):
                 pct_vp_bucket_n[player_id][pb] += 1
                 day_vp_bucket_sum[player_id][db] += vp
                 day_vp_bucket_n[player_id][db] += 1
+            n_alive = n_active_human = n_passive_human = n_ai = 0
+            for pid, defeated in current_player_defeated.items():
+                if defeated:
+                    continue
+                n_alive += 1
+                computer = is_computer_player.get(pid, False)
+                native = is_native_computer.get(pid, False)
+                if not computer and not native:
+                    n_active_human += 1
+                elif computer and not native:
+                    n_passive_human += 1
+                elif computer and native:
+                    n_ai += 1
             pct_alive_sum[pb] += n_alive
             pct_alive_n[pb] += 1
-            pct_human_sum[pb] += n_human
-            pct_human_n[pb] += 1
+            pct_active_human_sum[pb] += n_active_human
+            pct_active_human_n[pb] += 1
+            pct_passive_human_sum[pb] += n_passive_human
+            pct_passive_human_n[pb] += 1
+            pct_ai_sum[pb] += n_ai
+            pct_ai_n[pb] += 1
             day_alive_sum[db] += n_alive
             day_alive_n[db] += 1
-            day_human_sum[db] += n_human
-            day_human_n[db] += 1
+            day_active_human_sum[db] += n_active_human
+            day_active_human_n[db] += 1
+            day_passive_human_sum[db] += n_passive_human
+            day_passive_human_n[db] += 1
+            day_ai_sum[db] += n_ai
+            day_ai_n[db] += 1
 
         # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
@@ -537,9 +579,13 @@ class ReplayExtractor(BaseExtractor):
             total_alliance_dissolutions=game_allianced,
             total_right_of_ways=game_rows,
             pct_alive_buckets=_finalize_buckets(pct_alive_sum, pct_alive_n),
-            pct_human_buckets=_finalize_buckets(pct_human_sum, pct_human_n),
+            pct_active_human_buckets=_finalize_buckets(pct_active_human_sum, pct_active_human_n),
+            pct_passive_human_buckets=_finalize_buckets(pct_passive_human_sum, pct_passive_human_n),
+            pct_ai_buckets=_finalize_buckets(pct_ai_sum, pct_ai_n),
             day_alive_buckets=_finalize_buckets(day_alive_sum, day_alive_n),
-            day_human_buckets=_finalize_buckets(day_human_sum, day_human_n),
+            day_active_human_buckets=_finalize_buckets(day_active_human_sum, day_active_human_n),
+            day_passive_human_buckets=_finalize_buckets(day_passive_human_sum, day_passive_human_n),
+            day_ai_buckets=_finalize_buckets(day_ai_sum, day_ai_n),
             game_total_production=dict(game_total_prod),
         )
 
