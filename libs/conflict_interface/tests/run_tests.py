@@ -1,5 +1,6 @@
 import sys
 import unittest
+from pathlib import Path
 from conflict_interface import *
 
 
@@ -20,9 +21,10 @@ def run_tests():
     test_loader = unittest.TestLoader()
 
     # Discover tests in current directory and subdirectories
+    tests_dir = str(Path(__file__).parent)
     test_suite = test_loader.discover(
-        start_dir='.',  # Start searching from current directory
-        pattern='test_*'  # Find files starting with 'test_'
+        start_dir=tests_dir,
+        pattern='test_*'
     )
 
     # Create test runner with verbosity

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 from conflict_interface.game_object.game_object import GameObject
 from ..custom_types import HashMap
@@ -16,8 +16,8 @@ class Trading(GameObject):
     C = "ultshared.UltTrading"
 
     state_id: int
-    trading_offers: Vector[TradeOffer | AITradeOffer]
-    past_trades: Optional[Vector[TradeOffer | AITradeOffer]]
+    trading_offers: Vector[Union[TradeOffer, AITradeOffer]]
+    past_trades: Optional[Vector[Union[TradeOffer, AITradeOffer]]]
     trading_profiles: Optional[HashMap[int, TradingProfile]]
     next_trade_id: int
 
