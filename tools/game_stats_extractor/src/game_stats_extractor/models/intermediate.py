@@ -77,7 +77,11 @@ class GameData:
     total_alliance_dissolutions: int = 0
     total_right_of_ways: int = 0
     pct_alive_buckets: dict[int, int] = field(default_factory=dict)
-    pct_human_buckets: dict[int, int] = field(default_factory=dict)
+    pct_active_human_buckets: dict[int, int] = field(default_factory=dict)
+    pct_passive_human_buckets: dict[int, int] = field(default_factory=dict)
+    pct_ai_buckets: dict[int, int] = field(default_factory=dict)
     day_alive_buckets: dict[int, int] = field(default_factory=dict)
-    day_human_buckets: dict[int, int] = field(default_factory=dict)
+    day_active_human_buckets: dict[int, int] = field(default_factory=dict)
+    day_passive_human_buckets: dict[int, int] = field(default_factory=dict)
+    day_ai_buckets: dict[int, int] = field(default_factory=dict)
     game_total_production: dict[str, float] = field(default_factory=dict)

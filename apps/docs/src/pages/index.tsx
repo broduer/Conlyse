@@ -5,6 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import StatsTeaserStrip from '@site/src/components/StatsTeaserStrip';
 import Heading from '@theme/Heading';
 
 import styles from './index.module.css';
@@ -55,6 +56,7 @@ export default function Home(): ReactNode {
       <HomepageHeader />
       <main>
         <HomepageFeatures />
+        <StatsTeaserStrip />
       </main>
     </Layout>
   );

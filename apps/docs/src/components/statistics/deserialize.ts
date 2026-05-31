@@ -88,10 +88,14 @@ export function deserializeTimeSeries(raw: {
   max_game_days: number;
   generated_at: string;
   pct_alive?: (number | null)[];
-  pct_alive_human?: (number | null)[];
+  pct_active_human?: (number | null)[];
+  pct_passive_human?: (number | null)[];
+  pct_ai?: (number | null)[];
   pct_alive_n?: (number | null)[];
   day_alive?: (number | null)[];
-  day_alive_human?: (number | null)[];
+  day_active_human?: (number | null)[];
+  day_passive_human?: (number | null)[];
+  day_ai?: (number | null)[];
   day_alive_n?: (number | null)[];
   countries: Array<{
     nation_name: string;
@@ -111,7 +115,9 @@ export function deserializeTimeSeries(raw: {
       ? {
           bucket: b,
           avg_alive: raw.pct_alive![i]!,
-          avg_alive_human: raw.pct_alive_human?.[i] ?? 0,
+          avg_active_human: raw.pct_active_human?.[i] ?? 0,
+          avg_passive_human: raw.pct_passive_human?.[i] ?? 0,
+          avg_ai: raw.pct_ai?.[i] ?? 0,
           games_sampled: (raw.pct_alive_n?.[i] ?? 0) as number,
         }
       : null)
@@ -122,7 +128,9 @@ export function deserializeTimeSeries(raw: {
       ? {
           bucket: i,
           avg_alive: v,
-          avg_alive_human: raw.day_alive_human?.[i] ?? 0,
+          avg_active_human: raw.day_active_human?.[i] ?? 0,
+          avg_passive_human: raw.day_passive_human?.[i] ?? 0,
+          avg_ai: raw.day_ai?.[i] ?? 0,
           games_sampled: (raw.day_alive_n?.[i] ?? 0) as number,
         }
       : null)

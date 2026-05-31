@@ -17,6 +17,13 @@ interface Props {
 
 type Mode = 'pct' | 'days';
 
+const LINES = [
+  { key: 'alive',         label: 'Total Alive',    color: '#4a90e2' },
+  { key: 'active_human',  label: 'Active Humans',  color: '#50c878' },
+  { key: 'passive_human', label: 'Passive Humans', color: '#f5a623' },
+  { key: 'ai',            label: 'Native AI',      color: '#e74c3c' },
+] as const;
+
 export default function PlayerActivityTimeSeriesChart({ data }: Props) {
   const [mode, setMode] = useState<Mode>('pct');
 
@@ -25,7 +32,9 @@ export default function PlayerActivityTimeSeriesChart({ data }: Props) {
   const chartData = series.map((p) => ({
     bucket: p.bucket,
     alive: p.avg_alive,
-    human: p.avg_alive_human,
+    active_human: p.avg_active_human,
+    passive_human: p.avg_passive_human,
+    ai: p.avg_ai,
     n: p.games_sampled,
   }));
 
@@ -91,10 +100,10 @@ export default function PlayerActivityTimeSeriesChart({ data }: Props) {
               borderRadius: 6,
               color: 'var(--ifm-font-color-base)',
             }}
-            formatter={(value: number, name: string) => [
-              value.toFixed(1),
-              name === 'alive' ? 'Alive players' : 'Active humans',
-            ]}
+            formatter={(value: number, name: string) => {
+              const line = LINES.find((l) => l.key === name);
+              return [value.toFixed(1), line?.label ?? name];
+            }}
             labelFormatter={(label, payload) => {
               const n = payload?.[0]?.payload?.n ?? 0;
               const pos = mode === 'pct' ? `${label}% of game` : `Day ${label}`;
@@ -103,24 +112,19 @@ export default function PlayerActivityTimeSeriesChart({ data }: Props) {
           />
           <Legend
             wrapperStyle={{ fontSize: 11 }}
-            formatter={(value) => value === 'alive' ? 'Alive players' : 'Active humans'}
+            formatter={(value) => LINES.find((l) => l.key === value)?.label ?? value}
           />
-          <Line
-            type="monotone"
-            dataKey="alive"
-            stroke="#4a90e2"
-            dot={false}
-            strokeWidth={2}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="human"
-            stroke="#50c878"
-            dot={false}
-            strokeWidth={2}
-            connectNulls
-          />
+          {LINES.map(({ key, color }) => (
+            <Line
+              key={key}
+              type="monotone"
+              dataKey={key}
+              stroke={color}
+              dot={false}
+              strokeWidth={2}
+              connectNulls
+            />
+          ))}
         </LineChart>
       </ResponsiveContainer>
     </div>

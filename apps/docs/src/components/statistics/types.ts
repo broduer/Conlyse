@@ -95,7 +95,9 @@ export interface CountryTimeSeries {
 export interface PlayerActivityPoint {
   bucket: number;
   avg_alive: number;
-  avg_alive_human: number;
+  avg_active_human: number;
+  avg_passive_human: number;
+  avg_ai: number;
   games_sampled: number;
 }
 

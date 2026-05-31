@@ -100,7 +100,9 @@ class CountryTimeSeries(BaseModel):
 class PlayerActivityPoint(BaseModel):
     bucket: int
     avg_alive: float
-    avg_alive_human: float
+    avg_active_human: float
+    avg_passive_human: float
+    avg_ai: float
     games_sampled: int
 
 
