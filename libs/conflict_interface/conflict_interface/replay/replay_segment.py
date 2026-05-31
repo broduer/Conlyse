@@ -190,7 +190,8 @@ class ReplaySegment:
             all_nodes.extend(nodes)
             all_new_paths.extend(new_paths)
 
-        self.storage.append_patches_to_disk(all_nodes, all_new_paths)
+        if all_nodes:
+            self.storage.append_patches_to_disk(all_nodes, all_new_paths)
 
     def apply_patch(self, patch: PatchGraphNode, game_state: GameState, game_interface: ReplayInterface):
         idx_to_node = self.storage.path_tree.idx_to_node
