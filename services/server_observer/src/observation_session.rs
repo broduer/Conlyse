@@ -126,6 +126,9 @@ pub struct ObservationSession {
     pub account: Account,
     pub next_update_at: SystemTime,
     pub update_sequence_number: i64,
+    /// Survives `reset_package()` so connectivity checks can use the real game-server address
+    /// even after the session package has been cleared on error.
+    pub last_game_server_address: String,
 
     map_cache: Option<StaticMapCache>,
     api: Option<ObservationApi>,
@@ -153,6 +156,7 @@ impl ObservationSession {
             account,
             next_update_at: SystemTime::now(),
             update_sequence_number: 0,
+            last_game_server_address: String::new(),
             map_cache,
             api: None,
             storage_path,
@@ -313,6 +317,9 @@ impl ObservationSession {
             pkg.client_version,
         ) {
             Ok(api) => {
+                if !pkg.game_server_address.is_empty() {
+                    self.last_game_server_address = pkg.game_server_address.clone();
+                }
                 self.api = Some(api);
                 Ok(pkg)
             }
@@ -409,6 +416,9 @@ impl ObservationSession {
     ) -> Result<(), ObservationSessionError> {
         if let Some(api) = &self.api {
             api.update_package(&mut self.package);
+        }
+        if !self.package.game_server_address.is_empty() {
+            self.last_game_server_address = self.package.game_server_address.clone();
         }
 
         let compressed_response = encode_all(result.raw_response.as_bytes(), 3)?;

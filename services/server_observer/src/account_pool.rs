@@ -1,3 +1,4 @@
+use crate::connectivity_check;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -121,7 +122,7 @@ pub struct AccountPool {
     pub proxies: HashMap<String, Proxy>,
     guest_join_counts: HashMap<String, usize>,
     guest_account_pointer: usize,
-    _pool_path: String,
+    pool_path: String,
     webshare_token: String,
     proxy_reset_callback: Option<ProxyResetCallback>,
 }
@@ -216,7 +217,7 @@ impl AccountPool {
             proxies,
             guest_join_counts: HashMap::new(),
             guest_account_pointer: 0,
-            _pool_path: path.as_ref().to_string_lossy().to_string(),
+            pool_path: path.as_ref().to_string_lossy().to_string(),
             webshare_token,
             proxy_reset_callback: None,
         })
@@ -252,7 +253,9 @@ impl AccountPool {
 
             let parsed: ProxyResponse = resp.json().await?;
             for p in parsed.results {
-                proxy_map.insert(p.id.clone(), p);
+                if p.valid {
+                    proxy_map.insert(p.id.clone(), p);
+                }
             }
 
             if parsed.next.is_none() {
@@ -325,6 +328,125 @@ impl AccountPool {
             .map(|a| a.proxy_config.clone())
     }
 
+    /// Persists current runtime proxy assignments back to the account_pool.json on disk.
+    /// Only `proxy_id` and `proxy_url` fields are updated; all other fields are preserved.
+    pub fn save_to_file(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let file = File::open(&self.pool_path)?;
+        let reader = BufReader::new(file);
+        let mut json: serde_json::Value = serde_json::from_reader(reader)?;
+
+        if let Some(entries) = json["accounts"].as_array_mut() {
+            for entry in entries.iter_mut() {
+                let uname = entry["username"].as_str().unwrap_or("");
+                if let Some(account) = self.accounts.iter().find(|a| a.username == uname) {
+                    entry["proxy_id"] =
+                        serde_json::Value::String(account.proxy_config.proxy_id.clone());
+                    entry["proxy_url"] =
+                        serde_json::Value::String(account.proxy_config.to_url());
+                }
+            }
+        }
+
+        let tmp_path = format!("{}.tmp", self.pool_path);
+        let tmp_file = File::create(&tmp_path)?;
+        serde_json::to_writer_pretty(tmp_file, &json)?;
+        std::fs::rename(&tmp_path, &self.pool_path)?;
+        Ok(())
+    }
+
+    /// Calls the WebShare replace API to swap out the broken proxy for `username` with a
+    /// freshly provisioned one, verifies it, assigns it, and persists to disk.
+    /// Falls back to pool rotation if the API call fails or the new proxy fails verification.
+    pub async fn replace_proxy(&mut self, username: &str, game_server_url: &str) -> bool {
+        let old_proxy_id = self
+            .accounts
+            .iter()
+            .find(|a| a.username == username)
+            .map(|a| a.proxy_config.proxy_id.clone())
+            .unwrap_or_default();
+
+        // Try WebShare replace API first.
+        if !old_proxy_id.is_empty() {
+            if let Some(new_proxy) = self.request_webshare_replacement(&old_proxy_id).await {
+                let new_url = new_proxy.proxy_url();
+                tracing::info!(
+                    account = username,
+                    old_proxy_id = %old_proxy_id,
+                    new_proxy_id = %new_proxy.id,
+                    "received replacement proxy from WebShare; verifying"
+                );
+                if connectivity_check::proxy_passes_checks(&new_url, game_server_url).await {
+                    let new_cfg = ProxyConfig::from_url(&new_url, new_proxy.id.clone())
+                        .unwrap_or(ProxyConfig {
+                            proxy_id: new_proxy.id.clone(),
+                            enabled: true,
+                            host: new_proxy.address.clone(),
+                            port: new_proxy.port,
+                            username: new_proxy.username.clone(),
+                            password: new_proxy.password.clone(),
+                        });
+                    self.proxies.insert(new_proxy.id.clone(), new_proxy);
+                    if let Some(account) = self.accounts.iter_mut().find(|a| a.username == username) {
+                        account.proxy_config = new_cfg;
+                    }
+                    if let Err(err) = self.save_to_file() {
+                        tracing::warn!(?err, "failed to persist proxy assignment to disk");
+                    }
+                    if let Some(cb) = &self.proxy_reset_callback {
+                        cb(username.to_string());
+                    }
+                    tracing::info!(
+                        account = username,
+                        old_proxy_id = %old_proxy_id,
+                        "proxy successfully replaced and verified via WebShare"
+                    );
+                    return true;
+                } else {
+                    tracing::warn!(
+                        account = username,
+                        "WebShare replacement proxy failed connectivity checks; falling back to pool rotation"
+                    );
+                }
+            }
+        }
+
+        // Fallback: rotate within the existing pool.
+        self.reset_account_proxy(username).await
+    }
+
+    async fn request_webshare_replacement(&self, proxy_id: &str) -> Option<Proxy> {
+        let client = reqwest::Client::new();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Token {}", self.webshare_token)).unwrap(),
+        );
+
+        #[derive(Serialize)]
+        struct ReplaceRequest<'a> {
+            proxy_id: &'a str,
+        }
+
+        let resp = client
+            .post("https://proxy.webshare.io/api/v2/proxy/replace/")
+            .headers(headers)
+            .json(&ReplaceRequest { proxy_id })
+            .send()
+            .await
+            .ok()?;
+
+        if !resp.status().is_success() {
+            tracing::warn!(
+                proxy_id,
+                status = %resp.status(),
+                "WebShare replace API returned non-success status"
+            );
+            return None;
+        }
+
+        resp.json::<Proxy>().await.ok()
+    }
+
     pub async fn reset_account_proxy(&mut self, username: &str) -> bool {
         let old_proxy_id = self
             .accounts
@@ -349,7 +471,6 @@ impl AccountPool {
         let assigned_ids: HashSet<String> = self
             .accounts
             .iter()
-            .filter(|acc| acc.username != username)
             .map(|acc| acc.proxy_config.proxy_id.clone())
             .filter(|id| self.proxies.contains_key(id))
             .collect();

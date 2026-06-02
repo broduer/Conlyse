@@ -1,4 +1,5 @@
 use crate::account_pool::AccountPool;
+use crate::connectivity_check::{self, GameServerStatusMap};
 use crate::db::{DbClient, DbConfig};
 use crate::game_finder::{GameFinder, GameFinderConfig};
 use crate::metrics::{
@@ -54,6 +55,7 @@ pub struct ServerObserver {
     map_cache: StaticMapCache,
     redis_publisher: RedisPublisher,
     dead_letter_path: String,
+    game_server_status_map: GameServerStatusMap,
 }
 
 impl ServerObserver {
@@ -182,6 +184,7 @@ impl ServerObserver {
             map_cache,
             redis_publisher,
             dead_letter_path,
+            game_server_status_map: GameServerStatusMap::new(),
         });
 
         tracing::info!(
@@ -582,33 +585,76 @@ impl ServerObserver {
         session_arc: &Arc<tokio::sync::Mutex<ObservationSession>>,
         result: ObservationResult,
     ) {
-        let mut drop_session = false;
-        let username: String;
-        let mut needs_proxy_reset = false;
+        // Phase 1: collect everything needed without holding the session lock during async work.
+        let (username, proxy_url, game_server_address, current_attempt) = {
+            let session = session_arc.lock().await;
+            let game_server = if session.last_game_server_address.is_empty() {
+                None
+            } else {
+                Some(session.last_game_server_address.clone())
+            };
+            (
+                session.account.username.clone(),
+                session.account.proxy_config.to_url(),
+                game_server,
+                session.get_attempt(),
+            )
+        };
 
+        // Phase 2: run connectivity diagnostics on the first NetworkError (no locks held).
+        let mut needs_proxy_replace = false;
+        let effective_error = if result.error_code == ObservationError::NetworkError
+            && current_attempt == 1
+        {
+            let diagnosis = connectivity_check::diagnose(
+                &proxy_url,
+                game_server_address.as_deref(),
+                &result.error_message,
+                &self.game_server_status_map,
+            )
+            .await;
+
+            match diagnosis {
+                connectivity_check::NetworkDiagnosis::GameServerDown => {
+                    tracing::warn!(
+                        game_id,
+                        "game server appears globally down; downgrading to ServerError semantics"
+                    );
+                    ObservationError::ServerError
+                }
+                connectivity_check::NetworkDiagnosis::ProxyDead
+                | connectivity_check::NetworkDiagnosis::ProxyBlockingTarget => {
+                    needs_proxy_replace = true;
+                    result.error_code
+                }
+                connectivity_check::NetworkDiagnosis::Transient => result.error_code,
+            }
+        } else {
+            result.error_code
+        };
+
+        // Phase 3: apply retry decision (brief session lock).
+        let mut drop_session = false;
         {
             let mut session = session_arc.lock().await;
-            username = session.account.username.clone();
-            let (max_retries, delay_cap, reset_proxy) = match result.error_code {
+            let (max_retries, delay_cap) = match effective_error {
                 ObservationError::NetworkError => {
-                    (MAX_NETWORK_RETRIES, Duration::from_secs(3600), true)
+                    (MAX_NETWORK_RETRIES, Duration::from_secs(3600))
                 }
                 ObservationError::ServerError => {
-                    (MAX_SERVER_RETRIES, Duration::from_secs(1800), false)
+                    (MAX_SERVER_RETRIES, Duration::from_secs(1800))
                 }
                 _ => (
                     MAX_UPDATE_RETRIES,
                     Duration::from_secs_f64(
                         *self.update_interval.lock().unwrap_or_else(|poisoned| { tracing::error!("update interval mutex poisoned; recovering"); poisoned.into_inner() }),
                     ),
-                    false,
                 ),
             };
             if session.get_attempt() >= max_retries {
                 drop_session = true;
             } else {
                 session.increment_attempt();
-                needs_proxy_reset = reset_proxy;
                 let retry_index = (session.get_attempt() - 2) as u32;
                 let delay = Duration::from_secs(5)
                     .saturating_mul(2u32.pow(retry_index))
@@ -633,10 +679,14 @@ impl ServerObserver {
             }
         }
 
-        if needs_proxy_reset {
+        // Phase 4: replace proxy if diagnostics flagged it (no session lock needed).
+        if needs_proxy_replace {
+            let target = game_server_address
+                .as_deref()
+                .unwrap_or(connectivity_check::FALLBACK_GAME_SERVER_URL);
             let mut pool = self.account_pool.lock().await;
-            if !pool.reset_account_proxy(&username).await {
-                tracing::warn!(account = username, "failed to reset proxy after network error");
+            if !pool.replace_proxy(&username, target).await {
+                tracing::warn!(account = username, "failed to replace proxy after network error");
             }
         }
 
