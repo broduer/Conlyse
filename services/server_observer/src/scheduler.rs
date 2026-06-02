@@ -352,7 +352,14 @@ impl Scheduler {
     }
 
     fn calculate_offset_ms(&self, game_id: i32) -> i64 {
-        game_id as i64 % self.update_interval_ms()
+        let interval = self.update_interval_ms();
+        // Sequential game IDs produce adjacent modulo offsets, clustering all their
+        // updates into a narrow window. Fibonacci hashing maps sequential integers to
+        // a uniform distribution across the interval with no external dependencies.
+        let h = (game_id as u64)
+            .wrapping_mul(0x9e3779b97f4a7c15)
+            ^ ((game_id as u64) >> 16);
+        (h % interval as u64) as i64
     }
 
     fn calculate_next_k(&self, current_time_ms: i64, offset_ms: i64) -> i64 {

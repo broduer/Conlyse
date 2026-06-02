@@ -1,4 +1,5 @@
 mod account_pool;
+mod connectivity_check;
 mod db;
 mod game_finder;
 mod hub_interface_wrapper;
