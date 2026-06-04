@@ -28,19 +28,19 @@ pub struct GameFinderConfig {
 }
 
 fn default_scan_interval() -> f64 {
-    30.0
+    300.0
 }
 fn default_enabled_scanning() -> bool {
     true
 }
 fn default_max_parallel_recordings() -> i32 {
-    1
+    10
 }
 fn default_max_games_per_scan() -> i32 {
     10
 }
 fn default_max_guest_games_per_account() -> i32 {
-    -1
+    10
 }
 
 #[derive(Debug, Error)]

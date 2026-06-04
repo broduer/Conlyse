@@ -19,7 +19,7 @@ enabled = true
 scan_interval_seconds = 300
 max_games_per_scan = 10
 scenario_ids = [5976]
-max_guest_games_per_account = -1
+max_guest_games_per_account = 10
 
 [database]
 host = "localhost"
