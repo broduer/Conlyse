@@ -43,6 +43,7 @@ pub struct ServerObserver {
     scheduler: Arc<Scheduler>,
     max_parallel_recordings: AtomicI32,
     max_parallel_normal_recordings: AtomicI32,
+    max_guest_games_per_account: AtomicI32,
     update_interval: Mutex<f64>,
     output_dir: String,
     output_metadata_dir: String,
@@ -172,6 +173,7 @@ impl ServerObserver {
                     .max(0)
                     .min(max_parallel_recordings.max(1)),
             ),
+            max_guest_games_per_account: AtomicI32::new(max_guest_games_per_account),
             update_interval: Mutex::new(update_interval),
             output_dir,
             output_metadata_dir,
@@ -300,8 +302,9 @@ impl ServerObserver {
         is_priority: bool,
     ) -> bool {
         let account = {
+            let max_guest = self.max_guest_games_per_account.load(Ordering::SeqCst);
             let mut pool = self.account_pool.lock().await;
-            pool.next_guest_account_owned(-1)
+            pool.next_guest_account_owned(max_guest)
         };
         let Some(account) = account else {
             tracing::warn!("no free account available for new observation");
