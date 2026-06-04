@@ -159,6 +159,30 @@ static HTTP_RESPONSE_SIZE_BYTES: Lazy<HistogramVec> = Lazy::new(|| {
     vec
 });
 
+static DOWN_SERVER_COUNT: Lazy<IntGauge> = Lazy::new(|| {
+    let opts = Opts::new(
+        "server_observer_down_server_count",
+        "Number of game-server addresses with an open circuit breaker (currently unreachable)",
+    );
+    let gauge = IntGauge::with_opts(opts).expect("create server_observer_down_server_count");
+    default_registry()
+        .register(Box::new(gauge.clone()))
+        .expect("register server_observer_down_server_count");
+    gauge
+});
+
+static REDIS_PUBLISH_FAILURES_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
+    let opts = Opts::new(
+        "server_observer_redis_publish_failures_total",
+        "Total number of failed Redis XADD calls (game responses lost due to Redis unavailability)",
+    );
+    let counter = IntCounter::with_opts(opts).expect("create server_observer_redis_publish_failures_total");
+    default_registry()
+        .register(Box::new(counter.clone()))
+        .expect("register server_observer_redis_publish_failures_total");
+    counter
+});
+
 // Public helpers used by the rest of the crate
 pub fn record_game_started(scenario_id: i32) {
     GAMES_STARTED_TOTAL
@@ -220,6 +244,14 @@ pub fn record_response_size(bytes: usize) {
     HTTP_RESPONSE_SIZE_BYTES
         .with_label_values(&["true"])
         .observe(bytes as f64);
+}
+
+pub fn set_down_server_count(n: i64) {
+    DOWN_SERVER_COUNT.set(n);
+}
+
+pub fn record_redis_publish_failure() {
+    REDIS_PUBLISH_FAILURES_TOTAL.inc();
 }
 
 pub struct MetricsServer {
