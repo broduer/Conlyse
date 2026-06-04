@@ -195,7 +195,8 @@ class ReplayTimeline:
             return
         if self._mode == "a":
             for segment in self.segments.values():
-                segment.collapse_append_mode()
+                if segment.storage.metadata is not None:
+                    segment.collapse_append_mode()
         self._write_to_disk()
         self._open = False
 
