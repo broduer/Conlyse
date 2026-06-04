@@ -46,6 +46,21 @@ impl Scheduler {
         self.stop_flag.store(true, Ordering::SeqCst);
     }
 
+    /// Schedules `game_id` for an immediate update without requiring a session reference.
+    /// Used by the recovery probe to resume frozen sessions after a server comes back up.
+    pub fn schedule_immediate_by_id(&self, game_id: i32) {
+        let now = SystemTime::now();
+        self.update_queue
+            .lock()
+            .unwrap_or_else(|poisoned| {
+                tracing::error!("scheduler queue mutex poisoned; recovering");
+                poisoned.into_inner()
+            })
+            .entry(now)
+            .or_default()
+            .push_back(game_id);
+    }
+
     pub fn schedule_update(&self, session: &ObservationSession) {
         let mut queue = self.update_queue.lock().unwrap_or_else(|poisoned| { tracing::error!("scheduler queue mutex poisoned; recovering"); poisoned.into_inner() });
         queue

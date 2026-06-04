@@ -5,8 +5,9 @@ use crate::game_finder::{GameFinder, GameFinderConfig};
 use crate::metrics::{
     record_game_completed, record_game_failed, record_game_started, record_game_update_retry,
     record_missed_interval, record_scheduled_update_latency, record_game_update_completed,
-    record_game_update_started, set_active_games,
+    record_game_update_started, set_active_games, set_down_server_count,
 };
+use crate::server_outage_tracker::ServerOutageTracker;
 use crate::observation_session::{ObservationError, ObservationResult, ObservationSession};
 use crate::recording_registry::RecordingRegistry;
 use crate::redis_publisher::{RedisConfig, RedisPublisher};
@@ -57,6 +58,7 @@ pub struct ServerObserver {
     redis_publisher: RedisPublisher,
     dead_letter_path: String,
     game_server_status_map: GameServerStatusMap,
+    outage_tracker: ServerOutageTracker,
 }
 
 impl ServerObserver {
@@ -187,6 +189,7 @@ impl ServerObserver {
             redis_publisher,
             dead_letter_path,
             game_server_status_map: GameServerStatusMap::new(),
+            outage_tracker: ServerOutageTracker::new(),
         });
 
         tracing::info!(
@@ -225,6 +228,46 @@ impl ServerObserver {
         );
 
         self.resume_active().await;
+
+        // Spawn the recovery probe: periodically re-checks any down server addresses
+        // and resumes frozen sessions when they become reachable again.
+        {
+            let weak = Arc::downgrade(&self);
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    let Some(observer) = weak.upgrade() else { break };
+                    if observer.stop_flag.load(Ordering::SeqCst) { break; }
+
+                    for addr in observer.outage_tracker.down_addresses() {
+                        let reachable = connectivity_check::check_direct(&addr).await;
+                        observer.game_server_status_map.update(&addr, reachable);
+                        if reachable {
+                            let frozen = observer.outage_tracker.close(&addr);
+                            set_down_server_count(observer.outage_tracker.down_count());
+                            tracing::info!(
+                                server_addr = %addr,
+                                game_count = frozen.len(),
+                                "game server recovered; resuming frozen sessions"
+                            );
+                            for game_id in frozen {
+                                let session_arc = {
+                                    observer.observer_sessions
+                                        .lock()
+                                        .unwrap_or_else(|p| { tracing::error!("observer sessions mutex poisoned; recovering"); p.into_inner() })
+                                        .get(&game_id)
+                                        .cloned()
+                                };
+                                let Some(session_arc) = session_arc else { continue };
+                                session_arc.lock().await.reset_attempt();
+                                observer.scheduler.schedule_immediate_by_id(game_id);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         {
             let mut guard = self.game_finder.lock().unwrap_or_else(|poisoned| { tracing::error!("game finder mutex poisoned; recovering"); poisoned.into_inner() });
             if let Some(game_finder) = guard.as_mut() {
@@ -589,7 +632,7 @@ impl ServerObserver {
         result: ObservationResult,
     ) {
         // Phase 1: collect everything needed without holding the session lock during async work.
-        let (username, proxy_url, game_server_address, current_attempt) = {
+        let (username, proxy_url, game_server_address, _current_attempt) = {
             let session = session_arc.lock().await;
             let game_server = if session.last_game_server_address.is_empty() {
                 None
@@ -604,10 +647,26 @@ impl ServerObserver {
             )
         };
 
-        // Phase 2: run connectivity diagnostics on the first NetworkError (no locks held).
+        // Derive the server-address key used for circuit-breaker lookups throughout.
+        let server_addr = game_server_address
+            .clone()
+            .unwrap_or_else(|| connectivity_check::FALLBACK_GAME_SERVER_URL.to_string());
+
+        // Fast path: circuit already open for this server — freeze without diagnosis and without
+        // burning the retry budget. The recovery probe will resume the session when the server
+        // is reachable again.
+        if self.outage_tracker.is_down(&server_addr) {
+            self.outage_tracker.freeze(&server_addr, game_id);
+            let mut session = session_arc.lock().await;
+            self.scheduler.schedule_retry_update(&mut session, Duration::from_secs(60));
+            tracing::debug!(game_id, server_addr, "session re-frozen; circuit still open for server");
+            return;
+        }
+
+        // Phase 2: run connectivity diagnostics on NetworkError when the circuit is not already open.
         let mut needs_proxy_replace = false;
         let effective_error = if result.error_code == ObservationError::NetworkError
-            && current_attempt == 1
+            && !self.outage_tracker.is_down(&server_addr)
         {
             let diagnosis = connectivity_check::diagnose(
                 &proxy_url,
@@ -619,11 +678,18 @@ impl ServerObserver {
 
             match diagnosis {
                 connectivity_check::NetworkDiagnosis::GameServerDown => {
-                    tracing::warn!(
-                        game_id,
-                        "game server appears globally down; downgrading to ServerError semantics"
-                    );
-                    ObservationError::ServerError
+                    let newly_opened = self.outage_tracker.open(&server_addr, game_id);
+                    if newly_opened {
+                        set_down_server_count(self.outage_tracker.down_count());
+                        tracing::warn!(
+                            game_id,
+                            server_addr,
+                            "circuit opened; game server unreachable — sessions frozen until recovery probe clears it"
+                        );
+                    }
+                    let mut session = session_arc.lock().await;
+                    self.scheduler.schedule_retry_update(&mut session, Duration::from_secs(60));
+                    return;
                 }
                 connectivity_check::NetworkDiagnosis::ProxyDead
                 | connectivity_check::NetworkDiagnosis::ProxyBlockingTarget => {

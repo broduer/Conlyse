@@ -65,3 +65,32 @@ groups:
         annotations:
           summary: "Observer has no active game recordings"
           description: "No games have been active for 30 minutes. This may be normal off-peak, or the observer may be stuck."
+
+      - alert: ObserverGameServerDown
+        expr: server_observer_down_server_count > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} game server address(es) unreachable — sessions frozen"
+          description: "Per-address circuit breaker is open. Retry budgets are not consumed; sessions will auto-resume when the recovery probe confirms the server is reachable again."
+
+      - alert: ObserverRedisPublishFailures
+        expr: rate(server_observer_redis_publish_failures_total[5m]) > 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Observer cannot publish game responses to Redis"
+          description: "Game state is being fetched but not forwarded to the converter. Data loss is occurring. Check Redis container health."
+
+  - name: server_converter_extended
+    rules:
+      - alert: ConverterHighConsumerLag
+        expr: server_converter_redis_consumer_lag > 5000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Converter Redis consumer lag is high ({{ $value }} messages)"
+          description: "Stream cap is ~50,000 entries. At this lag, message loss risk is elevated if the converter stays behind."

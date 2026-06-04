@@ -1,5 +1,6 @@
 use crate::account_pool::{Account, ProxyConfig};
 use crate::hub_interface_wrapper::{HubInterfaceError, HubInterfaceWrapper};
+use crate::metrics::record_redis_publish_failure;
 use crate::observation_api::{GameServerError, GameServerResult, ObservationApi, ObservationApiError};
 use crate::observation_package::ObservationPackage;
 use crate::recording_storage::{RecordingStorage, RecordingStorageError};
@@ -442,6 +443,7 @@ impl ObservationSession {
             .publish_compressed_response(&metadata, &compressed_response)
         {
             tracing::warn!(?err, game_id = self.game_id, "failed redis publish");
+            record_redis_publish_failure();
         }
 
         let pkg_json = self.package.to_json();

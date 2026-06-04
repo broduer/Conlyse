@@ -71,7 +71,7 @@ pub fn is_socks5_ruleset_error(message: &str) -> bool {
     message.contains("0x02") || message.contains("Connection not allowed by ruleset")
 }
 
-async fn check_direct(url: &str) -> bool {
+pub(crate) async fn check_direct(url: &str) -> bool {
     let client = match Client::builder()
         .no_proxy()
         .timeout(CHECK_TIMEOUT)

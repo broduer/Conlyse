@@ -14,6 +14,7 @@ mod redis_publisher;
 mod s3_client;
 mod scheduler;
 mod server_observer;
+mod server_outage_tracker;
 mod static_map_cache;
 
 use crate::hub_interface_wrapper::HubInterfaceWrapper;
