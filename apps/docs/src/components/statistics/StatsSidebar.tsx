@@ -57,6 +57,16 @@ const SECTIONS: SidebarSection[] = [
       { id: 'chart-provinces-morale',    label: 'Province Morale' },
     ],
   },
+  {
+    id: 'section-buildings',
+    label: 'Building Analysis',
+    items: [
+      { id: 'chart-buildings-frequency',   label: 'Building Frequency' },
+      { id: 'chart-buildings-win',         label: 'Win Correlation' },
+      { id: 'chart-buildings-country',     label: 'Country Loadouts' },
+      { id: 'chart-buildings-progression', label: 'Build Progression' },
+    ],
+  },
 ];
 
 function scrollTo(id: string) {

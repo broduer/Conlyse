@@ -37,6 +37,10 @@ class PlayerData:
     peak_production_by_type: dict[str, float] = field(default_factory=dict)
     production_pct_buckets: dict[str, dict[int, float]] = field(default_factory=dict)
     production_day_buckets: dict[str, dict[int, float]] = field(default_factory=dict)
+    final_building_counts: dict[str, int] = field(default_factory=dict)
+    final_building_levels: dict[str, float] = field(default_factory=dict)
+    final_building_tier_counts: dict[str, dict[int, int]] = field(default_factory=dict)
+    building_pct_buckets: dict[str, dict[int, float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -54,6 +58,7 @@ class ProvinceData:
     avg_morale: float
     min_morale: float
     max_morale: float
+    final_upgrade_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass

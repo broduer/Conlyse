@@ -1,4 +1,6 @@
 import type {
+  BuildingAggregate,
+  BuildingTimeSeriesPoint,
   ColumnarData,
   CountryAggregate,
   CountryTimeSeries,
@@ -29,8 +31,10 @@ export function deserializeCountries(raw: ColumnarData): CountryAggregate[] {
     avg_peace_treaties_signed: r[idx.avg_peace_treaties_signed] as number,
     avg_alliances_formed:      r[idx.avg_alliances_formed]      as number,
     avg_right_of_ways_signed:  r[idx.avg_right_of_ways_signed]  as number,
-    avg_total_production:      (r[idx.avg_total_production]  as Record<string, number> | undefined) ?? {},
-    avg_production_rate:       (r[idx.avg_production_rate]   as Record<string, number> | undefined) ?? {},
+    avg_total_production:         (r[idx.avg_total_production]         as Record<string, number> | undefined) ?? {},
+    avg_production_rate:          (r[idx.avg_production_rate]          as Record<string, number> | undefined) ?? {},
+    avg_final_building_counts:    (r[idx.avg_final_building_counts]    as Record<string, number> | undefined) ?? {},
+    avg_final_building_levels:    (r[idx.avg_final_building_levels]    as Record<string, number> | undefined) ?? {},
   }));
 }
 
@@ -49,10 +53,25 @@ export function deserializeProvinces(raw: ColumnarData): ProvinceAggregate[] {
     avg_resource_production:  r[idx.avg_resource_production]  as number,
     avg_money_production:     r[idx.avg_money_production]     as number,
     avg_morale:               r[idx.avg_morale]               as number,
+    typical_buildings:        (r[idx.typical_buildings]       as Record<string, number> | undefined) ?? {},
   }));
 }
 
-type ProdSeries = Record<string, { avg: (number | null)[]; n: (number | null)[] }>;
+export function deserializeBuildings(raw: ColumnarData): BuildingAggregate[] {
+  const idx = Object.fromEntries(raw.columns.map((c, i) => [c, i]));
+  return raw.rows.map((r) => ({
+    upgrade_identifier: r[idx.upgrade_identifier] as string,
+    games_appeared:     r[idx.games_appeared]     as number,
+    avg_per_game:       r[idx.avg_per_game]       as number,
+    avg_per_winner:     r[idx.avg_per_winner]     as number,
+    avg_per_loser:      r[idx.avg_per_loser]      as number,
+    avg_level:          r[idx.avg_level]          as number,
+    avg_per_tier:       (r[idx.avg_per_tier] ?? {}) as Record<string, number>,
+  }));
+}
+
+type BucketSeries = Record<string, { avg: (number | null)[]; n: (number | null)[] }>;
+type ProdSeries = BucketSeries;
 
 function _deserializeProdBuckets(
   series: ProdSeries,
@@ -83,6 +102,21 @@ function _deserializeProdDayBuckets(
   return result;
 }
 
+function _deserializeBldBuckets(
+  series: BucketSeries,
+  pct_buckets: number[],
+): Record<string, BuildingTimeSeriesPoint[]> {
+  const result: Record<string, BuildingTimeSeriesPoint[]> = {};
+  for (const [uid, s] of Object.entries(series)) {
+    result[uid] = pct_buckets
+      .map((b, i) => s.avg[i] != null
+        ? { bucket: b, avg_count: s.avg[i]!, games_sampled: s.n[i]! }
+        : null)
+      .filter((p): p is BuildingTimeSeriesPoint => p !== null);
+  }
+  return result;
+}
+
 export function deserializeTimeSeries(raw: {
   pct_buckets: number[];
   max_game_days: number;
@@ -108,6 +142,7 @@ export function deserializeTimeSeries(raw: {
     day_vp_avg?: (number | null)[];
     prod_pct?: ProdSeries;
     prod_day?: ProdSeries;
+    bld_pct?: BucketSeries;
   }>;
 }): TimeSeriesOutput {
   const player_activity_pct: PlayerActivityPoint[] = raw.pct_buckets
@@ -160,6 +195,9 @@ export function deserializeTimeSeries(raw: {
         : undefined,
       production_game_days: c.prod_day
         ? _deserializeProdDayBuckets(c.prod_day)
+        : undefined,
+      building_pct_game: c.bld_pct
+        ? _deserializeBldBuckets(c.bld_pct, raw.pct_buckets)
         : undefined,
     })),
   };

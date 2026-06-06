@@ -73,6 +73,14 @@ def _aggregate_province(
     avg_money_production = statistics.mean(p.money_production for _, p in entries)
     avg_morale = statistics.mean(p.avg_morale for _, p in entries)
 
+    all_uids = {uid for _, p in entries for uid in p.final_upgrade_counts}
+    typical_buildings = {
+        uid: sum(1 for _, p in entries if p.final_upgrade_counts.get(uid, 0) > 0) / games_appeared
+        for uid in sorted(all_uids)
+    }
+    # Average level is not stored per-province in intermediate data (only per-player), so omit
+    avg_building_levels: dict[str, float] = {}
+
     return ProvinceAggregate(
         province_id=province_id,
         province_name=province_name,
@@ -86,4 +94,6 @@ def _aggregate_province(
         avg_resource_production=avg_resource_production,
         avg_money_production=avg_money_production,
         avg_morale=avg_morale,
+        typical_buildings=typical_buildings,
+        avg_building_levels=avg_building_levels,
     )

@@ -12,6 +12,7 @@ from typing import Optional
 
 from tqdm import tqdm
 
+from .aggregators.building_aggregator import BuildingAggregator
 from .aggregators.country_aggregator import CountryAggregator
 from .aggregators.global_aggregator import GlobalAggregator
 from .aggregators.province_aggregator import ProvinceAggregator
@@ -87,10 +88,14 @@ class Pipeline:
         logger.info("Aggregating time series...")
         timeseries_agg = TimeSeriesAggregator(min_games=self.min_timeseries_games).aggregate(games)
 
+        logger.info("Aggregating building statistics...")
+        building_aggs = BuildingAggregator().aggregate(games)
+
         logger.info(
-            "Writing output: %d countries, %d provinces",
+            "Writing output: %d countries, %d provinces, %d building types",
             len(country_aggs),
             len(province_aggs),
+            len(building_aggs),
         )
         write_output(
             self.output_dir,
@@ -98,6 +103,7 @@ class Pipeline:
             country_aggs,
             province_aggs,
             timeseries_agg,
+            building_aggs,
             games,
             self.replays_dir,
             failed,

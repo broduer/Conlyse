@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from .base import BaseAggregator
-from ..models.aggregates import CountryTimeSeries, PlayerActivityPoint, ProductionTimeSeriesPoint, TimeSeriesOutput, TimeSeriesPoint
+from ..models.aggregates import BuildingTimeSeriesPoint, CountryTimeSeries, PlayerActivityPoint, ProductionTimeSeriesPoint, TimeSeriesOutput, TimeSeriesPoint
 from ..models.intermediate import GameData, PlayerData
 
 _PCT_BUCKETS = list(range(0, 101, 5))
@@ -65,6 +65,14 @@ class TimeSeriesAggregator(BaseAggregator[TimeSeriesOutput]):
                 for rtype in sorted(all_res_types)
             }
 
+            all_bld_types = {uid for _, p in entries for uid in p.building_pct_buckets}
+            building_pct_game = {
+                uid: _aggregate_building_buckets(
+                    [p.building_pct_buckets.get(uid, {}) for _, p in entries], _PCT_BUCKETS
+                )
+                for uid in sorted(all_bld_types)
+            }
+
             countries.append(CountryTimeSeries(
                 nation_name=nation_name,
                 games_played=len(entries),
@@ -72,6 +80,7 @@ class TimeSeriesAggregator(BaseAggregator[TimeSeriesOutput]):
                 game_days=day_series,
                 production_pct_game=production_pct_game,
                 production_game_days=production_game_days,
+                building_pct_game=building_pct_game,
             ))
 
         countries.sort(key=lambda c: c.games_played, reverse=True)
@@ -161,6 +170,23 @@ def _aggregate_prod_buckets(
         points.append(ProductionTimeSeriesPoint(
             bucket=b,
             avg_production=round(statistics.mean(values), 2),
+            games_sampled=len(values),
+        ))
+    return points
+
+
+def _aggregate_building_buckets(
+    player_buckets: list[dict[int, float]],
+    bucket_keys: list[int],
+) -> list[BuildingTimeSeriesPoint]:
+    points: list[BuildingTimeSeriesPoint] = []
+    for b in bucket_keys:
+        values = [pb[b] for pb in player_buckets if b in pb]
+        if not values:
+            continue
+        points.append(BuildingTimeSeriesPoint(
+            bucket=b,
+            avg_count=round(statistics.mean(values), 2),
             games_sampled=len(values),
         ))
     return points

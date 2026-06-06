@@ -2,16 +2,19 @@ import Layout from '@theme/Layout';
 import React, { useEffect, useState } from 'react';
 import StatsSidebar from '../../components/statistics/StatsSidebar';
 import StatsHero from '../../components/statistics/StatsHero';
+import BuildingsSection from '../../components/statistics/sections/BuildingsSection';
 import CountryStatsSection from '../../components/statistics/sections/CountryStatsSection';
 import EconomicStatsSection from '../../components/statistics/sections/EconomicStatsSection';
 import GlobalStatsSection from '../../components/statistics/sections/GlobalStatsSection';
 import ProvinceStatsSection from '../../components/statistics/sections/ProvinceStatsSection';
 import {
+  deserializeBuildings,
   deserializeCountries,
   deserializeProvinces,
   deserializeTimeSeries,
 } from '../../components/statistics/deserialize';
 import type {
+  BuildingAggregate,
   CountryAggregate,
   GlobalAggregate,
   MetaInfo,
@@ -26,6 +29,7 @@ interface StatsData {
   provinces: ProvinceAggregate[];
   meta: MetaInfo;
   timeseries: TimeSeriesOutput;
+  buildings: BuildingAggregate[];
 }
 
 const STATS_BASE_URL = process.env.NODE_ENV === 'development'
@@ -33,12 +37,13 @@ const STATS_BASE_URL = process.env.NODE_ENV === 'development'
   : 'https://r2.conlyse.zdox.dev/stats';
 
 async function fetchStats(): Promise<StatsData> {
-  const [global, countriesRaw, provincesRaw, meta, timeseriesRaw] = await Promise.all([
+  const [global, countriesRaw, provincesRaw, meta, timeseriesRaw, buildingsRaw] = await Promise.all([
     fetch(`${STATS_BASE_URL}/global.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/countries.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/provinces.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/meta.json`).then((r) => r.json()),
     fetch(`${STATS_BASE_URL}/timeseries.json`).then((r) => r.json()),
+    fetch(`${STATS_BASE_URL}/buildings.json`).then((r) => r.json()),
   ]);
   return {
     global,
@@ -46,6 +51,7 @@ async function fetchStats(): Promise<StatsData> {
     provinces: deserializeProvinces(provincesRaw),
     meta,
     timeseries: deserializeTimeSeries(timeseriesRaw),
+    buildings: deserializeBuildings(buildingsRaw),
   };
 }
 
@@ -91,6 +97,7 @@ export default function StatisticsPage() {
               <CountryStatsSection data={data.countries} timeseries={data.timeseries} />
               <EconomicStatsSection global={data.global} countries={data.countries} timeseries={data.timeseries} />
               <ProvinceStatsSection data={data.provinces} />
+              <BuildingsSection data={data.buildings} countries={data.countries} timeseries={data.timeseries} />
             </>
           )}
         </main>

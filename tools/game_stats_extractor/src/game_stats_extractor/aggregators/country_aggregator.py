@@ -81,6 +81,17 @@ def _aggregate_country(
         for rtype in sorted(all_res)
     }
 
+    all_bld = {uid for _, p in entries for uid in p.final_building_counts}
+    avg_final_building_counts = {
+        uid: _mean([p.final_building_counts.get(uid, 0.0) for _, p in entries])
+        for uid in sorted(all_bld)
+    }
+    all_bld_lvl = {uid for _, p in entries for uid in p.final_building_levels}
+    avg_final_building_levels = {
+        uid: _mean([p.final_building_levels[uid] for _, p in entries if uid in p.final_building_levels])
+        for uid in sorted(all_bld_lvl)
+    }
+
     return CountryAggregate(
         nation_name=nation_name,
         games_played=games_played,
@@ -102,4 +113,6 @@ def _aggregate_country(
         avg_right_of_ways_signed=_mean(right_of_ways),
         avg_total_production=avg_total_production,
         avg_production_rate=avg_production_rate,
+        avg_final_building_counts=avg_final_building_counts,
+        avg_final_building_levels=avg_final_building_levels,
     )

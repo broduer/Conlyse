@@ -6,6 +6,22 @@ export interface ColumnarData {
   rows: unknown[][];
 }
 
+export interface BuildingTimeSeriesPoint {
+  bucket: number;
+  avg_count: number;
+  games_sampled: number;
+}
+
+export interface BuildingAggregate {
+  upgrade_identifier: string;
+  games_appeared: number;
+  avg_per_game: number;
+  avg_per_winner: number;
+  avg_per_loser: number;
+  avg_level: number;
+  avg_per_tier: Record<string, number>;
+}
+
 export interface ProductionTimeSeriesPoint {
   bucket: number;
   avg_production: number;
@@ -59,6 +75,8 @@ export interface CountryAggregate {
   avg_right_of_ways_signed: number;
   avg_total_production?: Record<string, number>;
   avg_production_rate?: Record<string, number>;
+  avg_final_building_counts?: Record<string, number>;
+  avg_final_building_levels?: Record<string, number>;
 }
 
 export interface ProvinceAggregate {
@@ -74,6 +92,7 @@ export interface ProvinceAggregate {
   avg_resource_production: number;
   avg_money_production: number;
   avg_morale: number;
+  typical_buildings?: Record<string, number>;
 }
 
 export interface TimeSeriesPoint {
@@ -90,6 +109,7 @@ export interface CountryTimeSeries {
   game_days: TimeSeriesPoint[];
   production_pct_game?: Record<string, ProductionTimeSeriesPoint[]>;
   production_game_days?: Record<string, ProductionTimeSeriesPoint[]>;
+  building_pct_game?: Record<string, BuildingTimeSeriesPoint[]>;
 }
 
 export interface PlayerActivityPoint {
