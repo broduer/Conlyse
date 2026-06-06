@@ -32,6 +32,22 @@ def _aggregate_country(
     wins = sum(
         1 for game, player in entries if player.player_id in game.winner_ids
     )
+    solo_wins = sum(
+        1 for game, player in entries
+        if player.player_id in game.winner_ids and game.victory_type == "solo"
+    )
+    coalition_wins = sum(
+        1 for game, player in entries
+        if player.player_id in game.winner_ids and game.victory_type == "coalition"
+    )
+
+    coalition_win_rate = coalition_wins / wins if wins > 0 else 0.0
+
+    winning_coalition_sizes = [
+        len(game.winner_ids)
+        for game, player in entries
+        if player.player_id in game.winner_ids and game.victory_type == "coalition"
+    ]
 
     final_vps = [p.final_vp for _, p in entries]
     final_provs = [p.final_province_count for _, p in entries]
@@ -92,6 +108,12 @@ def _aggregate_country(
         for uid in sorted(all_bld_lvl)
     }
 
+    morale_vals = [p.avg_national_morale for _, p in entries if p.avg_national_morale > 0]
+    avg_national_morale = _mean(morale_vals)
+
+    elim_pcts = [p.elimination_game_pct for _, p in entries if p.elimination_game_pct is not None]
+    avg_elimination_pct: float | None = _mean(elim_pcts) if elim_pcts else None
+
     return CountryAggregate(
         nation_name=nation_name,
         games_played=games_played,
@@ -115,4 +137,10 @@ def _aggregate_country(
         avg_production_rate=avg_production_rate,
         avg_final_building_counts=avg_final_building_counts,
         avg_final_building_levels=avg_final_building_levels,
+        avg_national_morale=avg_national_morale,
+        solo_wins=solo_wins,
+        coalition_wins=coalition_wins,
+        coalition_win_rate=coalition_win_rate,
+        avg_winning_coalition_size=_mean(winning_coalition_sizes),
+        avg_elimination_pct=avg_elimination_pct,
     )

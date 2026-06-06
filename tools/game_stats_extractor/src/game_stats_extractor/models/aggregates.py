@@ -55,6 +55,10 @@ class GlobalAggregate(BaseModel):
     avg_alliances_per_game: float = 0.0
     avg_right_of_ways_per_game: float = 0.0
     avg_game_total_production: dict[str, float] = {}
+    coalition_size_distribution: dict[str, int] = {}
+    avg_coalition_size: float = 0.0
+    top_coalition_pairs: list[list[str | int]] = []
+    elimination_timing_distribution: dict[str, int] = {}
 
 
 class CountryAggregate(BaseModel):
@@ -81,6 +85,12 @@ class CountryAggregate(BaseModel):
     avg_production_rate: dict[str, float] = {}
     avg_final_building_counts: dict[str, float] = {}
     avg_final_building_levels: dict[str, float] = {}
+    avg_national_morale: float = 0.0
+    solo_wins: int = 0
+    coalition_wins: int = 0
+    coalition_win_rate: float = 0.0
+    avg_winning_coalition_size: float = 0.0
+    avg_elimination_pct: Optional[float] = None
 
 
 class ProvinceAggregate(BaseModel):
@@ -108,6 +118,12 @@ class TimeSeriesPoint(BaseModel):
     games_sampled: int
 
 
+class MoraleTimeSeriesPoint(BaseModel):
+    bucket: int
+    avg_morale: float
+    games_sampled: int
+
+
 class CountryTimeSeries(BaseModel):
     nation_name: str
     games_played: int
@@ -116,6 +132,8 @@ class CountryTimeSeries(BaseModel):
     production_pct_game: dict[str, list[ProductionTimeSeriesPoint]] = {}
     production_game_days: dict[str, list[ProductionTimeSeriesPoint]] = {}
     building_pct_game: dict[str, list[BuildingTimeSeriesPoint]] = {}
+    morale_pct_game: list[MoraleTimeSeriesPoint] = []
+    morale_game_days: list[MoraleTimeSeriesPoint] = []
 
 
 class PlayerActivityPoint(BaseModel):

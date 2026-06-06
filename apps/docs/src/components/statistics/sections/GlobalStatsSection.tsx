@@ -1,8 +1,11 @@
 import React from 'react';
+import CoalitionSizeDistributionChart from '../charts/CoalitionSizeDistributionChart';
 import DiplomacyGlobalChart from '../charts/DiplomacyGlobalChart';
+import EliminationTimingDistributionChart from '../charts/EliminationTimingDistributionChart';
 import GameDurationChart from '../charts/GameDurationChart';
 import PlayerActivityTimeSeriesChart from '../charts/PlayerActivityTimeSeriesChart';
 import PlayerDropoutChart from '../charts/PlayerDropoutChart';
+import TopCoalitionPairsChart from '../charts/TopCoalitionPairsChart';
 import VictoryTypeChart from '../charts/VictoryTypeChart';
 import type { GlobalAggregate, TimeSeriesOutput } from '../types';
 import styles from './Section.module.css';
@@ -54,6 +57,21 @@ export default function GlobalStatsSection({ data, timeseries }: Props) {
           <h3 className={styles.chartTitle}>Player Activity Over Time</h3>
           <p className={styles.chartSubtitle}>Avg alive players and active humans at each point in a typical game · use buttons to switch time axis</p>
           <PlayerActivityTimeSeriesChart data={timeseries} />
+        </div>
+        <div id="chart-global-coalition-size" className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Coalition Size Distribution</h3>
+          <p className={styles.chartSubtitle}>How many players shared the win — solo vs 2-, 3-, or more-player coalitions</p>
+          <CoalitionSizeDistributionChart data={data} />
+        </div>
+        <div id="chart-global-coalition-pairs" className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Most Common Coalition Partners (Top 15)</h3>
+          <p className={styles.chartSubtitle}>Nation pairs that won the most games together as coalition partners</p>
+          <TopCoalitionPairsChart data={data} topN={15} />
+        </div>
+        <div id="chart-global-elim-timing" className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>When Do Players Get Eliminated?</h3>
+          <p className={styles.chartSubtitle}>Distribution of elimination events by game progress (human players only)</p>
+          <EliminationTimingDistributionChart data={data} />
         </div>
       </div>
     </section>
