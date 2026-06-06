@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .models.aggregates import CountryAggregate, GlobalAggregate, MetaInfo, ProvinceAggregate, TimeSeriesOutput
+from .models.aggregates import BuildingAggregate, CountryAggregate, GlobalAggregate, MetaInfo, ProvinceAggregate, TimeSeriesOutput
 from .models.intermediate import GameData
 
 
@@ -29,6 +29,7 @@ def _provinces_columnar(provinces: list[ProvinceAggregate]) -> dict:
         "games_appeared", "avg_ownership_changes", "contest_frequency",
         "win_correlation", "resource_production_type",
         "avg_resource_production", "avg_money_production", "avg_morale",
+        "typical_buildings",
     ]
     rows = [
         [
@@ -36,6 +37,7 @@ def _provinces_columnar(provinces: list[ProvinceAggregate]) -> dict:
             p.games_appeared, _r(p.avg_ownership_changes), _rp(p.contest_frequency),
             _rp(p.win_correlation), p.resource_production_type,
             _r(p.avg_resource_production), _r(p.avg_money_production), _r(p.avg_morale),
+            {k: _rp(v) for k, v in p.typical_buildings.items()},
         ]
         for p in provinces
     ]
@@ -51,6 +53,7 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
         "avg_wars_declared", "avg_peace_treaties_signed",
         "avg_alliances_formed", "avg_right_of_ways_signed",
         "avg_total_production", "avg_production_rate",
+        "avg_final_building_counts", "avg_final_building_levels",
     ]
     rows = [
         [
@@ -63,6 +66,8 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
             _r(c.avg_alliances_formed), _r(c.avg_right_of_ways_signed),
             {k: _r(v) for k, v in c.avg_total_production.items()},
             {k: _r(v) for k, v in c.avg_production_rate.items()},
+            {k: _r(v) for k, v in c.avg_final_building_counts.items()},
+            {k: _r(v) for k, v in c.avg_final_building_levels.items()},
         ]
         for c in countries
     ]
@@ -98,6 +103,14 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
                 "n":   [by_b[d].games_sampled if d in by_b else None for d in range(n_days)],
             }
 
+        bld_pct: dict = {}
+        for uid, points in c.building_pct_game.items():
+            by_b = {p.bucket: p for p in points}
+            bld_pct[uid] = {
+                "avg": [_r(by_b[b].avg_count) if b in by_b else None for b in ts.pct_buckets],
+                "n":   [by_b[b].games_sampled if b in by_b else None for b in ts.pct_buckets],
+            }
+
         countries.append({
             "nation_name": c.nation_name,
             "games_played": c.games_played,
@@ -109,6 +122,7 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
             "day_vp_avg": day_vp_avg,
             "prod_pct": prod_pct,
             "prod_day": prod_day,
+            "bld_pct": bld_pct,
         })
     return {
         "pct_buckets": ts.pct_buckets,
@@ -128,12 +142,29 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
     }
 
 
+def _buildings_columnar(buildings: list[BuildingAggregate]) -> dict:
+    cols = [
+        "upgrade_identifier", "games_appeared",
+        "avg_per_game", "avg_per_winner", "avg_per_loser", "avg_level", "avg_per_tier",
+    ]
+    rows = [
+        [
+            b.upgrade_identifier, b.games_appeared,
+            _r(b.avg_per_game), _r(b.avg_per_winner), _r(b.avg_per_loser), _r(b.avg_level),
+            {str(tier): _r(avg) for tier, avg in sorted(b.avg_per_tier.items())},
+        ]
+        for b in buildings
+    ]
+    return {"columns": cols, "rows": rows}
+
+
 def write_output(
     output_dir: Path,
     global_agg: GlobalAggregate,
     country_aggs: list[CountryAggregate],
     province_aggs: list[ProvinceAggregate],
     timeseries_agg: TimeSeriesOutput,
+    building_aggs: list[BuildingAggregate],
     games: list[GameData],
     replay_dir: Path,
     failed_replays: int,
@@ -154,6 +185,7 @@ def write_output(
     _write_compact(output_dir / "provinces.json",  _provinces_columnar(province_aggs))
     _write_compact(output_dir / "countries.json",  _countries_columnar(country_aggs))
     _write_compact(output_dir / "timeseries.json", _timeseries_compact(timeseries_agg))
+    _write_compact(output_dir / "buildings.json",  _buildings_columnar(building_aggs))
 
     # Small files: readable indented JSON
     _write_json(output_dir / "global.json", global_agg.model_dump())

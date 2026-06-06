@@ -1,0 +1,1041 @@
+{
+  "id": null,
+  "uid": "conlyse-services",
+  "title": "Conlyse Services",
+  "description": "Logs and metrics for Server Observer (Rust) and Server Converter (Python)",
+  "tags": ["conlyse", "logs", "metrics"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active Games",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(active_games)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 50}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Games Started (24h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(games_started_total[24h]))",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 3, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "blue"},
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Games Completed (24h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(games_completed_total[24h]))",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 6, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Games Failed (24h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(games_failed_total[24h]))",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 9, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Converter Error Rate (1m)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(server_converter_errors_total[1m]))",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 12, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.01},
+              {"color": "red", "value": 0.1}
+            ]
+          },
+          "unit": "reqps",
+          "decimals": 3
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Poison Messages (24h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(server_converter_poison_messages_total[24h])",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 15, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Redis Consumer Lag",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "server_converter_redis_consumer_lag",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 18, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 100}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Hot Storage Replays",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "server_converter_hot_storage_replays",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 21, "y": 0, "w": 3, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "blue"},
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Server Observer",
+      "collapsed": false,
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 1},
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Active Games by Scenario",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "active_games",
+          "legendFormat": "Scenario {{scenario_id}}"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 5, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Game Lifecycle Rates",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(games_started_total[5m]))",
+          "legendFormat": "started"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(games_completed_total[5m]))",
+          "legendFormat": "completed"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(games_failed_total[5m]))",
+          "legendFormat": "failed"
+        }
+      ],
+      "gridPos": {"x": 12, "y": 5, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "failed"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "completed"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "started"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Update Retry Rate by Error Type",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(game_update_retries_total[5m])",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 13, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "In-flight Updates & Missed Intervals",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "inflight_game_updates",
+          "legendFormat": "in-flight"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(missed_update_intervals_total[5m])",
+          "legendFormat": "missed intervals/s"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 13, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5}
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Scheduled Update Latency p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(scheduled_update_latency_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(scheduled_update_latency_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"x": 16, "y": 13, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "requests/s"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 21, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "HTTP Request Latency p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 21, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 17,
+      "type": "logs",
+      "title": "Observer — Errors & Warnings",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"server-observer\", level=~\"ERROR|WARN\"}",
+          "maxLines": 200
+        }
+      ],
+      "gridPos": {"x": 16, "y": 21, "w": 8, "h": 8},
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "showLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Down Game Servers",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "server_observer_down_server_count",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 0, "y": 29, "w": 4, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 1}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Redis Publish Failures (24h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(server_observer_redis_publish_failures_total[24h])",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": {"x": 4, "y": 29, "w": 4, "h": 4},
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Down Server Count & Redis Publish Failures",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "server_observer_down_server_count",
+          "legendFormat": "down servers"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(server_observer_redis_publish_failures_total[5m])",
+          "legendFormat": "redis failures/s"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 29, "w": 16, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20},
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "down servers"},
+            "properties": [
+              {"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}},
+              {"id": "custom.fillOpacity", "value": 30}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "redis failures/s"},
+            "properties": [
+              {"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}},
+              {"id": "unit", "value": "reqps"}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 18,
+      "type": "row",
+      "title": "Server Converter",
+      "collapsed": false,
+      "gridPos": {"x": 0, "y": 37, "w": 24, "h": 1},
+      "panels": []
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Message Processing Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(server_converter_messages_processed_total[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 38, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "error"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Message Processing Duration p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(server_converter_messages_processing_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(server_converter_messages_processing_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 38, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Replay Operations Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(server_converter_replay_operations_total[5m])",
+          "legendFormat": "{{operation}} / {{status}}"
+        }
+      ],
+      "gridPos": {"x": 16, "y": 46, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "Replay Creation Duration p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(server_converter_replay_creation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(server_converter_replay_creation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 46, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Replay Append Duration p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(server_converter_replay_append_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(server_converter_replay_append_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 46, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Converter Error Rate by Type",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(server_converter_errors_total[5m])",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 54, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Database Operations Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(server_converter_database_operations_total[5m])",
+          "legendFormat": "{{operation}} / {{status}}"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 54, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Database Operation Duration p50 / p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, rate(server_converter_database_operation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50 {{operation}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, rate(server_converter_database_operation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{operation}}"
+        }
+      ],
+      "gridPos": {"x": 16, "y": 54, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 5},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Redis Consumer Lag",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "server_converter_redis_consumer_lag",
+          "legendFormat": "pending messages"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 62, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20},
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 100}
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Cold Storage Upload Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(server_converter_cold_storage_uploads_total[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 62, "w": 8, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "error"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 27,
+      "type": "logs",
+      "title": "Converter — Errors & Warnings",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"server-converter\", level=~\"ERROR|WARNING\"}",
+          "maxLines": 200
+        }
+      ],
+      "gridPos": {"x": 16, "y": 62, "w": 8, "h": 8},
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "showLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 28,
+      "type": "row",
+      "title": "Full Log Streams",
+      "collapsed": false,
+      "gridPos": {"x": 0, "y": 70, "w": 24, "h": 1},
+      "panels": []
+    },
+    {
+      "id": 29,
+      "type": "logs",
+      "title": "Server Observer — All Logs",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"server-observer\"}",
+          "maxLines": 500
+        }
+      ],
+      "gridPos": {"x": 0, "y": 71, "w": 12, "h": 12},
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
+    },
+    {
+      "id": 30,
+      "type": "logs",
+      "title": "Server Converter — All Logs",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"server-converter\"}",
+          "maxLines": 500
+        }
+      ],
+      "gridPos": {"x": 12, "y": 71, "w": 12, "h": 12},
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
+    }
+  ]
+}

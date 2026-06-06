@@ -23,10 +23,53 @@ logger = logging.getLogger(__name__)
 
 _UNOWNED = 0
 
+# One-time actions and game-managed upgrades that should not appear in building statistics.
+# Programmatic rule: only upgrades with non-empty costs are player-buildable; but these actions
+# have costs yet produce no persistent building that we want to count.
+_NON_BUILDING_NAMES = frozenset({"Annex City", "Relocate Headquarters", "Nationalize"})
+
 
 def _is_land_province(province) -> bool:
     """True for LandProvince objects (which have owner_id / morale)."""
     return hasattr(province, "owner_id") and hasattr(province, "morale")
+
+
+def _upgrade_identifier(upgrade_id: int, ut_map: dict) -> str:
+    ut = ut_map.get(upgrade_id)
+    if ut is None:
+        return str(upgrade_id)
+    return ut.upgrade_identifier or ut.upgrade_name or str(upgrade_id)
+
+
+def _is_player_building(upgrade_id: int, ut_map: dict) -> bool:
+    """True only for player-constructable persistent buildings (have resource costs, not one-time actions)."""
+    ut = ut_map.get(upgrade_id)
+    if ut is None:
+        return False
+    if ut.upgrade_name in _NON_BUILDING_NAMES:
+        return False
+    return bool(ut.costs)
+
+
+def _is_built(upgrade, ut_map: dict) -> bool:
+    """A building is 'built' when its condition meets or exceeds build_condition."""
+    cond = upgrade.condition
+    if cond is None or cond <= 0:
+        return False
+    ut = ut_map.get(upgrade.id)
+    if ut is None:
+        return True
+    return cond >= ut.build_condition
+
+
+def _province_built_buildings(province, ut_map: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    upgrades = getattr(province, "upgrades", None) or {}
+    for upgrade in upgrades.values():
+        if _is_player_building(upgrade.id, ut_map) and _is_built(upgrade, ut_map):
+            uid = _upgrade_identifier(upgrade.id, ut_map)
+            counts[uid] = counts.get(uid, 0) + 1
+    return counts
 
 
 def _pct_bucket(elapsed: float, total: float) -> int:
@@ -120,6 +163,9 @@ class ReplayExtractor(BaseExtractor):
 
         map_obj = gs.states.map_state.map
         map_id: str = getattr(map_obj, "map_id", "unknown")
+
+        # Upgrade type registry: id → UpgradeType (name + build_condition metadata)
+        ut_map: dict = dict(gs.states.mod_state.upgrades)
 
         initial_land = {
             pid: p
@@ -230,6 +276,21 @@ class ReplayExtractor(BaseExtractor):
         prod_day_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         prev_time = start_time
 
+        # Building accumulators — seeded from initial state (one-time scan of ~3400 provinces)
+        current_province_buildings: dict[int, dict[str, int]] = {
+            pid: _province_built_buildings(p, ut_map) for pid, p in initial_land.items()
+        }
+        current_player_buildings: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        for pid, bld in current_province_buildings.items():
+            owner = initial_owners.get(pid, _UNOWNED)
+            if owner > _UNOWNED:
+                for uid, cnt in bld.items():
+                    current_player_buildings[owner][uid] += cnt
+        bld_pct_sum: dict[int, dict[str, dict[int, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+        bld_pct_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        bld_level_sum: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        bld_level_n:   dict[int, dict[str, int]]   = defaultdict(lambda: defaultdict(int))
+
         # Diplomacy counters — keyed by 1-indexed player id; populated by ForeignAffairsChanged events
         dp_wars: dict[int, int] = defaultdict(int)
         dp_peace: dict[int, int] = defaultdict(int)
@@ -262,7 +323,7 @@ class ReplayExtractor(BaseExtractor):
         }
 
         # ---- Register hooks — only changed provinces/relations fire events ----
-        replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production"])
+        replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production", "upgrades_set"])
         replay.register_player_trigger(["victory_points", "defeated", "computer_player"])
         replay.register_foreign_affairs_trigger()
 
@@ -294,6 +355,17 @@ class ReplayExtractor(BaseExtractor):
                             )
                         if new_owner is not None and new_owner > _UNOWNED:
                             current_player_production[new_owner][rtype] += amount
+                    # Transfer buildings between players
+                    prov_bld = current_province_buildings.get(pid, {})
+                    if prov_bld:
+                        if old_owner is not None and old_owner > _UNOWNED:
+                            for uid, cnt in prov_bld.items():
+                                current_player_buildings[old_owner][uid] = max(
+                                    0, current_player_buildings[old_owner].get(uid, 0) - cnt
+                                )
+                        if new_owner is not None and new_owner > _UNOWNED:
+                            for uid, cnt in prov_bld.items():
+                                current_player_buildings[new_owner][uid] += cnt
 
                 if "money_production" in attrs:
                     _, new_mprod = attrs["money_production"]
@@ -328,6 +400,41 @@ class ReplayExtractor(BaseExtractor):
                         else:
                             prov_morale_min[pid] = morale
                             prov_morale_max[pid] = morale
+
+                if "upgrades_set" in attrs:
+                    old_set, new_set = attrs["upgrades_set"]
+                    owner = current_owners.get(pid, _UNOWNED)
+                    old_by_id = {u.id: u for u in (old_set or [])}
+                    new_by_id = {u.id: u for u in (new_set or [])}
+                    for upgrade_id, new_u in new_by_id.items():
+                        if not _is_player_building(upgrade_id, ut_map):
+                            continue
+                        old_u = old_by_id.get(upgrade_id)
+                        was_built = _is_built(old_u, ut_map) if old_u is not None else False
+                        now_built = _is_built(new_u, ut_map)
+                        if not was_built and now_built:
+                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            prov_bld = current_province_buildings.setdefault(pid, {})
+                            prov_bld[uid] = prov_bld.get(uid, 0) + 1
+                            if owner > _UNOWNED:
+                                current_player_buildings[owner][uid] += 1
+                        elif was_built and not now_built:
+                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            prov_bld = current_province_buildings.setdefault(pid, {})
+                            prov_bld[uid] = max(0, prov_bld.get(uid, 0) - 1)
+                            if owner > _UNOWNED:
+                                current_player_buildings[owner][uid] = max(
+                                    0, current_player_buildings[owner].get(uid, 0) - 1
+                                )
+                    for upgrade_id, old_u in old_by_id.items():
+                        if upgrade_id not in new_by_id and _is_player_building(upgrade_id, ut_map) and _is_built(old_u, ut_map):
+                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            prov_bld = current_province_buildings.setdefault(pid, {})
+                            prov_bld[uid] = max(0, prov_bld.get(uid, 0) - 1)
+                            if owner > _UNOWNED:
+                                current_player_buildings[owner][uid] = max(
+                                    0, current_player_buildings[owner].get(uid, 0) - 1
+                                )
 
             # Diplomacy — one event per tick when neighbor_relations changed;
             # extractor diffs old vs new to classify per-(sender, receiver) transitions.
@@ -463,6 +570,13 @@ class ReplayExtractor(BaseExtractor):
             day_ai_sum[db] += n_ai
             day_ai_n[db] += 1
 
+            # Building time-series snapshot (O(players × building_types) — no province scan)
+            for player_id, uid_counts in current_player_buildings.items():
+                for uid, cnt in uid_counts.items():
+                    if cnt > 0:
+                        bld_pct_sum[player_id][uid][pb] += cnt
+                        bld_pct_n[player_id][uid][pb] += 1
+
         # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
         if gs is None:
@@ -473,6 +587,22 @@ class ReplayExtractor(BaseExtractor):
             for pid, p in gs.states.map_state.map.provinces.items()
             if _is_land_province(p)
         }
+
+        # ---- Building level scan (once on final_land) ----
+        bld_tier_count: dict[int, dict[str, dict[int, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        for _pid, _p in final_land.items():
+            _owner = current_owners.get(_pid, _UNOWNED)
+            if _owner <= _UNOWNED:
+                continue
+            for _upgrade in (getattr(_p, "upgrades", None) or {}).values():
+                if not _is_player_building(_upgrade.id, ut_map) or not _is_built(_upgrade, ut_map):
+                    continue
+                _uid = _upgrade_identifier(_upgrade.id, ut_map)
+                _ut = ut_map.get(_upgrade.id)
+                if _ut is not None:
+                    bld_level_sum[_owner][_uid] += _ut.tier
+                    bld_level_n[_owner][_uid] += 1
+                    bld_tier_count[_owner][_uid][_ut.tier] += 1
 
         # ---- Players ----
         players_map = gs.states.player_state.players
@@ -528,6 +658,20 @@ class ReplayExtractor(BaseExtractor):
                     rtype: _finalize_float_buckets(prod_day_sum[player_id][rtype], prod_day_n[player_id][rtype])
                     for rtype in prod_day_sum.get(player_id, {})
                 },
+                final_building_counts=dict(current_player_buildings.get(player_id, {})),
+                final_building_levels={
+                    uid: bld_level_sum[player_id][uid] / bld_level_n[player_id][uid]
+                    for uid in bld_level_sum.get(player_id, {})
+                    if bld_level_n[player_id][uid] > 0
+                },
+                final_building_tier_counts={
+                    uid: dict(tier_counts)
+                    for uid, tier_counts in bld_tier_count.get(player_id, {}).items()
+                },
+                building_pct_buckets={
+                    uid: _finalize_float_buckets(bld_pct_sum[player_id][uid], bld_pct_n[player_id][uid])
+                    for uid in bld_pct_sum.get(player_id, {})
+                },
             ))
 
         # ---- Victory detection ----
@@ -552,6 +696,7 @@ class ReplayExtractor(BaseExtractor):
                 avg_morale=prov_morale_sum.get(pid, 0.0) / n,
                 min_morale=prov_morale_min.get(pid, 0.0),
                 max_morale=prov_morale_max.get(pid, 0.0),
+                final_upgrade_counts=dict(current_province_buildings.get(pid, {})),
             ))
 
         game_total_prod: dict[str, float] = defaultdict(float)
