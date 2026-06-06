@@ -73,6 +73,38 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             for rtype in sorted(all_res)
         }
 
+        # Coalition size distribution (1 = solo, N = coalition of N players)
+        coalition_size_dist: dict[str, int] = {}
+        coalition_sizes: list[int] = []
+        for g in games:
+            size = len(g.winner_ids) if g.winner_ids else 1
+            coalition_size_dist[str(size)] = coalition_size_dist.get(str(size), 0) + 1
+            coalition_sizes.append(size)
+
+        # Top nation-pair co-occurrences in winning coalitions
+        from collections import defaultdict as _dd, Counter as _Counter
+        pair_counts: dict[tuple[str, str], int] = _dd(int)
+        for g in games:
+            if g.victory_type != "coalition" or len(g.winner_ids) < 2:
+                continue
+            id_to_nation = {p.player_id: p.nation_name for p in g.players}
+            winner_nations = [id_to_nation[wid] for wid in g.winner_ids if wid in id_to_nation]
+            for i in range(len(winner_nations)):
+                for j in range(i + 1, len(winner_nations)):
+                    a, b = sorted([winner_nations[i], winner_nations[j]])
+                    pair_counts[(a, b)] += 1
+        top_pairs = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+        top_coalition_pairs = [[a, b, cnt] for (a, b), cnt in top_pairs]
+
+        # Elimination timing distribution — 10% game buckets, human players only
+        elim_dist: dict[str, int] = {}
+        for g in games:
+            for p in g.players:
+                if p.is_ai or not p.is_defeated or p.elimination_game_pct is None:
+                    continue
+                bucket = str(int(p.elimination_game_pct // 10) * 10)
+                elim_dist[bucket] = elim_dist.get(bucket, 0) + 1
+
         return GlobalAggregate(
             total_games=len(games),
             avg_duration_hours=statistics.mean(durations),
@@ -91,6 +123,10 @@ class GlobalAggregator(BaseAggregator[GlobalAggregate]):
             avg_alliances_per_game=_mean([g.total_alliances_formed for g in games]),
             avg_right_of_ways_per_game=_mean([g.total_right_of_ways for g in games]),
             avg_game_total_production=avg_game_total_production,
+            coalition_size_distribution=coalition_size_dist,
+            avg_coalition_size=statistics.mean(coalition_sizes) if coalition_sizes else 0.0,
+            top_coalition_pairs=top_coalition_pairs,
+            elimination_timing_distribution=elim_dist,
         )
 
 

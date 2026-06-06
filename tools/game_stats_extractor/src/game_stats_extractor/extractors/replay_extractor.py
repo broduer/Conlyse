@@ -322,6 +322,29 @@ class ReplayExtractor(BaseExtractor):
             if pid > _UNOWNED
         }
 
+        # National morale — running province-level average per player.
+        # Maintained incrementally: current_province_morale tracks each province's morale;
+        # player_morale_total[player_id] = sum of morale of all owned provinces.
+        # Updated on ProvinceChanged morale/owner events; avg = total / province_count.
+        current_province_morale: dict[int, float] = {
+            pid: float(p.morale) for pid, p in initial_land.items()
+        }
+        player_morale_total: dict[int, float] = defaultdict(float)
+        for pid, morale in current_province_morale.items():
+            owner = initial_owners[pid]
+            if owner > _UNOWNED:
+                player_morale_total[owner] += morale
+        player_morale_sum: dict[int, float] = defaultdict(float)
+        player_morale_n: dict[int, int] = defaultdict(int)
+        morale_pct_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        morale_pct_n:   dict[int, dict[int, int]]   = defaultdict(lambda: defaultdict(int))
+        morale_day_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        morale_day_n:   dict[int, dict[int, int]]   = defaultdict(lambda: defaultdict(int))
+
+        # Elimination timestamps — populated when defeated flips True
+        player_elimination_pct: dict[int, float] = {}
+        player_elimination_day: dict[int, int] = {}
+
         # ---- Register hooks — only changed provinces/relations fire events ----
         replay.register_province_trigger(["owner_id", "morale", "resource_production", "money_production", "upgrades_set"])
         replay.register_player_trigger(["victory_points", "defeated", "computer_player"])
@@ -342,9 +365,11 @@ class ReplayExtractor(BaseExtractor):
                     if old_owner is not None and old_owner > _UNOWNED:
                         current_player_counts[old_owner] = max(0, current_player_counts[old_owner] - 1)
                         player_losses[old_owner] += 1
+                        player_morale_total[old_owner] = max(0.0, player_morale_total[old_owner] - current_province_morale.get(pid, 0.0))
                     if new_owner is not None and new_owner > _UNOWNED:
                         current_player_counts[new_owner] += 1
                         player_captures[new_owner] += 1
+                        player_morale_total[new_owner] += current_province_morale.get(pid, 0.0)
                     # Transfer production sums between players
                     for rtype, amount in province_production.get(pid, {}).items():
                         if amount <= 0:
@@ -392,6 +417,11 @@ class ReplayExtractor(BaseExtractor):
                     _, new_morale = attrs["morale"]
                     if new_morale is not None:
                         morale = float(new_morale)
+                        old_prov_morale = current_province_morale.get(pid, 0.0)
+                        current_province_morale[pid] = morale
+                        owner = current_owners.get(pid, _UNOWNED)
+                        if owner > _UNOWNED:
+                            player_morale_total[owner] += morale - old_prov_morale
                         prov_morale_sum[pid] = prov_morale_sum.get(pid, 0.0) + morale
                         prov_morale_n[pid] = prov_morale_n.get(pid, 0) + 1
                         if pid in prov_morale_min:
@@ -486,7 +516,17 @@ class ReplayExtractor(BaseExtractor):
                 if "defeated" in player_event.attributes:
                     _, new_defeated = player_event.attributes["defeated"]
                     if new_defeated is not None:
+                        was_defeated = current_player_defeated.get(pid, False)
                         current_player_defeated[pid] = bool(new_defeated)
+                        if new_defeated and not was_defeated and pid not in player_elimination_pct:
+                            et = replay.current_time
+                            if et is not None:
+                                elapsed = (et - start_time).total_seconds()
+                                player_elimination_pct[pid] = (
+                                    (elapsed / total_duration_seconds) * 100.0
+                                    if total_duration_seconds > 0 else 0.0
+                                )
+                                player_elimination_day[pid] = _day_bucket(elapsed, total_duration_seconds, game_days)
                 if "computer_player" in player_event.attributes:
                     _, new_cp = player_event.attributes["computer_player"]
                     if new_cp is not None:
@@ -576,6 +616,20 @@ class ReplayExtractor(BaseExtractor):
                     if cnt > 0:
                         bld_pct_sum[player_id][uid][pb] += cnt
                         bld_pct_n[player_id][uid][pb] += 1
+
+            # National morale snapshot — average province morale per player
+            for player_id, total_morale in player_morale_total.items():
+                count = current_player_counts.get(player_id, 0)
+                if count <= 0 or current_player_defeated.get(player_id, False):
+                    continue
+                avg_morale = total_morale / count
+                if avg_morale > 0:
+                    player_morale_sum[player_id] += avg_morale
+                    player_morale_n[player_id] += 1
+                    morale_pct_sum[player_id][pb] += avg_morale
+                    morale_pct_n[player_id][pb] += 1
+                    morale_day_sum[player_id][db] += avg_morale
+                    morale_day_n[player_id][db] += 1
 
         # ---- Final state — game_state accessed once, only for production values ----
         gs = replay.game_state
@@ -672,6 +726,14 @@ class ReplayExtractor(BaseExtractor):
                     uid: _finalize_float_buckets(bld_pct_sum[player_id][uid], bld_pct_n[player_id][uid])
                     for uid in bld_pct_sum.get(player_id, {})
                 },
+                elimination_game_pct=player_elimination_pct.get(player_id),
+                elimination_game_day=player_elimination_day.get(player_id),
+                avg_national_morale=(
+                    player_morale_sum[player_id] / player_morale_n[player_id]
+                    if player_morale_n.get(player_id, 0) > 0 else 0.0
+                ),
+                morale_pct_buckets=_finalize_float_buckets(morale_pct_sum[player_id], morale_pct_n[player_id]),
+                morale_day_buckets=_finalize_float_buckets(morale_day_sum[player_id], morale_day_n[player_id]),
             ))
 
         # ---- Victory detection ----

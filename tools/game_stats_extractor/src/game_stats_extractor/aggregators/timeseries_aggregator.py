@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from .base import BaseAggregator
-from ..models.aggregates import BuildingTimeSeriesPoint, CountryTimeSeries, PlayerActivityPoint, ProductionTimeSeriesPoint, TimeSeriesOutput, TimeSeriesPoint
+from ..models.aggregates import BuildingTimeSeriesPoint, CountryTimeSeries, MoraleTimeSeriesPoint, PlayerActivityPoint, ProductionTimeSeriesPoint, TimeSeriesOutput, TimeSeriesPoint
 from ..models.intermediate import GameData, PlayerData
 
 _PCT_BUCKETS = list(range(0, 101, 5))
@@ -73,6 +73,16 @@ class TimeSeriesAggregator(BaseAggregator[TimeSeriesOutput]):
                 for uid in sorted(all_bld_types)
             }
 
+            morale_pct_game = _aggregate_morale_buckets(
+                [p.morale_pct_buckets for _, p in entries], _PCT_BUCKETS
+            )
+            all_morale_day_keys: set[int] = set()
+            for _, p in entries:
+                all_morale_day_keys.update(p.morale_day_buckets.keys())
+            morale_game_days = _aggregate_morale_buckets(
+                [p.morale_day_buckets for _, p in entries], sorted(all_morale_day_keys)
+            )
+
             countries.append(CountryTimeSeries(
                 nation_name=nation_name,
                 games_played=len(entries),
@@ -81,6 +91,8 @@ class TimeSeriesAggregator(BaseAggregator[TimeSeriesOutput]):
                 production_pct_game=production_pct_game,
                 production_game_days=production_game_days,
                 building_pct_game=building_pct_game,
+                morale_pct_game=morale_pct_game,
+                morale_game_days=morale_game_days,
             ))
 
         countries.sort(key=lambda c: c.games_played, reverse=True)
@@ -187,6 +199,23 @@ def _aggregate_building_buckets(
         points.append(BuildingTimeSeriesPoint(
             bucket=b,
             avg_count=round(statistics.mean(values), 2),
+            games_sampled=len(values),
+        ))
+    return points
+
+
+def _aggregate_morale_buckets(
+    player_buckets: list[dict[int, float]],
+    bucket_keys: list[int],
+) -> list[MoraleTimeSeriesPoint]:
+    points: list[MoraleTimeSeriesPoint] = []
+    for b in bucket_keys:
+        values = [pb[b] for pb in player_buckets if b in pb]
+        if not values:
+            continue
+        points.append(MoraleTimeSeriesPoint(
+            bucket=b,
+            avg_morale=round(statistics.mean(values), 2),
             games_sampled=len(values),
         ))
     return points

@@ -4,6 +4,7 @@ import type {
   ColumnarData,
   CountryAggregate,
   CountryTimeSeries,
+  MoraleTimeSeriesPoint,
   PlayerActivityPoint,
   ProvinceAggregate,
   ProductionTimeSeriesPoint,
@@ -35,6 +36,12 @@ export function deserializeCountries(raw: ColumnarData): CountryAggregate[] {
     avg_production_rate:          (r[idx.avg_production_rate]          as Record<string, number> | undefined) ?? {},
     avg_final_building_counts:    (r[idx.avg_final_building_counts]    as Record<string, number> | undefined) ?? {},
     avg_final_building_levels:    (r[idx.avg_final_building_levels]    as Record<string, number> | undefined) ?? {},
+    avg_national_morale:          (r[idx.avg_national_morale]          as number | undefined) ?? 0,
+    solo_wins:                    (r[idx.solo_wins]                    as number | undefined) ?? 0,
+    coalition_wins:               (r[idx.coalition_wins]               as number | undefined) ?? 0,
+    coalition_win_rate:           (r[idx.coalition_win_rate]           as number | undefined) ?? 0,
+    avg_winning_coalition_size:   (r[idx.avg_winning_coalition_size]   as number | undefined) ?? 0,
+    avg_elimination_pct:          (r[idx.avg_elimination_pct]          as number | null | undefined) ?? null,
   }));
 }
 
@@ -143,6 +150,10 @@ export function deserializeTimeSeries(raw: {
     prod_pct?: ProdSeries;
     prod_day?: ProdSeries;
     bld_pct?: BucketSeries;
+    morale_pct_avg?: (number | null)[];
+    morale_pct_n?:   (number | null)[];
+    morale_day_avg?: (number | null)[];
+    morale_day_n?:   (number | null)[];
   }>;
 }): TimeSeriesOutput {
   const player_activity_pct: PlayerActivityPoint[] = raw.pct_buckets
@@ -198,6 +209,20 @@ export function deserializeTimeSeries(raw: {
         : undefined,
       building_pct_game: c.bld_pct
         ? _deserializeBldBuckets(c.bld_pct, raw.pct_buckets)
+        : undefined,
+      morale_pct_game: c.morale_pct_avg
+        ? raw.pct_buckets
+            .map((b, i) => c.morale_pct_avg![i] != null
+              ? { bucket: b, avg_morale: c.morale_pct_avg![i]!, games_sampled: (c.morale_pct_n?.[i] ?? 0) as number }
+              : null)
+            .filter((p): p is MoraleTimeSeriesPoint => p !== null)
+        : undefined,
+      morale_game_days: c.morale_day_avg
+        ? c.morale_day_avg
+            .map((v, i) => v != null
+              ? { bucket: i, avg_morale: v, games_sampled: (c.morale_day_n?.[i] ?? 0) as number }
+              : null)
+            .filter((p): p is MoraleTimeSeriesPoint => p !== null)
         : undefined,
     })),
   };

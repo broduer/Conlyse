@@ -54,6 +54,9 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
         "avg_alliances_formed", "avg_right_of_ways_signed",
         "avg_total_production", "avg_production_rate",
         "avg_final_building_counts", "avg_final_building_levels",
+        "avg_national_morale",
+        "solo_wins", "coalition_wins", "coalition_win_rate", "avg_winning_coalition_size",
+        "avg_elimination_pct",
     ]
     rows = [
         [
@@ -68,6 +71,9 @@ def _countries_columnar(countries: list[CountryAggregate]) -> dict:
             {k: _r(v) for k, v in c.avg_production_rate.items()},
             {k: _r(v) for k, v in c.avg_final_building_counts.items()},
             {k: _r(v) for k, v in c.avg_final_building_levels.items()},
+            _r(c.avg_national_morale),
+            c.solo_wins, c.coalition_wins, _r(c.coalition_win_rate), _r(c.avg_winning_coalition_size),
+            _r(c.avg_elimination_pct) if c.avg_elimination_pct is not None else None,
         ]
         for c in countries
     ]
@@ -111,6 +117,13 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
                 "n":   [by_b[b].games_sampled if b in by_b else None for b in ts.pct_buckets],
             }
 
+        morale_pct_by_b = {p.bucket: p for p in c.morale_pct_game}
+        morale_day_by_b = {p.bucket: p for p in c.morale_game_days}
+        morale_pct_avg = [_r(morale_pct_by_b[b].avg_morale) if b in morale_pct_by_b else None for b in ts.pct_buckets]
+        morale_pct_n   = [morale_pct_by_b[b].games_sampled if b in morale_pct_by_b else None for b in ts.pct_buckets]
+        morale_day_avg = [_r(morale_day_by_b[d].avg_morale) if d in morale_day_by_b else None for d in range(n_days)]
+        morale_day_n   = [morale_day_by_b[d].games_sampled if d in morale_day_by_b else None for d in range(n_days)]
+
         countries.append({
             "nation_name": c.nation_name,
             "games_played": c.games_played,
@@ -123,6 +136,10 @@ def _timeseries_compact(ts: TimeSeriesOutput) -> dict:
             "prod_pct": prod_pct,
             "prod_day": prod_day,
             "bld_pct": bld_pct,
+            "morale_pct_avg": morale_pct_avg,
+            "morale_pct_n":   morale_pct_n,
+            "morale_day_avg": morale_day_avg,
+            "morale_day_n":   morale_day_n,
         })
     return {
         "pct_buckets": ts.pct_buckets,

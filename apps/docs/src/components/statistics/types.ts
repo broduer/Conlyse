@@ -52,6 +52,10 @@ export interface GlobalAggregate {
   avg_alliances_per_game: number;
   avg_right_of_ways_per_game: number;
   avg_game_total_production?: Record<string, number>;
+  coalition_size_distribution?: Record<string, number>;
+  avg_coalition_size?: number;
+  top_coalition_pairs?: [string, string, number][];
+  elimination_timing_distribution?: Record<string, number>;
 }
 
 export interface CountryAggregate {
@@ -77,6 +81,12 @@ export interface CountryAggregate {
   avg_production_rate?: Record<string, number>;
   avg_final_building_counts?: Record<string, number>;
   avg_final_building_levels?: Record<string, number>;
+  avg_national_morale?: number;
+  solo_wins?: number;
+  coalition_wins?: number;
+  coalition_win_rate?: number;
+  avg_winning_coalition_size?: number;
+  avg_elimination_pct?: number | null;
 }
 
 export interface ProvinceAggregate {
@@ -102,6 +112,12 @@ export interface TimeSeriesPoint {
   games_sampled: number;
 }
 
+export interface MoraleTimeSeriesPoint {
+  bucket: number;
+  avg_morale: number;
+  games_sampled: number;
+}
+
 export interface CountryTimeSeries {
   nation_name: string;
   games_played: number;
@@ -110,6 +126,8 @@ export interface CountryTimeSeries {
   production_pct_game?: Record<string, ProductionTimeSeriesPoint[]>;
   production_game_days?: Record<string, ProductionTimeSeriesPoint[]>;
   building_pct_game?: Record<string, BuildingTimeSeriesPoint[]>;
+  morale_pct_game?: MoraleTimeSeriesPoint[];
+  morale_game_days?: MoraleTimeSeriesPoint[];
 }
 
 export interface PlayerActivityPoint {
