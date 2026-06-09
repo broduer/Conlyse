@@ -842,7 +842,7 @@ class ReplayExtractor(BaseExtractor):
                 avg_morale=prov_morale_sum.get(pid, 0.0) / n,
                 min_morale=prov_morale_min.get(pid, 0.0),
                 max_morale=prov_morale_max.get(pid, 0.0),
-                final_upgrade_counts=dict(current_province_buildings.get(pid, {})),
+                final_upgrade_counts=_group_building_counts(current_province_buildings.get(pid, {})),
             ))
 
         game_total_prod: dict[str, float] = defaultdict(float)
