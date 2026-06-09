@@ -41,6 +41,14 @@ def _upgrade_identifier(upgrade_id: int, ut_map: dict) -> str:
     return ut.upgrade_identifier or ut.upgrade_name or str(upgrade_id)
 
 
+def _upgrade_type_key(upgrade_id: int, ut_map: dict) -> tuple[str, int]:
+    """Building type key — (Building Group identifier, Tier within that group)."""
+    ut = ut_map.get(upgrade_id)
+    if ut is None:
+        return (str(upgrade_id), 0)
+    return (ut.upgrade_identifier or ut.upgrade_name or str(upgrade_id), ut.tier)
+
+
 def _is_player_building(upgrade_id: int, ut_map: dict) -> bool:
     """True only for player-constructable persistent buildings (have resource costs, not one-time actions)."""
     ut = ut_map.get(upgrade_id)
@@ -62,13 +70,13 @@ def _is_built(upgrade, ut_map: dict) -> bool:
     return cond >= ut.build_condition
 
 
-def _province_built_buildings(province, ut_map: dict) -> dict[str, int]:
-    counts: dict[str, int] = {}
+def _province_built_buildings(province, ut_map: dict) -> dict[tuple[str, int], int]:
+    counts: dict[tuple[str, int], int] = {}
     upgrades = getattr(province, "upgrades", None) or {}
     for upgrade in upgrades.values():
         if _is_player_building(upgrade.id, ut_map) and _is_built(upgrade, ut_map):
-            uid = _upgrade_identifier(upgrade.id, ut_map)
-            counts[uid] = counts.get(uid, 0) + 1
+            key = _upgrade_type_key(upgrade.id, ut_map)
+            counts[key] = counts.get(key, 0) + 1
     return counts
 
 
@@ -90,6 +98,14 @@ def _finalize_buckets(sums: dict[int, float], ns: dict[int, int]) -> dict[int, i
 
 def _finalize_float_buckets(sums: dict[int, float], ns: dict[int, int]) -> dict[int, float]:
     return {b: sums[b] / ns[b] for b in sums if ns[b] > 0}
+
+
+def _group_building_counts(type_counts: dict[tuple[str, int], int]) -> dict[str, int]:
+    """Sum (uid, tier)-keyed Building Type counts into uid-keyed Building Group counts."""
+    totals: dict[str, int] = defaultdict(int)
+    for (uid, _tier), cnt in type_counts.items():
+        totals[uid] += cnt
+    return dict(totals)
 
 
 class ReplayExtractor(BaseExtractor):
@@ -276,18 +292,23 @@ class ReplayExtractor(BaseExtractor):
         prod_day_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         prev_time = start_time
 
-        # Building accumulators — seeded from initial state (one-time scan of ~3400 provinces)
-        current_province_buildings: dict[int, dict[str, int]] = {
+        # Building accumulators — keyed by (Building Group identifier, Tier), i.e. "Building Type".
+        # Seeded from initial state (one-time scan of ~3400 provinces)
+        current_province_buildings: dict[int, dict[tuple[str, int], int]] = {
             pid: _province_built_buildings(p, ut_map) for pid, p in initial_land.items()
         }
-        current_player_buildings: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        current_player_buildings: dict[int, dict[tuple[str, int], int]] = defaultdict(lambda: defaultdict(int))
         for pid, bld in current_province_buildings.items():
             owner = initial_owners.get(pid, _UNOWNED)
             if owner > _UNOWNED:
-                for uid, cnt in bld.items():
-                    current_player_buildings[owner][uid] += cnt
+                for type_key, cnt in bld.items():
+                    current_player_buildings[owner][type_key] += cnt
+        # Building Group (uid) time series — derived by summing counts across tiers at snapshot time
         bld_pct_sum: dict[int, dict[str, dict[int, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
         bld_pct_n:   dict[int, dict[str, dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        # Building Type ((uid, tier)) time series
+        bldtype_pct_sum: dict[int, dict[tuple[str, int], dict[int, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+        bldtype_pct_n:   dict[int, dict[tuple[str, int], dict[int, int]]]   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         bld_level_sum: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
         bld_level_n:   dict[int, dict[str, int]]   = defaultdict(lambda: defaultdict(int))
 
@@ -297,7 +318,23 @@ class ReplayExtractor(BaseExtractor):
         dp_alliances: dict[int, int] = defaultdict(int)
         dp_allianced: dict[int, int] = defaultdict(int)
         dp_rows: dict[int, int] = defaultdict(int)
-        game_wars = game_peace = game_alliances = game_allianced = game_rows = 0
+        dp_intel: dict[int, int] = defaultdict(int)
+        game_wars = game_peace = game_alliances = game_allianced = game_rows = game_intel = 0
+
+        # Current diplomatic state — 0-indexed sender -> receiver -> ForeignAffairRelationTypes.value.
+        # Replaced wholesale with the new snapshot on each ForeignAffairsRelationChanged event,
+        # then sampled per-tick (alongside province/VP/morale) into pct buckets below.
+        #
+        # Note: only WAR, RIGHT_OF_WAY and SHARED_INTELLIGENCE were ever observed in real
+        # games (sampled ~18 replays) — MUTUAL_PROTECTION/NON_AGGRESSION_PACT/CEASEFIRE/
+        # TRADE_EMBARGO never occur, so only the three meaningful types are tracked.
+        current_relations: dict[int, dict[int, int]] = {}
+        dp_war_pct_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        dp_war_pct_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        dp_row_pct_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        dp_row_pct_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        dp_intel_pct_sum: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        dp_intel_pct_n: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
 
         # Seed initial VP from player profiles at start_time; also record AI flag
         initial_players_map = gs.states.player_state.players
@@ -384,13 +421,13 @@ class ReplayExtractor(BaseExtractor):
                     prov_bld = current_province_buildings.get(pid, {})
                     if prov_bld:
                         if old_owner is not None and old_owner > _UNOWNED:
-                            for uid, cnt in prov_bld.items():
-                                current_player_buildings[old_owner][uid] = max(
-                                    0, current_player_buildings[old_owner].get(uid, 0) - cnt
+                            for type_key, cnt in prov_bld.items():
+                                current_player_buildings[old_owner][type_key] = max(
+                                    0, current_player_buildings[old_owner].get(type_key, 0) - cnt
                                 )
                         if new_owner is not None and new_owner > _UNOWNED:
-                            for uid, cnt in prov_bld.items():
-                                current_player_buildings[new_owner][uid] += cnt
+                            for type_key, cnt in prov_bld.items():
+                                current_player_buildings[new_owner][type_key] += cnt
 
                 if "money_production" in attrs:
                     _, new_mprod = attrs["money_production"]
@@ -443,27 +480,27 @@ class ReplayExtractor(BaseExtractor):
                         was_built = _is_built(old_u, ut_map) if old_u is not None else False
                         now_built = _is_built(new_u, ut_map)
                         if not was_built and now_built:
-                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            type_key = _upgrade_type_key(upgrade_id, ut_map)
                             prov_bld = current_province_buildings.setdefault(pid, {})
-                            prov_bld[uid] = prov_bld.get(uid, 0) + 1
+                            prov_bld[type_key] = prov_bld.get(type_key, 0) + 1
                             if owner > _UNOWNED:
-                                current_player_buildings[owner][uid] += 1
+                                current_player_buildings[owner][type_key] += 1
                         elif was_built and not now_built:
-                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            type_key = _upgrade_type_key(upgrade_id, ut_map)
                             prov_bld = current_province_buildings.setdefault(pid, {})
-                            prov_bld[uid] = max(0, prov_bld.get(uid, 0) - 1)
+                            prov_bld[type_key] = max(0, prov_bld.get(type_key, 0) - 1)
                             if owner > _UNOWNED:
-                                current_player_buildings[owner][uid] = max(
-                                    0, current_player_buildings[owner].get(uid, 0) - 1
+                                current_player_buildings[owner][type_key] = max(
+                                    0, current_player_buildings[owner].get(type_key, 0) - 1
                                 )
                     for upgrade_id, old_u in old_by_id.items():
                         if upgrade_id not in new_by_id and _is_player_building(upgrade_id, ut_map) and _is_built(old_u, ut_map):
-                            uid = _upgrade_identifier(upgrade_id, ut_map)
+                            type_key = _upgrade_type_key(upgrade_id, ut_map)
                             prov_bld = current_province_buildings.setdefault(pid, {})
-                            prov_bld[uid] = max(0, prov_bld.get(uid, 0) - 1)
+                            prov_bld[type_key] = max(0, prov_bld.get(type_key, 0) - 1)
                             if owner > _UNOWNED:
-                                current_player_buildings[owner][uid] = max(
-                                    0, current_player_buildings[owner].get(uid, 0) - 1
+                                current_player_buildings[owner][type_key] = max(
+                                    0, current_player_buildings[owner].get(type_key, 0) - 1
                                 )
 
             # Diplomacy — one event per tick when neighbor_relations changed;
@@ -475,10 +512,18 @@ class ReplayExtractor(BaseExtractor):
             _peace_val = ForeignAffairRelationTypes.PEACE.value
             _mutual_val = ForeignAffairRelationTypes.MUTUAL_PROTECTION.value
             _row_val = ForeignAffairRelationTypes.RIGHT_OF_WAY.value
+            _intel_val = ForeignAffairRelationTypes.SHARED_INTELLIGENCE.value
             for fa_event in events.get(ReplayHookTag.ForeignAffairsRelationChanged, []):
                 old_rel, new_rel = fa_event.attributes["neighbor_relations"]
                 if old_rel is None or new_rel is None:
                     continue
+                # `new_rel` is the full post-change relation matrix — keep a running
+                # snapshot (as plain .value ints) so per-tick bucket sampling below
+                # can read each player's *current* outgoing relation counts in O(1).
+                current_relations = {
+                    s: {r: v.value for r, v in row.items()}
+                    for s, row in new_rel.items()
+                }
                 for s in set(old_rel) | set(new_rel):
                     prev_row = old_rel.get(s, {})
                     curr_row = new_rel.get(s, {})
@@ -505,6 +550,9 @@ class ReplayExtractor(BaseExtractor):
                         if new_val == _row_val:
                             dp_rows[sender_id] += 1
                             game_rows += 1
+                        if new_val == _intel_val:
+                            dp_intel[sender_id] += 1
+                            game_intel += 1
 
             for player_event in events.get(ReplayHookTag.PlayerChanged, []):
                 player_profile = player_event.reference
@@ -580,6 +628,24 @@ class ReplayExtractor(BaseExtractor):
                 pct_vp_bucket_n[player_id][pb] += 1
                 day_vp_bucket_sum[player_id][db] += vp
                 day_vp_bucket_n[player_id][db] += 1
+
+                # Diplomatic-state snapshot — counts of this player's *current*
+                # outgoing relations by type (sender perspective, mirrors dp_wars/etc.)
+                relation_row = current_relations.get(player_id - 1, {})
+                war_n = row_n = intel_n = 0
+                for rel_val in relation_row.values():
+                    if rel_val == _war_val:
+                        war_n += 1
+                    elif rel_val == _row_val:
+                        row_n += 1
+                    elif rel_val == _intel_val:
+                        intel_n += 1
+                dp_war_pct_sum[player_id][pb] += war_n
+                dp_war_pct_n[player_id][pb] += 1
+                dp_row_pct_sum[player_id][pb] += row_n
+                dp_row_pct_n[player_id][pb] += 1
+                dp_intel_pct_sum[player_id][pb] += intel_n
+                dp_intel_pct_n[player_id][pb] += 1
             n_alive = n_active_human = n_passive_human = n_ai = 0
             for pid, defeated in current_player_defeated.items():
                 if defeated:
@@ -610,12 +676,19 @@ class ReplayExtractor(BaseExtractor):
             day_ai_sum[db] += n_ai
             day_ai_n[db] += 1
 
-            # Building time-series snapshot (O(players × building_types) — no province scan)
-            for player_id, uid_counts in current_player_buildings.items():
-                for uid, cnt in uid_counts.items():
+            # Building time-series snapshot (O(players × building_types) — no province scan).
+            # Snapshot per Building Type ((uid, tier)) directly, and derive the Building Group
+            # (uid) snapshot by summing tier counts so its avg/n semantics stay unchanged.
+            for player_id, type_counts in current_player_buildings.items():
+                uid_totals: dict[str, int] = defaultdict(int)
+                for (uid, tier), cnt in type_counts.items():
                     if cnt > 0:
-                        bld_pct_sum[player_id][uid][pb] += cnt
-                        bld_pct_n[player_id][uid][pb] += 1
+                        uid_totals[uid] += cnt
+                        bldtype_pct_sum[player_id][(uid, tier)][pb] += cnt
+                        bldtype_pct_n[player_id][(uid, tier)][pb] += 1
+                for uid, total in uid_totals.items():
+                    bld_pct_sum[player_id][uid][pb] += total
+                    bld_pct_n[player_id][uid][pb] += 1
 
             # National morale snapshot — average province morale per player
             for player_id, total_morale in player_morale_total.items():
@@ -679,6 +752,7 @@ class ReplayExtractor(BaseExtractor):
                 player_name=profile.name,
                 team_id=profile.team_id,
                 is_ai=bool(profile.computer_player),
+                is_native_computer=is_native_computer.get(player_id, False),
                 is_defeated=bool(profile.defeated),
                 is_playing=bool(profile.playing),
                 final_vp=int(profile.victory_points),
@@ -698,6 +772,7 @@ class ReplayExtractor(BaseExtractor):
                 alliances_formed=dp_alliances.get(player_id, 0),
                 alliance_dissolutions=dp_allianced.get(player_id, 0),
                 right_of_ways_signed=dp_rows.get(player_id, 0),
+                shared_intelligence_signed=dp_intel.get(player_id, 0),
                 avg_production_by_type={
                     rtype: player_prod_sum[player_id][rtype] / n_prod
                     for rtype in player_prod_sum.get(player_id, {})
@@ -712,7 +787,7 @@ class ReplayExtractor(BaseExtractor):
                     rtype: _finalize_float_buckets(prod_day_sum[player_id][rtype], prod_day_n[player_id][rtype])
                     for rtype in prod_day_sum.get(player_id, {})
                 },
-                final_building_counts=dict(current_player_buildings.get(player_id, {})),
+                final_building_counts=_group_building_counts(current_player_buildings.get(player_id, {})),
                 final_building_levels={
                     uid: bld_level_sum[player_id][uid] / bld_level_n[player_id][uid]
                     for uid in bld_level_sum.get(player_id, {})
@@ -726,6 +801,11 @@ class ReplayExtractor(BaseExtractor):
                     uid: _finalize_float_buckets(bld_pct_sum[player_id][uid], bld_pct_n[player_id][uid])
                     for uid in bld_pct_sum.get(player_id, {})
                 },
+                building_type_pct_buckets={
+                    type_key: _finalize_float_buckets(bldtype_pct_sum[player_id][type_key], bldtype_pct_n[player_id][type_key])
+                    for type_key in bldtype_pct_sum.get(player_id, {})
+                },
+                pct_bucket_coverage=dict(pct_bucket_n[player_id]),
                 elimination_game_pct=player_elimination_pct.get(player_id),
                 elimination_game_day=player_elimination_day.get(player_id),
                 avg_national_morale=(
@@ -734,10 +814,14 @@ class ReplayExtractor(BaseExtractor):
                 ),
                 morale_pct_buckets=_finalize_float_buckets(morale_pct_sum[player_id], morale_pct_n[player_id]),
                 morale_day_buckets=_finalize_float_buckets(morale_day_sum[player_id], morale_day_n[player_id]),
+                at_war_pct_buckets=_finalize_float_buckets(dp_war_pct_sum[player_id], dp_war_pct_n[player_id]),
+                right_of_way_pct_buckets=_finalize_float_buckets(dp_row_pct_sum[player_id], dp_row_pct_n[player_id]),
+                shared_intelligence_pct_buckets=_finalize_float_buckets(dp_intel_pct_sum[player_id], dp_intel_pct_n[player_id]),
             ))
 
         # ---- Victory detection ----
-        winner_ids, victory_type = _determine_winners(players)
+        ranking = gs.states.newspaper_state.ranking
+        winner_ids, victory_type = _determine_winners(players, ranking)
 
         # ---- Provinces ----
         provinces: list[ProvinceData] = []
@@ -785,6 +869,7 @@ class ReplayExtractor(BaseExtractor):
             total_alliances_formed=game_alliances,
             total_alliance_dissolutions=game_allianced,
             total_right_of_ways=game_rows,
+            total_shared_intelligence=game_intel,
             pct_alive_buckets=_finalize_buckets(pct_alive_sum, pct_alive_n),
             pct_active_human_buckets=_finalize_buckets(pct_active_human_sum, pct_active_human_n),
             pct_passive_human_buckets=_finalize_buckets(pct_passive_human_sum, pct_passive_human_n),
@@ -797,23 +882,30 @@ class ReplayExtractor(BaseExtractor):
         )
 
 
-def _determine_winners(players: list[PlayerData]) -> tuple[list[int], str]:
+def _determine_winners(players: list[PlayerData], ranking=None) -> tuple[list[int], str]:
     if not players:
         return [], "unknown"
 
-    # Prefer still-playing non-defeated players as the winner pool
+    # Use newspaper ranking when the game has a finalized result
+    if ranking is not None and ranking.initialized:
+        if ranking.winner != -1:
+            return [ranking.winner], "solo"
+        if ranking.winner_team != -1:
+            team_players = [p.player_id for p in players if p.team_id == ranking.winner_team]
+            if team_players:
+                return team_players, "coalition"
+
+    # Fallback heuristic for replays without a finalized ranking
     still_playing = [p for p in players if p.is_playing and not p.is_defeated]
 
     if len(still_playing) == 1:
         return [still_playing[0].player_id], "solo"
 
     if len(still_playing) >= 2:
-        # All on same team → coalition
         team_ids = {p.team_id for p in still_playing if p.team_id > 0}
         if len(team_ids) == 1 and all(p.team_id > 0 for p in still_playing):
             return [p.player_id for p in still_playing], "coalition"
 
-    # Fallback: use VP among non-defeated (covers games where playing flag is unreliable)
     pool = still_playing or [p for p in players if not p.is_defeated] or players
     max_vp = max((p.final_vp for p in pool), default=0)
     if max_vp <= 0:
