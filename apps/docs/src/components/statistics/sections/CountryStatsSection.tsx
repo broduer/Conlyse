@@ -18,7 +18,7 @@ interface Props {
   timeseries: TimeSeriesOutput;
 }
 
-export default function CountryStatsSection({ data }: Props) {
+export default function CountryStatsSection({ data, timeseries }: Props) {
   return (
     <section id="section-countries" className={styles.section}>
       <div className={styles.sectionHeader}>
