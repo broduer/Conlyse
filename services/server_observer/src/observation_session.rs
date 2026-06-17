@@ -340,6 +340,20 @@ impl ObservationSession {
         self.api = None;
     }
 
+    /// Like `reset_package`, but also discards any persisted resume metadata
+    /// (stale auth/cookies/client_version). Without this, `ensure_observation_package`
+    /// would keep resuming from the same broken saved state on every retry instead of
+    /// performing a fresh hub login + game join, which is what re-derives the live
+    /// client_version (scraped from index.html) and a valid auth session.
+    pub fn reset_package_and_credentials(&mut self) {
+        if let Ok(storage) = self.ensure_storage() {
+            let _ = storage.clear_resume_metadata();
+        }
+        self.hub_interface = None;
+        self.package = ObservationPackage::default();
+        self.api = None;
+    }
+
     async fn ensure_static_map_data(&mut self, map_id: &str) -> bool {
         let Some(map_cache) = &self.map_cache else {
             return false;
@@ -363,12 +377,12 @@ impl ObservationSession {
     fn handle_game_server_error(&mut self, result: &GameServerResult) -> ObservationResult {
         match result.error_code {
             GameServerError::AuthError => {
-                self.reset_package();
+                self.reset_package_and_credentials();
                 ObservationResult::make_auth_failed(false, result.error_message.clone())
             }
             GameServerError::HttpError => {
                 // 4xx — permanent client error, reset so we re-authenticate
-                self.reset_package();
+                self.reset_package_and_credentials();
                 ObservationResult::make_server_error(result.error_message.clone())
             }
             GameServerError::ServerError => {
