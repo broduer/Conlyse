@@ -46,11 +46,12 @@ Locally you can do the same (replace `<VERSION>`):
 ```bash
 cd libs/conflict_interface
 mkdir -p tests/test_data
-wget -O "tests/test_data/full_test_data_1_v<VERSION>.json" \
-  "https://raw.githubusercontent.com/zDox/ConflictData/refs/heads/main/FullTestData/full_test_data_1_v<VERSION>.json"
+wget -O /tmp/response_01.json \
+  "https://raw.githubusercontent.com/zDox/ConflictData/refs/heads/main/v<VERSION>/recording/response_01.json"
+python -c "import json; json.dump(json.load(open('/tmp/response_01.json'))['response'], open('tests/test_data/full_test_data_1_v<VERSION>.json', 'w'))"
 ```
 
-If you maintain the test-data capture pipeline, there is also a scheduled workflow that detects version changes and opens a PR to `ConflictData` (see `.github/workflows/conflict_interface-update-testdata.yml`).
+If you maintain the test-data capture pipeline, there are two scheduled workflows that handle this automatically: `.github/workflows/conflict_interface-check-new-version.yml` detects a new client version and triggers `.github/workflows/conflict_interface-create-version-data.yml`, which records 10 game-state responses (1/min) plus a beautified copy of the client's `main-built-min.js` and opens a PR to `ConflictData` under `v<VERSION>/recording/` and `v<VERSION>/javascript/`.
 
 ### 2) Snapshot the previous latest into a `v###/` package
 
