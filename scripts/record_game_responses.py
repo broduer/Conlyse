@@ -111,7 +111,7 @@ def record(version: int, out_dir: Path) -> None:
         }
         out_path = out_dir / f"response_{i:02d}.json"
         with out_path.open("w", encoding="utf-8") as f:
-            json.dump(record_entry, f, ensure_ascii=False, separators=(",", ":"))
+            json.dump(record_entry, f, ensure_ascii=False, indent=2, sort_keys=True)
         print(f"Wrote {out_path}", file=sys.stderr)
 
         _update_ids_from_response(response_json, state_ids, time_stamps)
