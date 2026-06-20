@@ -46,7 +46,8 @@ jobs:
         run: |
           mkdir -p tests/test_data
           VERSION=${{ steps.latest_version.outputs.latest_version }}
-          wget -O "tests/test_data/full_test_data_1_v${VERSION}.json" "https://raw.githubusercontent.com/zDox/ConflictData/refs/heads/main/FullTestData/full_test_data_1_v${VERSION}.json"
+          wget -O /tmp/response_01.json "https://raw.githubusercontent.com/zDox/ConflictData/refs/heads/main/v${VERSION}/recording/response_01.json"
+          python -c "import json; json.dump(json.load(open('/tmp/response_01.json'))['response'], open('tests/test_data/full_test_data_1_v${VERSION}.json', 'w'))"
 
 
       - name: Run tests with unittest
