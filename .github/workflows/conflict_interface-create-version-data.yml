@@ -55,7 +55,7 @@ jobs:
           mkdir -p javascript_output
           curl -sL "https://www.conflictnations.com/clients/con-client/con-client_live/js/main-built-min.js?bust=$(date +%s)" \
             -o main-built-min.js
-          js-beautify main-built-min.js -o javascript_output/main-built.js
+          js-beautify -o javascript_output/main-built.js main-built-min.js
 
       - name: Clone ConflictData
         run: |
