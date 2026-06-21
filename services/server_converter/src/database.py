@@ -472,7 +472,7 @@ class ReplayDatabase:
         )
         cursor.execute(query, (game_id, player_id))
         row = cursor.fetchone()
-        return row[0] if row else None
+        return row["pending_datatype_version"] if row else None
 
     @_reconnect_on_failure
     def record_version_pending(
