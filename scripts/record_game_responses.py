@@ -2,9 +2,10 @@
 """
 Records 10 raw game-state responses for a scenario_id=5975 game, 1/minute,
 threading state_ids/time_stamps between polls the way ServerObserver's
-ObservationSession does (rather than 10 independent full snapshots).
+ObservationSession does (rather than 10 independent full snapshots). Also
+captures the game's static map data as plain beautified JSON.
 
-Usage: record_game_responses.py <version> --out-dir <dir>
+Usage: record_game_responses.py <version> --out-dir <dir> --static-map-dir <dir>
 Prints {"dir": "<dir>"} on the last line of stdout.
 """
 
@@ -23,6 +24,7 @@ from conflict_interface.data_types.newest.custom_types import HashMap, LinkedLis
 from conflict_interface.data_types.newest.game_api_types.game_state_action import GameStateAction
 from conflict_interface.data_types.newest.game_api_types.login_action import DEFAULT_LOGIN_ACTION
 from conflict_interface.data_types.newest.to_json import dump_any
+from conflict_interface.data_types.newest.version import VERSION as DATATYPE_VERSION
 from conflict_interface.interface.hub_interface import HubInterface
 from conflict_interface.logger_config import setup_library_logger
 
@@ -79,7 +81,20 @@ def _update_ids_from_response(
             time_stamps[key] = str(state["timeStamp"])
 
 
-def record(version: int, out_dir: Path) -> None:
+def _record_static_map_data(real_game, static_map_dir: Path) -> str:
+    map_id = real_game.game_api.map_id
+    static_map_json = real_game.game_api.get_static_map_data(
+        map_id, session=real_game.game_api.session, proxy=real_game.game_api.proxy
+    )
+    static_map_dir.mkdir(parents=True, exist_ok=True)
+    static_map_path = static_map_dir / f"{map_id}_{DATATYPE_VERSION}.json"
+    with static_map_path.open("w", encoding="utf-8") as f:
+        json.dump(static_map_json, f, ensure_ascii=False, indent=2, sort_keys=True)
+    print(f"Wrote {static_map_path}", file=sys.stderr)
+    return map_id
+
+
+def record(version: int, out_dir: Path, static_map_dir: Path) -> None:
     username, password, _email, _proxy_url = _load_credentials()
 
     hub = HubInterface()
@@ -91,6 +106,8 @@ def record(version: int, out_dir: Path) -> None:
     if not real_game.is_country_selected():
         print("Selecting random country", file=sys.stderr)
         real_game.select_country(country_id=-1, team_id=-1, random_country_team=True)
+
+    map_id = _record_static_map_data(real_game, static_map_dir)
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -105,6 +122,7 @@ def record(version: int, out_dir: Path) -> None:
 
         record_entry = {
             "timestamp": int(time.time()),
+            "map_id": map_id,
             "state_ids": sent_state_ids,
             "time_stamps": sent_time_stamps,
             "response": response_json,
@@ -126,10 +144,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("version", type=int)
     parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--static-map-dir", required=True)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
-    record(args.version, out_dir)
+    static_map_dir = Path(args.static_map_dir)
+    record(args.version, out_dir, static_map_dir)
 
     print(json.dumps({"dir": str(out_dir)}))
     return 0

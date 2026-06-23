@@ -48,7 +48,7 @@ jobs:
 
       - name: Record game responses
         run: |
-          python scripts/record_game_responses.py "$VERSION" --out-dir recording_output
+          python scripts/record_game_responses.py "$VERSION" --out-dir recording_output --static-map-dir static_map_output
 
       - name: Download and beautify client javascript
         run: |
@@ -67,9 +67,11 @@ jobs:
           cd ConflictData
           DEST_RECORDING="v${VERSION}/recording"
           DEST_JS="v${VERSION}/javascript"
-          mkdir -p "$DEST_RECORDING" "$DEST_JS"
+          DEST_STATIC_MAP="v${VERSION}/static_map"
+          mkdir -p "$DEST_RECORDING" "$DEST_JS" "$DEST_STATIC_MAP"
           cp ../recording_output/*.json "$DEST_RECORDING/"
           cp ../javascript_output/main-built.js "$DEST_JS/"
+          cp ../static_map_output/*.json "$DEST_STATIC_MAP/"
 
           BRANCH="add-version-data-v${VERSION}"
           git checkout -b "$BRANCH"
