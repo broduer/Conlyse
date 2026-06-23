@@ -51,7 +51,9 @@ wget -O /tmp/response_01.json \
 python -c "import json; json.dump(json.load(open('/tmp/response_01.json'))['response'], open('tests/test_data/full_test_data_1_v<VERSION>.json', 'w'))"
 ```
 
-If you maintain the test-data capture pipeline, there are two scheduled workflows that handle this automatically: `.github/workflows/conflict_interface-check-new-version.yml` detects a new client version and triggers `.github/workflows/conflict_interface-create-version-data.yml`, which records 10 game-state responses (1/min) plus a beautified copy of the client's `main-built-min.js` and opens a PR to `ConflictData` under `v<VERSION>/recording/` and `v<VERSION>/javascript/`.
+If you maintain the test-data capture pipeline, there are two scheduled workflows that handle this automatically: `.github/workflows/conflict_interface-check-new-version.yml` detects a new client version and triggers `.github/workflows/conflict_interface-create-version-data.yml`, which records 10 game-state responses (1/min), the game's static map data (as plain beautified JSON), and a beautified copy of the client's `main-built-min.js`, then opens a PR to `ConflictData` under `v<VERSION>/recording/`, `v<VERSION>/static_map/`, and `v<VERSION>/javascript/`.
+
+A replay-build integrity test (`libs/conflict_interface/tests/test_replay_builder.py`) consumes these same `recording/` + `static_map/` fixtures to build a real `.conrp` replay via `ReplayBuilder` and verify it opens (`ReplayInterface.open(mode="r")`) and passes structural checks.
 
 ### 2) Snapshot the previous latest into a `v###/` package
 
