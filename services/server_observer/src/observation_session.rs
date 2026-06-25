@@ -130,6 +130,10 @@ pub struct ObservationSession {
     /// Survives `reset_package()` so connectivity checks can use the real game-server address
     /// even after the session package has been cleared on error.
     pub last_game_server_address: String,
+    /// Last raw HTTP response body received from the game server. Updated on every request that
+    /// returns an HTTP 200 body (auth errors, parse errors, success, etc.). Persists across
+    /// resets so the dead letter always has the most recent server response for diagnosis.
+    pub last_raw_response: Option<String>,
 
     map_cache: Option<StaticMapCache>,
     api: Option<ObservationApi>,
@@ -158,6 +162,7 @@ impl ObservationSession {
             next_update_at: SystemTime::now(),
             update_sequence_number: 0,
             last_game_server_address: String::new(),
+            last_raw_response: None,
             map_cache,
             api: None,
             storage_path,
@@ -246,6 +251,7 @@ impl ObservationSession {
         }
 
         self.package = self.create_observation_package()?;
+        self.hub_interface = None;
         Ok(())
     }
 
@@ -490,6 +496,10 @@ impl ObservationSession {
                 &mut self.package.state_ids,
                 &mut self.package.time_stamps,
             );
+
+            if !result.raw_response.is_empty() {
+                self.last_raw_response = Some(result.raw_response.clone());
+            }
 
             if !result.success() {
                 return self.handle_game_server_error(&result);

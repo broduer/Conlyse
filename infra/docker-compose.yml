@@ -104,6 +104,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_DIR=/app/logs
+      - PYTHONMALLOC=malloc
     networks:
       - conlyse-network
     restart: unless-stopped
@@ -158,6 +159,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET_NAME:-replays}
+      PYTHONMALLOC: malloc
     volumes:
       - ./prod/server-converter-config.json:/app/config.json:ro
       - converter-hot-storage:/data/hot_storage

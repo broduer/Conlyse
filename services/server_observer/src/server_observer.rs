@@ -811,6 +811,7 @@ impl ServerObserver {
             };
             record_game_failed(error_type);
 
+            let last_raw_response = session_arc.lock().await.last_raw_response.clone();
             let ts = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -821,6 +822,7 @@ impl ServerObserver {
                 "error_code": error_type,
                 "error_message": &result.error_message,
                 "account": &username,
+                "last_raw_response": last_raw_response,
             });
             if let Ok(mut f) = std::fs::OpenOptions::new()
                 .create(true)
