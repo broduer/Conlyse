@@ -1022,13 +1022,410 @@
       }
     },
     {
+      "id": 40,
+      "type": "stat",
+      "title": "Unhealthy Proxies",
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "unhealthy_proxies",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Healthy Proxies",
+      "gridPos": {
+        "x": 4,
+        "y": 33,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "healthy_proxies",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Proxy Health Over Time",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Healthy"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unhealthy"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "healthy_proxies",
+          "legendFormat": "Healthy",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "unhealthy_proxies",
+          "legendFormat": "Unhealthy",
+          "refId": "B"
+        }
+      ],
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Proxy Health Check Rate",
+      "gridPos": {
+        "x": 8,
+        "y": 37,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pass"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(proxy_health_checks_total[5m])",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "10.0.0"
+    },
+    {
+      "id": 44,
+      "type": "timeseries",
+      "title": "Proxy Replacement Outcomes",
+      "gridPos": {
+        "x": 16,
+        "y": 37,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "webshare_api"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pool_rotation"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pool_sharing"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(proxy_replacements_total[5m])",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "10.0.0"
+    },
+    {
       "id": 18,
       "type": "row",
       "title": "Server Converter",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 45,
         "w": 24,
         "h": 1
       },
@@ -1048,7 +1445,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 46,
         "w": 8,
         "h": 8
       },
@@ -1109,7 +1506,7 @@
       ],
       "gridPos": {
         "x": 8,
-        "y": 38,
+        "y": 46,
         "w": 8,
         "h": 8
       },
@@ -1149,7 +1546,7 @@
       ],
       "gridPos": {
         "x": 16,
-        "y": 46,
+        "y": 54,
         "w": 8,
         "h": 8
       },
@@ -1194,7 +1591,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 54,
         "w": 8,
         "h": 8
       },
@@ -1239,7 +1636,7 @@
       ],
       "gridPos": {
         "x": 8,
-        "y": 46,
+        "y": 54,
         "w": 8,
         "h": 8
       },
@@ -1279,7 +1676,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 62,
         "w": 8,
         "h": 8
       },
@@ -1319,7 +1716,7 @@
       ],
       "gridPos": {
         "x": 8,
-        "y": 54,
+        "y": 62,
         "w": 8,
         "h": 8
       },
@@ -1364,7 +1761,7 @@
       ],
       "gridPos": {
         "x": 16,
-        "y": 54,
+        "y": 62,
         "w": 8,
         "h": 8
       },
@@ -1404,7 +1801,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 70,
         "w": 8,
         "h": 8
       },
@@ -1463,7 +1860,7 @@
       ],
       "gridPos": {
         "x": 8,
-        "y": 62,
+        "y": 70,
         "w": 8,
         "h": 8
       },
@@ -1519,7 +1916,7 @@
       ],
       "gridPos": {
         "x": 16,
-        "y": 62,
+        "y": 70,
         "w": 8,
         "h": 8
       },
@@ -1539,7 +1936,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 70,
+        "y": 78,
         "w": 24,
         "h": 1
       },
@@ -1559,7 +1956,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 71,
+        "y": 79,
         "w": 12,
         "h": 12
       },
@@ -1586,7 +1983,7 @@
       ],
       "gridPos": {
         "x": 12,
-        "y": 71,
+        "y": 79,
         "w": 12,
         "h": 12
       },
@@ -1606,7 +2003,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 91,
         "w": 24,
         "h": 1
       },
@@ -1626,7 +2023,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 84,
+        "y": 92,
         "w": 8,
         "h": 8
       },
@@ -1687,7 +2084,7 @@
       ],
       "gridPos": {
         "x": 8,
-        "y": 84,
+        "y": 92,
         "w": 8,
         "h": 8
       },
@@ -1748,7 +2145,7 @@
       ],
       "gridPos": {
         "x": 16,
-        "y": 84,
+        "y": 92,
         "w": 8,
         "h": 8
       },
